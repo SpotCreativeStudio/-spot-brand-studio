@@ -1858,7 +1858,9 @@ function addToReview() {
     brief: document.getElementById('briefInput').value,
     channel: ch, title: p.title, content: p.content,
     hashtags: [...p.hashtags], cta: p.cta, layout: 'gradient',
-    status: 'review', createdAt: new Date().toISOString(), author: 'Admin',
+    status: 'review', createdAt: new Date().toISOString(),
+    author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
+    channels: [ch],
   };
   S.reviewQueue.push(post);
   updateBadge();
