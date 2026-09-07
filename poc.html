@@ -2835,7 +2835,7 @@ function emRenderPreview() {
         var dx = (((ev.clientX - isx) / _z2) / Math.max(1, card.clientWidth)) * 100;
         var dy = (((ev.clientY - isy) / _z2) / Math.max(1, card.clientHeight)) * 100;
         var _zz = sp.zoom || post.imgPos.zoom || 1;
-        var _ez = _zz <= 1 ? _zz * 1.15 : _zz;
+        var _ez = _zz <= 1 ? _zz * 1.06 : _zz;
         var _max = (1 - 1/_ez) * 50 * _ez;
         post.imgPos.x = Math.max(-_max, Math.min(_max, sp.x + dx));
         post.imgPos.y = Math.max(-_max, Math.min(_max, sp.y + dy));
