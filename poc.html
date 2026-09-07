@@ -1294,6 +1294,8 @@ function _imgTransform(post){
   var p = (post && post.imgPos) ? post.imgPos : { x:0, y:0, zoom:1 };
   if (p.zoom === undefined || p.zoom === null) p.zoom = 1;
   var z = p.zoom || 1, x = p.x || 0, y = p.y || 0;
+  if (Math.abs(x) > 20) x = 0;
+  if (Math.abs(y) > 20) y = 0;
   if (z === 1 && !x && !y) return '';
   var ez = (z <= 1 && (x || y)) ? z * 1.15 : z;
   var m = (1 - 1/ez) * 50 * ez;
