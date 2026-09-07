@@ -2832,7 +2832,6 @@ function emRenderPreview() {
         var dx = (((ev.clientX - isx) / _z2) / Math.max(1, card.clientWidth)) * 100;
         var dy = (((ev.clientY - isy) / _z2) / Math.max(1, card.clientHeight)) * 100;
         var _zz = sp.zoom || post.imgPos.zoom || 1;
-        if (_zz <= 1) { _zz = 1.25; post.imgPos.zoom = _zz; var _zs=document.getElementById('emZoomSlider'); if(_zs)_zs.value=_zz; var _zl=document.getElementById('emZoomLabel'); if(_zl)_zl.textContent=Math.round(_zz*100)+'%'; }
         var _max = (1 - 1/_zz) * 50 * _zz;
         post.imgPos.x = Math.max(-_max, Math.min(_max, sp.x + dx));
         post.imgPos.y = Math.max(-_max, Math.min(_max, sp.y + dy));
