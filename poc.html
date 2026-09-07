@@ -1727,6 +1727,7 @@ function renderDashboard() {
             <span style="font-size:10px;color:${CH_TC[p.channel]};font-weight:500">${CH_LABEL[p.channel]}</span>
             <span style="font-size:10px;color:#9ca3af">${new Date(p.createdAt).toLocaleDateString('sv-SE')}</span>
           </div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:2px">${typeof _authorLine==='function'? _authorLine(p) : ''}</div>
         </div>
       </div>`).join('');
   }
