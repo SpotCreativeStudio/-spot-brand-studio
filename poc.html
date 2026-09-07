@@ -2280,7 +2280,7 @@ function renderProposalCards(ch) {
   body.innerHTML = `<div class="ai-proposals" style="width:100%">` +
     proposals.slice(0,3).map((p, i) => {
       const cardLayouts = ['studio','case','louisiana'];
-      const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), cta: p.cta||'', imageUrl: activeImageUrl(), imageStyle: S.imageStyle };
+      const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), cta: p.cta||'', imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos };
       const dim = i!==selectedIdx;
       return `<div class="ai-prop-card ${i===selectedIdx?'selected':''}" onclick="openProposalEditor('${ch}',${i})" style="${dim ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
         <div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(ch)}">
