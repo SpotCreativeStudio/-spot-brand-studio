@@ -1255,7 +1255,7 @@ const MOCK_PROPOSALS = {
 //  LAYOUT RENDERER
 // ════════════════════════════════════════════════════════
 // Returns object-position CSS value — reads from post if available, else global drag state
-function applyImgPreviewTransform(){var pv=document.getElementById("imgPreview");if(!pv)return;var p=S._imgPos||{x:0,y:0,zoom:1};var z=(p.zoom||1);var mx=z>1?(1-1/z)*50:0;var x=Math.max(-mx,Math.min(mx,p.x||0));var y=Math.max(-mx,Math.min(mx,p.y||0));pv.style.objectPosition="center";pv.style.transform="scale("+z.toFixed(3)+") translate("+x.toFixed(2)+"%,"+y.toFixed(2)+"%)";}
+function applyImgPreviewTransform(){var pv=document.getElementById("imgPreview");if(!pv)return;var p=S._imgPos||{x:0,y:0,zoom:1};var z0=(p.zoom||1);var z=z0<=1?z0*1.06:z0;var mx=(1-1/z)*50*z;var x=Math.max(-mx,Math.min(mx,p.x||0));var y=Math.max(-mx,Math.min(mx,p.y||0));pv.style.objectPosition="center";pv.style.transform="scale("+z.toFixed(3)+") translate("+(x/z).toFixed(2)+"%,"+(y/z).toFixed(2)+"%)";}
 function setImgZoom(v){if(!S._imgPos)S._imgPos={x:0,y:0,zoom:1};S._imgPos.zoom=parseFloat(v)||1;applyImgPreviewTransform();if(window._aiProposals&&window._allChannelProposals){renderProposalCards(window._activeProposalTab||S.manualChannel);}else{updateManualPreview();}}
 function repromptImage(){var t=document.getElementById("imgReprompt");var extra=t?t.value.trim():"";var base=S._aiImageBrief||S._lastBrief||"";if(!base&&!extra){showToast("Skriv en beskrivning av ändringen.");return;}var brief=extra?(base?(base+". Ändring: "+extra):extra):base;S._uploadedImageUrl=null;generateBrandImage(brief,true);}
 function _imgObjPos(post) {
