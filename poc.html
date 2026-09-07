@@ -1297,7 +1297,7 @@ function _imgTransform(post){
   if (Math.abs(x) > 20) x = 0;
   if (Math.abs(y) > 20) y = 0;
   if (z === 1 && !x && !y) return '';
-  var ez = (z <= 1 && (x || y)) ? z * 1.15 : z;
+  var ez = (z <= 1) ? z * 1.06 : z;
   var m = (1 - 1/ez) * 50 * ez;
   x = Math.max(-m, Math.min(m, x));
   y = Math.max(-m, Math.min(m, y));
