@@ -3164,7 +3164,9 @@ function saveEditorModal() {
     if (typeof fillFormFromProposal === 'function') fillFormFromProposal(post);
     S._uploadedImageUrl = post.imageUrl || post.aiImageUrl || S._uploadedImageUrl;
     S._aiImageUrl = post.imageUrl || post.aiImageUrl || S._aiImageUrl;
+    S._imgPos = post.imgPos || S._imgPos; // synka positionering tillbaka så förslagskorten matchar redigeringen
     if (typeof updateManualPreview === 'function') updateManualPreview();
+    if (typeof renderProposalCards === 'function') renderProposalCards(window._activeProposalTab || S.manualChannel);
     S._editPost = null;
     showToast('✅ Ändringar sparade');
   } else {
