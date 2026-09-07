@@ -2392,7 +2392,9 @@ function addManualToReview() {
         channel: ch, title: p.title, content: p.content,
         hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), cta: p.cta,
         layout: cardLayouts[idx] || 'gradient',
-        status: 'review', createdAt: new Date().toISOString(), author: 'Sara Lindqvist',
+        author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
+        channels: [ch],
+        status: 'review', createdAt: new Date().toISOString(),
         scheduledAt, imageUrl: activeImageUrl(),
         imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
       });
