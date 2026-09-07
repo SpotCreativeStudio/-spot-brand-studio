@@ -1294,11 +1294,12 @@ function _imgTransform(post){
   var p = (post && post.imgPos) ? post.imgPos : { x:0, y:0, zoom:1 };
   if (p.zoom === undefined || p.zoom === null) p.zoom = 1;
   var z = p.zoom || 1, x = p.x || 0, y = p.y || 0;
-  var m = (1 - 1/z) * 50 * z;
+  if (z === 1 && !x && !y) return '';
+  var ez = (z <= 1 && (x || y)) ? z * 1.15 : z;
+  var m = (1 - 1/ez) * 50 * ez;
   x = Math.max(-m, Math.min(m, x));
   y = Math.max(-m, Math.min(m, y));
-  if (z === 1 && !x && !y) return '';
-  return 'scale(' + z + ') translate(' + (x/z) + '%,' + (y/z) + '%)';
+  return 'scale(' + ez + ') translate(' + (x/ez) + '%,' + (y/ez) + '%)';
 }
 function _imgZoomCss(post){ var t = _imgTransform(post); return t ? ('transform:' + t + ';transform-origin:center center;') : ''; }
 function _imgOrGray(post) {
@@ -2832,7 +2833,8 @@ function emRenderPreview() {
         var dx = (((ev.clientX - isx) / _z2) / Math.max(1, card.clientWidth)) * 100;
         var dy = (((ev.clientY - isy) / _z2) / Math.max(1, card.clientHeight)) * 100;
         var _zz = sp.zoom || post.imgPos.zoom || 1;
-        var _max = (1 - 1/_zz) * 50 * _zz;
+        var _ez = _zz <= 1 ? _zz * 1.15 : _zz;
+        var _max = (1 - 1/_ez) * 50 * _ez;
         post.imgPos.x = Math.max(-_max, Math.min(_max, sp.x + dx));
         post.imgPos.y = Math.max(-_max, Math.min(_max, sp.y + dy));
         imgEl.style.transformOrigin = 'center center';
