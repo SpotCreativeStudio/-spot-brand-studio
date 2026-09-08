@@ -86,7 +86,8 @@ function auth(req, res, next) { if (sessions[getToken(req)]) return next(); if (
 app.get('/login', (_req, res) => res.send(LOGIN_HTML))
 app.post('/login', async (req, res) => {
   const { username, password } = req.body
-  const u = await getUserByUsername(username)
+  const identifier = String(username || '')
+  const u = (await getUserByUsername(identifier)) || (identifier.includes('@') ? await getUserByEmail(identifier) : null)
   if (u && password === u.password) {
     const t = makeToken()
     sessions[t] = { u: u.username, role: u.role, firstName: u.first_name, lastName: u.last_name, workspace: u.workspace || 'spot' }
@@ -94,9 +95,11 @@ app.post('/login', async (req, res) => {
     res.setHeader('Set-Cookie', 'spot_session=' + t + '; Path=/; HttpOnly; SameSite=Lax; Max-Age=' + (60*60*24*7))
     return res.redirect('/')
   }
-  if (username === UNAME && password === await getPassword()) {
+  const recoveryEmail = process.env.APP_RECOVERY_EMAIL
+  const isMainAdmin = identifier === UNAME || (recoveryEmail && identifier.trim().toLowerCase() === recoveryEmail.trim().toLowerCase())
+  if (isMainAdmin && password === await getPassword()) {
     const t = makeToken()
-    sessions[t] = { u: username, role: 'admin', firstName: process.env.APP_USER_FIRSTNAME || 'Spot', lastName: process.env.APP_USER_LASTNAME || 'Admin', workspace: 'spot' }
+    sessions[t] = { u: UNAME, role: 'admin', firstName: process.env.APP_USER_FIRSTNAME || 'Spot', lastName: process.env.APP_USER_LASTNAME || 'Admin', workspace: 'spot' }
     persistSession(t, sessions[t])
     res.setHeader('Set-Cookie', 'spot_session=' + t + '; Path=/; HttpOnly; SameSite=Lax; Max-Age=' + (60*60*24*7))
     return res.redirect('/')
