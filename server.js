@@ -205,6 +205,8 @@ app.post('/forgot', async (req, res) => {
     const recoveryEmail = process.env.APP_RECOVERY_EMAIL
     if (!recoveryEmail) return res.redirect('/forgot?err=nocfg')
     if (!process.env.RESEND_API_KEY) return res.redirect('/forgot?err=nomailer')
+    const submitted = String((req.body || {}).email || '').trim().toLowerCase()
+    if (!submitted || submitted !== recoveryEmail.trim().toLowerCase()) return res.redirect('/forgot?err=nomatch')
     const t = makeResetToken()
     const link = 'https://' + req.get('host') + '/reset?token=' + t
     const ok = await sendAppMail({
