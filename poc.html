@@ -3991,7 +3991,7 @@ function addMember() {
       TEAM_MEMBERS.push({id: Date.now(), name, email, role, color, initials, username: res.data.username});
       closeAddMember();
       renderTeam();
-      showToast(`✅ ${name} kan nu logga in som "${res.data.username}"`);
+      showToast(res.data.mailSent ? `✅ ${name} har fått ett mail med inloggningsuppgifter` : `✅ ${name} kan nu logga in som "${res.data.username}" (mail kunde inte skickas — dela uppgifterna manuellt)`);
     })
     .catch(function(){ showToast('⚠️ Kunde inte skapa kontot'); });
 }
