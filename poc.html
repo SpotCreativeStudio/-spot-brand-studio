@@ -3674,6 +3674,7 @@ async function renderPublished() {
       <div class="pub-post-info">
         <div class="pub-post-title">${post.title||'Inlägg'}</div>
         <div class="pub-post-meta">${date}</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:2px">${typeof _authorLine==='function'? _authorLine(post) : ''}</div>
         <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
           <div class="pub-post-ch">${chLabel}</div>
           ${archived
