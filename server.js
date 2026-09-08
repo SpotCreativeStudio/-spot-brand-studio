@@ -53,6 +53,9 @@ async function ensureUsersTable() {
 async function getUserByUsername(username) {
   try { await ensureUsersTable(); const r = await getAuthPool().query("SELECT * FROM app_users WHERE username=$1", [username]); return r.rows[0] || null } catch (e) { console.error('[auth] getUserByUsername error:', e.message); return null }
 }
+async function getUserByEmail(email) {
+  try { await ensureUsersTable(); const r = await getAuthPool().query("SELECT * FROM app_users WHERE lower(email)=$1", [String(email || '').trim().toLowerCase()]); return r.rows[0] || null } catch (e) { console.error('[auth] getUserByEmail error:', e.message); return null }
+}
 async function getPassword() { try { await ensureAuthTable(); const r = await getAuthPool().query("SELECT value FROM app_settings WHERE key='password'"); return (r.rows[0] && r.rows[0].value) || UPASS } catch (e) { console.error('[auth] getPassword error:', e.message); return UPASS } }
 async function setPassword(pw) { try { await ensureAuthTable(); const r = await getAuthPool().query("INSERT INTO app_settings (key,value) VALUES ('password',$1) ON CONFLICT (key) DO UPDATE SET value=$1", [pw]); console.log('[auth] setPassword ok, rowCount:', r.rowCount) } catch (e) { console.error('[auth] setPassword error:', e.message) } }
 const resetTokens = {}
