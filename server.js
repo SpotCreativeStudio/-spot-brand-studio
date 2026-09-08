@@ -202,15 +202,26 @@ app.post('/api/change-password', auth, async (req, res) => { const { currentPass
 app.get('/forgot', (_req, res) => res.send(FORGOT_HTML))
 app.post('/forgot', async (req, res) => {
   try {
-    const recoveryEmail = process.env.APP_RECOVERY_EMAIL
-    if (!recoveryEmail) return res.redirect('/forgot?err=nocfg')
     if (!process.env.RESEND_API_KEY) return res.redirect('/forgot?err=nomailer')
     const submitted = String((req.body || {}).email || '').trim().toLowerCase()
-    if (!submitted || submitted !== recoveryEmail.trim().toLowerCase()) return res.redirect('/forgot?err=nomatch')
-    const t = makeResetToken()
+    if (!submitted) return res.redirect('/forgot?err=nomatch')
+    const recoveryEmail = process.env.APP_RECOVERY_EMAIL
+    let targetUsername = null
+    let targetEmail = null
+    if (recoveryEmail && submitted === recoveryEmail.trim().toLowerCase()) {
+      targetUsername = null
+      targetEmail = recoveryEmail
+    } else {
+      await ensureUsersTable()
+      const r = await getAuthPool().query('SELECT username, email FROM app_users WHERE lower(email)=$1', [submitted])
+      if (!r.rows.length) return res.redirect('/forgot?err=nomatch')
+      targetUsername = r.rows[0].username
+      targetEmail = r.rows[0].email
+    }
+    const t = makeResetToken(targetUsername)
     const link = 'https://' + req.get('host') + '/reset?token=' + t
     const ok = await sendAppMail({
-      to: recoveryEmail,
+      to: targetEmail,
       subject: 'spot. - Aterstall losenord',
       text: 'Nagon har begart att aterstalla losenordet for spot. Brand Studio.\n\nKlicka pa lanken nedan for att valja ett nytt losenord (giltig i 30 minuter):\n' + link + '\n\nOm det inte var du kan du ignorera detta mail.',
       html: '<p>Någon har begärt att återställa lösenordet för <strong>spot. Brand Studio</strong>.</p><p><a href="' + link + '">Klicka här för att välja ett nytt lösenord</a> (giltig i 30 minuter).</p><p>Om det inte var du kan du ignorera detta mail.</p>'
