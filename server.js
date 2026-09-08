@@ -56,8 +56,8 @@ async function getUserByUsername(username) {
 async function getPassword() { try { await ensureAuthTable(); const r = await getAuthPool().query("SELECT value FROM app_settings WHERE key='password'"); return (r.rows[0] && r.rows[0].value) || UPASS } catch (e) { console.error('[auth] getPassword error:', e.message); return UPASS } }
 async function setPassword(pw) { try { await ensureAuthTable(); const r = await getAuthPool().query("INSERT INTO app_settings (key,value) VALUES ('password',$1) ON CONFLICT (key) DO UPDATE SET value=$1", [pw]); console.log('[auth] setPassword ok, rowCount:', r.rowCount) } catch (e) { console.error('[auth] setPassword error:', e.message) } }
 const resetTokens = {}
-function makeResetToken() { const t = crypto.randomBytes(24).toString('hex'); resetTokens[t] = Date.now() + 30 * 60 * 1000; return t }
-function validResetToken(t) { const exp = resetTokens[t]; return !!exp && exp > Date.now() }
+function makeResetToken(username) { const t = crypto.randomBytes(24).toString('hex'); resetTokens[t] = { exp: Date.now() + 30 * 60 * 1000, username: username || null }; return t }
+function validResetToken(t) { const e = resetTokens[t]; return !!e && e.exp > Date.now() }
 function getMailer() { if (!nodemailer) return null; if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) return null; return nodemailer.createTransport({ host: process.env.SMTP_HOST, port: +(process.env.SMTP_PORT || 587), secure: process.env.SMTP_PORT === '465', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }, connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 10000 }) }
 async function sendAppMail({ to, subject, text, html }) {
   const key = process.env.RESEND_API_KEY
