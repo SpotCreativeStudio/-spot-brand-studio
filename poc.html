@@ -1326,6 +1326,7 @@ function getPostImageHTML(post, size='card') {
   const grad = CH_GRAD[post.channel] || CH_GRAD.instagram;
   const hasImg = !!post.imageUrl;
   const dateStr = post.date || new Date().toISOString().slice(0,10);
+  const authorStr = post.author || '';
 
   // ── SPOT-MALL: studio. (helbild + Higuen-serif nedtill) ──────────────
   if (layout === 'studio') {
@@ -1333,7 +1334,7 @@ function getPostImageHTML(post, size='card') {
       ${_imgOrGray(post)}
       <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.28) 0%,transparent 28%,transparent 50%,rgba(0,0,0,.6) 100%)"></div>
       <div style="position:absolute;top:9px;left:11px;font-size:9px;font-weight:700;color:rgba(255,255,255,.92);font-family:Helvetica,Arial,sans-serif">spot.</div>
-      <div style="position:absolute;top:9px;right:11px;font-size:8px;font-weight:300;color:rgba(255,255,255,.78);letter-spacing:.06em">${dateStr}</div>
+      <div style="position:absolute;top:9px;right:11px;font-size:8px;font-weight:300;color:rgba(255,255,255,.78);letter-spacing:.06em;text-align:right">${dateStr}${authorStr?`<br>👤 ${authorStr}`:``}</div>
       <div style="position:absolute;left:13px;right:13px;bottom:13px">
         <div style="font-family:${SERIF};font-size:${_autoFit(t,30,18,16)}px;color:#fff;line-height:.95;letter-spacing:-.01em">${t}</div>
         ${c?`<div style="font-size:9px;color:rgba(255,255,255,.82);margin-top:6px;line-height:1.45;max-height:38px;overflow:hidden">${c}</div>`:''}
@@ -1351,7 +1352,7 @@ function getPostImageHTML(post, size='card') {
         <div style="position:absolute;left:11px;right:11px;top:30%;font-family:${SERIF};font-size:${_autoFit(t,29,16,14)}px;line-height:.95;color:#fff;text-shadow:0 2px 14px rgba(0,0,0,.4);max-height:62%;overflow:hidden">${t}</div>
         ${c?`<div style="position:absolute;left:11px;right:11px;bottom:6px;font-size:8px;color:rgba(255,255,255,.9);line-height:1.4;max-height:30px;overflow:hidden">${c}</div>`:''}
       </div>
-      <div style="text-align:center;padding:5px 0 8px;font-size:8px;color:rgba(255,255,255,.92);font-weight:600;letter-spacing:.03em">@spotstudio.se</div>
+      <div style="text-align:center;padding:5px 0 8px;font-size:8px;color:rgba(255,255,255,.92);font-weight:600;letter-spacing:.03em">@spotstudio.se${authorStr?` · 👤 ${authorStr}`:``}</div>
     </div>`;
   }
 
