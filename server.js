@@ -59,6 +59,20 @@ const resetTokens = {}
 function makeResetToken() { const t = crypto.randomBytes(24).toString('hex'); resetTokens[t] = Date.now() + 30 * 60 * 1000; return t }
 function validResetToken(t) { const exp = resetTokens[t]; return !!exp && exp > Date.now() }
 function getMailer() { if (!nodemailer) return null; if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) return null; return nodemailer.createTransport({ host: process.env.SMTP_HOST, port: +(process.env.SMTP_PORT || 587), secure: process.env.SMTP_PORT === '465', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }, connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 10000 }) }
+async function sendAppMail({ to, subject, text, html }) {
+  const key = process.env.RESEND_API_KEY
+  if (!key) return false
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'spot. Brand Studio <onboarding@resend.dev>', to: [to], subject, text, html })
+    })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok) { console.error('[resend] error:', JSON.stringify(data)); return false }
+    return true
+  } catch (e) { console.error('[resend] exception:', e.message); return false }
+}
 app.use(express.json({ limit: '20mb' }))
 app.use(express.urlencoded({ extended: true }))
 const _TPL = { 'tpl-studio.png': '4.png', 'tpl-case-hallanning.png': '5.png', 'tpl-case-gardsstyling.png': '7.png', 'tpl-louisiana.png': '6.png' }
@@ -142,7 +156,14 @@ app.post('/api/team/invite', auth, async (req, res) => {
     username = candidate
     await getAuthPool().query('INSERT INTO app_users (username,password,role,first_name,last_name,email,workspace) VALUES ($1,$2,$3,$4,$5,$6,$7)', [username, password, dbRole, firstName, lastName, email, s.workspace || 'spot'])
     logBillingEvent(s.workspace || 'spot', 'member_added', { username, name: (firstName + ' ' + lastName).trim(), role: dbRole, addedBy: s.u })
-    res.json({ ok: true, username })
+    const loginLink = 'https://' + req.get('host') + '/login'
+    const mailSent = await sendAppMail({
+      to: email,
+      subject: 'Du har bjudits in till spot. Brand Studio',
+      text: 'Hej ' + firstName + '!\n\nDu har lagts till i spot. Brand Studio.\n\nAnvandarnamn: ' + username + '\nLosenord: ' + password + '\n\nLogga in har: ' + loginLink + '\n\nVi rekommenderar att du byter losenord efter forsta inloggningen.',
+      html: '<p>Hej ' + firstName + '!</p><p>Du har lagts till i <strong>spot. Brand Studio</strong>.</p><p>Användarnamn: <strong>' + username + '</strong><br>Lösenord: <strong>' + password + '</strong></p><p><a href="' + loginLink + '">Logga in här</a></p><p>Vi rekommenderar att du byter lösenord efter första inloggningen.</p>'
+    })
+    res.json({ ok: true, username, mailSent })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 app.post('/api/team/role', auth, async (req, res) => {
@@ -183,17 +204,16 @@ app.post('/forgot', async (req, res) => {
   try {
     const recoveryEmail = process.env.APP_RECOVERY_EMAIL
     if (!recoveryEmail) return res.redirect('/forgot?err=nocfg')
-    const mailer = getMailer()
-    if (!mailer) return res.redirect('/forgot?err=nomailer')
+    if (!process.env.RESEND_API_KEY) return res.redirect('/forgot?err=nomailer')
     const t = makeResetToken()
     const link = 'https://' + req.get('host') + '/reset?token=' + t
-    await mailer.sendMail({
-      from: process.env.SMTP_USER,
+    const ok = await sendAppMail({
       to: recoveryEmail,
       subject: 'spot. - Aterstall losenord',
       text: 'Nagon har begart att aterstalla losenordet for spot. Brand Studio.\n\nKlicka pa lanken nedan for att valja ett nytt losenord (giltig i 30 minuter):\n' + link + '\n\nOm det inte var du kan du ignorera detta mail.',
       html: '<p>Någon har begärt att återställa lösenordet för <strong>spot. Brand Studio</strong>.</p><p><a href="' + link + '">Klicka här för att välja ett nytt lösenord</a> (giltig i 30 minuter).</p><p>Om det inte var du kan du ignorera detta mail.</p>'
     })
+    if (!ok) return res.redirect('/forgot?err=1')
     res.redirect('/forgot?sent=1')
   } catch (e) { console.error('[forgot] error:', e.message); res.redirect('/forgot?err=1') }
 })
