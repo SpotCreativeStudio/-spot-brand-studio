@@ -1360,7 +1360,7 @@ function getPostImageHTML(post, size='card') {
   if (layout === 'louisiana') {
     return `<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#b31e59;display:flex">
       <div style="width:44%;position:relative;flex-shrink:0">
-        <div style="position:absolute;top:9px;left:9px;font-size:7px;color:rgba(255,255,255,.82);letter-spacing:.05em;writing-mode:vertical-rl;transform:rotate(180deg)">${dateStr}</div>
+        <div style="position:absolute;top:9px;left:9px;font-size:7px;color:rgba(255,255,255,.82);letter-spacing:.05em;writing-mode:vertical-rl;transform:rotate(180deg)">${dateStr}${authorStr?` · 👤 ${authorStr}`:``}</div>
         <div style="position:absolute;left:0;right:0;top:8px;bottom:8px;display:flex;align-items:flex-end;justify-content:center">
           <div style="font-family:${SERIF};font-size:${_autoFit(t,32,10,15)}px;color:#fff;writing-mode:vertical-rl;transform:rotate(180deg);line-height:1;letter-spacing:-.01em;white-space:nowrap;max-height:100%;overflow:hidden">${t}</div>
         </div>
