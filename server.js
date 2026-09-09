@@ -69,7 +69,7 @@ async function sendAppMail({ to, subject, text, html }) {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: 'spot. Brand Studio <onboarding@resend.dev>', to: [to], subject, text, html })
+      body: JSON.stringify({ from: 'spot. Brand Studio <noreply@platform.spotstudio.se>', to: [to], subject, text, html })
     })
     const data = await r.json().catch(() => ({}))
     if (!r.ok) { console.error('[resend] error:', JSON.stringify(data)); return false }
