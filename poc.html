@@ -2746,7 +2746,7 @@ function emRenderPreview() {
     node.style.position = 'relative';
     node.style.transform = 'translate(' + pos.x + 'px,' + pos.y + 'px)' + ((key === 'brand' && scale !== 1) ? (' scale(' + scale + ')') : '');
     node.style.transformOrigin = 'left top';
-    if (key !== 'brand') node.style.fontSize = (scale === 1) ? '' : (scale * 100) + '%';
+    if (key !== 'brand') node.style.fontSize = (scale === 1) ? '' : (scale * 100) + '%'; if (key !== 'brand') { var _bs = post.textBoxSize && post.textBoxSize[key]; if (_bs) { node.style.display = 'inline-block'; node.style.width = _bs.w + 'px'; node.style.height = _bs.h + 'px'; node.style.overflow = 'visible'; } }
     node.style.outlineOffset = '3px';
     node.style.cursor = 'move';
     if (key !== 'hashtags') {
@@ -2804,22 +2804,38 @@ function emRenderPreview() {
     rh.style.cssText = 'position:absolute;bottom:-8px;right:-8px;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid #b31e59;cursor:nwse-resize;z-index:31;display:none';
     rh.addEventListener('mousedown', function(ev){
       ev.preventDefault(); ev.stopPropagation();
-      var startY = ev.clientY;
-      var startScale = (post.textScale && post.textScale[key]) || 1;
-      function onMove(e2){
-        var delta = (e2.clientY - startY) / 120;
-        var ns = Math.max(0.4, Math.min(3, startScale + delta));
-        post.textScale = post.textScale || {};
-        post.textScale[key] = ns;
-        var pz = post.textPos[key] || {x:0,y:0};
-        if (key === 'brand') node.style.transform = 'translate(' + pz.x + 'px,' + pz.y + 'px) scale(' + ns + ')';
-        else node.style.fontSize = (ns*100) + '%';
-        var sl = document.getElementById('emTextSize'); if (sl) sl.value = ns;
-        var sv = document.getElementById('emTextSizeLabel'); if (sv) sv.textContent = Math.round(ns*100) + '%';
+      if (key === 'brand') {
+        var startY = ev.clientY;
+        var startScale = (post.textScale && post.textScale[key]) || 1;
+        function onMove(e2){
+          var delta = (e2.clientY - startY) / 120;
+          var ns = Math.max(0.4, Math.min(3, startScale + delta));
+          post.textScale = post.textScale || {};
+          post.textScale[key] = ns;
+          var pz = post.textPos[key] || {x:0,y:0};
+          node.style.transform = 'translate(' + pz.x + 'px,' + pz.y + 'px) scale(' + ns + ')';
+        }
+        function onUp(){ window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); }
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      } else {
+        var _r0 = node.getBoundingClientRect();
+        var sx = ev.clientX, sy = ev.clientY;
+        var startW = (post.textBoxSize && post.textBoxSize[key] && post.textBoxSize[key].w) || _r0.width;
+        var startH = (post.textBoxSize && post.textBoxSize[key] && post.textBoxSize[key].h) || _r0.height;
+        function onMove(e2){
+          var nw = Math.max(24, Math.round(startW + (e2.clientX - sx))), nh = Math.max(16, Math.round(startH + (e2.clientY - sy)));
+          post.textBoxSize = post.textBoxSize || {};
+          post.textBoxSize[key] = { w: nw, h: nh };
+          node.style.display = 'inline-block';
+          node.style.width = nw + 'px';
+          node.style.height = nh + 'px';
+          node.style.overflow = 'visible';
+        }
+        function onUp(){ window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); }
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
       }
-      function onUp(){ window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); }
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onUp);
     });
     node.appendChild(rh);
     if (_emActiveWidget === key) { node.style.outline = '2px solid #b31e59'; x.style.display = 'flex'; rh.style.display = 'block'; }
