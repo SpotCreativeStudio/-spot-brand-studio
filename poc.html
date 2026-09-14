@@ -659,6 +659,13 @@ textarea.field-input{resize:none;line-height:1.5}
     <div class="view" id="v-brand" style="overflow-y:auto;padding:24px;flex-direction:column;gap:20px">
       <div style="flex:1;min-width:220px"><input id="brandNameInput" value="" onchange="BRAND_NAME=this.value;saveBrandSettings();" style="font-family:Helvetica,Arial,sans-serif;font-weight:700;letter-spacing:-.03em;font-size:28px;border:none;background:transparent;padding:2px 0;width:100%;color:#111" placeholder="Varumärkesnamn"/></div>
       <div class="card"><div class="card-header" style="display:flex;align-items:center;justify-content:space-between">Logotyp <button id="secBtn-logo" onclick="toggleSecEdit('logo')" style="font-size:12px;font-weight:600;padding:6px 14px;border-radius:8px;border:1.5px solid #b31e59;background:#fff;color:#b31e59;cursor:pointer">Redigera</button></div><div id="brandLogoBox"></div></div>
+      <div class="card">
+        <div class="card-header">💼 LinkedIn – företagssida</div>
+        <div style="padding:16px 18px">
+          <div style="font-size:12px;color:#6b7280;margin-bottom:12px">Anslut spot.:s officiella LinkedIn-företagssida för att kunna publicera inlägg dit (utöver privat delning i profilmenyn). Kräver att LinkedIn har godkänt appens Community Management API-åtkomst.</div>
+          <div id="liCompanyStatusBox" style="padding:10px 14px;border:1px solid #f0f0f0;border-radius:8px;font-size:12px;color:#6b7280">Kollar status…</div>
+        </div>
+      </div>
       <div class="card"><div class="card-header" style="display:flex;align-items:center;justify-content:space-between">Färgpalett <button id="secBtn-colors" onclick="toggleSecEdit('colors')" style="font-size:12px;font-weight:600;padding:6px 14px;border-radius:8px;border:1.5px solid #b31e59;background:#fff;color:#b31e59;cursor:pointer">Redigera</button></div><div style="padding:18px"><div class="color-row" id="colorRow"></div></div></div>
       <div class="card">
         <div class="card-header">📸 Bildstil för uppladdade bilder</div>
@@ -967,7 +974,7 @@ function _authorLine(p){
 function _saveAppState(){ if(!CURRENT_WORKSPACE) return; try{ localStorage.setItem('spotAppState', JSON.stringify({workspace:CURRENT_WORKSPACE, reviewQueue:S.reviewQueue, publishedPosts:S.publishedPosts, archiveOverride:S.archiveOverride})); }catch(e){} }
 function _restoreAppStateIfSameWorkspace(){ try{ var _as=JSON.parse(localStorage.getItem('spotAppState')||'null'); if(_as && _as.workspace===CURRENT_WORKSPACE){ if(Array.isArray(_as.reviewQueue))S.reviewQueue=_as.reviewQueue; if(Array.isArray(_as.publishedPosts))S.publishedPosts=_as.publishedPosts; if(_as.archiveOverride)S.archiveOverride=_as.archiveOverride; } else { localStorage.removeItem('spotAppState'); } }catch(e){} }
 var CURRENT_ROLE = 'admin';
-function _loadUserInfo(){ fetch('/api/me').then(function(r){ return r.json(); }).then(function(u){ var el=document.getElementById('avatarInitials'); if(el && u.initials) el.textContent=u.initials; var el2=document.getElementById('avatarInitials2'); if(el2 && u.initials) el2.textContent=u.initials; var btn=document.getElementById('avatarBtn'); if(btn && u.firstName) btn.title=u.firstName+' '+u.lastName; var nameEl=document.getElementById('userFullName'); if(nameEl) nameEl.textContent=(u.firstName||'')+' '+(u.lastName||''); CURRENT_ROLE = u.role || 'admin'; CURRENT_WORKSPACE = u.workspace || 'spot'; CURRENT_USER_NAME = ((u.firstName||'') + ' ' + (u.lastName||'')).trim() || 'Okänd'; _restoreAppStateIfSameWorkspace(); if (typeof renderDashboard === 'function') renderDashboard(); applyRolePermissions(); if (typeof _loadMyChannels === 'function') _loadMyChannels(); if (typeof _loadLinkedInStatus === 'function') _loadLinkedInStatus(); if (typeof _loadImgLibrary === 'function') _loadImgLibrary(); if (typeof _loadDrafts === 'function') _loadDrafts(); if (typeof _loadTeamPosts === 'function') _loadTeamPosts(); }).catch(function(){}); }
+function _loadUserInfo(){ fetch('/api/me').then(function(r){ return r.json(); }).then(function(u){ var el=document.getElementById('avatarInitials'); if(el && u.initials) el.textContent=u.initials; var el2=document.getElementById('avatarInitials2'); if(el2 && u.initials) el2.textContent=u.initials; var btn=document.getElementById('avatarBtn'); if(btn && u.firstName) btn.title=u.firstName+' '+u.lastName; var nameEl=document.getElementById('userFullName'); if(nameEl) nameEl.textContent=(u.firstName||'')+' '+(u.lastName||''); CURRENT_ROLE = u.role || 'admin'; CURRENT_WORKSPACE = u.workspace || 'spot'; CURRENT_USER_NAME = ((u.firstName||'') + ' ' + (u.lastName||'')).trim() || 'Okänd'; _restoreAppStateIfSameWorkspace(); if (typeof renderDashboard === 'function') renderDashboard(); applyRolePermissions(); if (typeof _loadMyChannels === 'function') _loadMyChannels(); if (typeof _loadLinkedInStatus === 'function') _loadLinkedInStatus(); if (typeof _loadLinkedInCompanyStatus === 'function') _loadLinkedInCompanyStatus(); if (typeof _loadImgLibrary === 'function') _loadImgLibrary(); if (typeof _loadDrafts === 'function') _loadDrafts(); if (typeof _loadTeamPosts === 'function') _loadTeamPosts(); }).catch(function(){}); }
 function applyRolePermissions(){
   var isAdmin = CURRENT_ROLE === 'admin';
   var isGranskare = CURRENT_ROLE === 'granskare';
@@ -1594,7 +1601,7 @@ function navigate(view) {
     if (b.textContent.trim().toLowerCase().includes(labels[view])) b.classList.add('active');
   });
   if (view === 'review')    renderReview();
-  if (view === 'brand')     renderBrand();
+  if (view === 'brand')     { renderBrand(); if (typeof _loadLinkedInCompanyStatus === 'function') _loadLinkedInCompanyStatus(); }
   if (view === 'dashboard') renderDashboard();
   if (view === 'published') renderPublished();
   if (view === 'team')      renderTeam();
@@ -2097,6 +2104,20 @@ function _loadLinkedInStatus(){
 }
 function disconnectLinkedIn(){
   fetch('/api/linkedin/disconnect', {method:'POST'}).then(function(){ _loadLinkedInStatus(); if(typeof showToast==='function') showToast('LinkedIn frånkopplat'); });
+}
+function _loadLinkedInCompanyStatus(){
+  var box = document.getElementById('liCompanyStatusBox');
+  if (!box) return;
+  fetch('/api/linkedin/company/status').then(function(r){return r.json();}).then(function(data){
+    if (data.connected) {
+      box.innerHTML = '💼 Ansluten till <b>' + (data.name||'företagssida') + '</b> <button onclick="disconnectLinkedInCompany()" style="margin-left:6px;font-size:11px;color:#b31e59;background:none;border:none;cursor:pointer;text-decoration:underline">Koppla bort</button>';
+    } else {
+      box.innerHTML = '<a href="/auth/linkedin/company" style="color:var(--m);font-weight:600;text-decoration:none">🔗 Koppla LinkedIn (företag)</a>';
+    }
+  }).catch(function(){ box.innerHTML = '<a href="/auth/linkedin/company" style="color:var(--m);font-weight:600;text-decoration:none">🔗 Koppla LinkedIn (företag)</a>'; });
+}
+function disconnectLinkedInCompany(){
+  fetch('/api/linkedin/company/disconnect', {method:'POST'}).then(function(){ _loadLinkedInCompanyStatus(); if(typeof showToast==='function') showToast('LinkedIn-företagssida frånkopplad'); });
 }
 var _myChCache = [];
 function _getMyCh(){ return _myChCache; }
