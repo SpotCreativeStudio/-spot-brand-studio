@@ -353,6 +353,107 @@ app.post('/api/linkedin/publish', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+// --- LinkedIn Company Page (official Community Management API) ---
+async function ensureLinkedInCompanyTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS linkedin_company_accounts (username TEXT PRIMARY KEY, access_token TEXT, expires_at BIGINT, org_urn TEXT, org_name TEXT)") }
+app.get('/auth/linkedin/company', auth, (req, res) => {
+  const s = sessions[getToken(req)] || {}
+  const state = makeToken()
+  s.liCompanyState = state
+  const redirectUri = req.protocol + '://' + req.get('host') + '/auth/linkedin/company/callback'
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: process.env.LINKEDIN_COMPANY_CLIENT_ID || '',
+    redirect_uri: redirectUri,
+    state,
+    scope: 'rw_organization_admin w_organization_social r_organization_social'
+  })
+  res.redirect('https://www.linkedin.com/oauth/v2/authorization?' + params.toString())
+})
+app.get('/auth/linkedin/company/callback', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    const { code, state } = req.query
+    if (!code || state !== s.liCompanyState) return res.send('<p>Ogiltig eller utgången LinkedIn-inloggning (företag). <a href="/">Tillbaka</a></p>')
+    const redirectUri = req.protocol + '://' + req.get('host') + '/auth/linkedin/company/callback'
+    const tokenRes = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+        client_id: process.env.LINKEDIN_COMPANY_CLIENT_ID || '',
+        client_secret: process.env.LINKEDIN_COMPANY_CLIENT_SECRET || ''
+      })
+    })
+    const tokenData = await tokenRes.json()
+    if (!tokenData.access_token) return res.send('<p>Kunde inte ansluta LinkedIn-företagssida: ' + (tokenData.error_description || tokenData.error || 'okänt fel') + '. <a href="/">Tillbaka</a></p>')
+    const aclRes = await fetch('https://api.linkedin.com/v2/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&projection=(elements*(organization~(localizedName),organizationalTarget~(localizedName)))', {
+      headers: { Authorization: 'Bearer ' + tokenData.access_token }
+    })
+    const aclData = await aclRes.json()
+    const first = (aclData.elements || [])[0] || {}
+    const orgTargetUrn = first.organizationalTarget || first.organization || null
+    const orgInfo = first['organizationalTarget~'] || first['organization~'] || {}
+    if (!orgTargetUrn) return res.send('<p>Inget LinkedIn-företag hittades där du är administratör. <a href="/">Tillbaka</a></p>')
+    await ensureLinkedInCompanyTable()
+    const expiresAt = Date.now() + (tokenData.expires_in || 5000) * 1000
+    await getAuthPool().query(
+      'INSERT INTO linkedin_company_accounts (username,access_token,expires_at,org_urn,org_name) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (username) DO UPDATE SET access_token=$2, expires_at=$3, org_urn=$4, org_name=$5',
+      [s.u, tokenData.access_token, expiresAt, orgTargetUrn, orgInfo.localizedName || '']
+    )
+    res.redirect('/?linkedin_company=connected')
+  } catch (e) {
+    res.send('<p>Fel vid LinkedIn-företagsinloggning: ' + e.message + '. <a href="/">Tillbaka</a></p>')
+  }
+})
+app.get('/api/linkedin/company/status', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    await ensureLinkedInCompanyTable()
+    const r = await getAuthPool().query('SELECT org_name, expires_at FROM linkedin_company_accounts WHERE username=$1', [s.u])
+    if (!r.rows.length) return res.json({ connected: false })
+    res.json({ connected: true, name: r.rows[0].org_name })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+app.post('/api/linkedin/company/disconnect', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    await ensureLinkedInCompanyTable()
+    await getAuthPool().query('DELETE FROM linkedin_company_accounts WHERE username=$1', [s.u])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+app.post('/api/linkedin/company/publish', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    const { text } = req.body || {}
+    if (!text) return res.status(400).json({ error: 'Text saknas' })
+    await ensureLinkedInCompanyTable()
+    const r = await getAuthPool().query('SELECT access_token, org_urn FROM linkedin_company_accounts WHERE username=$1', [s.u])
+    if (!r.rows.length) return res.status(400).json({ error: 'LinkedIn-företagssida är inte ansluten. Anslut den först under Varumärke.' })
+    const { access_token, org_urn } = r.rows[0]
+    const postRes = await fetch('https://api.linkedin.com/rest/posts', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + access_token,
+        'Content-Type': 'application/json',
+        'X-Restli-Protocol-Version': '2.0.0',
+        'Linkedin-Version': '202409'
+      },
+      body: JSON.stringify({
+        author: org_urn,
+        commentary: text,
+        visibility: 'PUBLIC',
+        distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] },
+        lifecycleState: 'PUBLISHED',
+        isReshareDisabledByAuthor: false
+      })
+    })
+    if (!postRes.ok) { const errText = await postRes.text(); return res.status(500).json({ error: 'LinkedIn avvisade företagsinlägget: ' + errText }) }
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 async function ensureBrandImagesTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS brand_images (id SERIAL PRIMARY KEY, name TEXT, url TEXT, ts BIGINT)"); await getAuthPool().query("ALTER TABLE brand_images ADD COLUMN IF NOT EXISTS workspace TEXT DEFAULT 'spot'") }
 app.get('/api/brand-images', auth, async (req, res) => {
   try {
@@ -492,6 +593,7 @@ app.post('/api/admin/delete-workspace', auth, async (req, res) => {
     await ensureUsersTable(); await ensureBrandTable(); await ensureBrandImagesTable(); await ensureDraftsTable()
     await getAuthPool().query('DELETE FROM user_channels WHERE username IN (SELECT username FROM app_users WHERE workspace=$1)', [workspaceId])
     await getAuthPool().query('DELETE FROM linkedin_accounts WHERE username IN (SELECT username FROM app_users WHERE workspace=$1)', [workspaceId])
+    await getAuthPool().query('DELETE FROM linkedin_company_accounts WHERE username IN (SELECT username FROM app_users WHERE workspace=$1)', [workspaceId]).catch(()=>{})
     await getAuthPool().query('DELETE FROM user_drafts WHERE username IN (SELECT username FROM app_users WHERE workspace=$1)', [workspaceId])
     await getAuthPool().query('DELETE FROM brand_images WHERE workspace=$1', [workspaceId])
     await getAuthPool().query('DELETE FROM workspace_brand WHERE workspace=$1', [workspaceId])
@@ -615,7 +717,8 @@ app.post('/api/admin/billing-events/seen', auth, async (req, res) => {
 })
 restoreSessions().finally(function(){ app.listen(PORT, () => console.log('spot. running on ' + PORT)) })
 const LOGIN_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot.</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:32px}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">content studio</div><form method="POST" action="/login"><div class="f"><label>Användarnamn eller e-post</label><input type="text" name="username" autofocus/></div><div class="f"><label>Lösenord</label><input type="password" name="password"/></div><div class="err" id="err">Fel.</div><button type="submit">Logga in</button><div style="text-align:center;margin-top:14px"><a href="/forgot" style="font-size:12px;color:#9ca3af;text-decoration:none">Glömt lösenord?</a></div><div class="ok" id="ok" style="display:none;color:#16a34a;font-size:13px;margin-top:8px;text-align:center">Lösenordet är återställt. Logga in med det nya lösenordet.</div></form></div><script>var q=new URLSearchParams(location.search);if(q.get("err"))document.getElementById("err").classList.add("show");if(q.get("reset"))document.getElementById("ok").style.display="block"<\/script></body></html>'
-
+ 
 const FORGOT_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot. - Glömt lösenord</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:24px;line-height:1.5}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.msg{font-size:13px;margin-top:8px;display:none;padding:10px 12px;border-radius:8px}.msg.err{color:#b31e59;background:#fff5f7}.msg.ok{color:#16a34a;background:#f0fdf4}.msg.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}a.back{display:block;text-align:center;margin-top:14px;font-size:12px;color:#9ca3af;text-decoration:none}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">Vi skickar en länk för att återställa lösenordet till adminens e-postadress.</div><form method="POST" action="/forgot"><div class="f"><label>E-postadress</label><input type="email" name="email" autofocus required placeholder="din@epost.se"/></div><div class="msg err" id="err">Något gick fel. Försök igen.</div><div class="msg err" id="nocfg">Ingen återställnings-e-post är konfigurerad. Kontakta utvecklaren.</div><div class="msg err" id="nomailer">E-postutskick är inte konfigurerat på servern. Kontakta utvecklaren.</div><div class="msg err" id="nomatch">Ingen adminadress matchar den e-postadressen.</div><div class="msg ok" id="sent">Ett mail med en återställningslänk har skickats. Kolla inkorgen (giltig i 30 minuter).</div><button type="submit">Skicka återställningslänk</button></form><a class="back" href="/login">Tillbaka till inloggning</a></div><script>var q=new URLSearchParams(location.search);var e=q.get("err");if(e==="1")document.getElementById("err").classList.add("show");if(e==="nocfg")document.getElementById("nocfg").classList.add("show");if(e==="nomailer")document.getElementById("nomailer").classList.add("show");if(e==="nomatch")document.getElementById("nomatch").classList.add("show");if(q.get("sent"))document.getElementById("sent").classList.add("show")<\/script></body></html>'
 const RESET_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot. - Nytt lösenord</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:24px}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">Välj ett nytt lösenord.</div><form method="POST" action="/reset"><input type="hidden" name="token" value="__TOKEN__"/><div class="f"><label>Nytt lösenord</label><input type="password" name="newPassword" autofocus/></div><div class="err" id="err">Lösenordet måste vara minst 4 tecken.</div><button type="submit">Spara nytt lösenord</button></form></div><script>if(new URLSearchParams(location.search).get("err"))document.getElementById("err").classList.add("show")<\/script></body></html>'
 const RESET_INVALID_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot.</title><style>body{font-family:Segoe UI,sans-serif;background:#0f0f0f;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}a{color:#b31e59}</style></head><body><div><p>Länken är ogiltig eller har gått ut.</p><p><a href="/forgot">Försök igen</a></p></div></body></html>'
+ 
