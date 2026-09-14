@@ -4303,7 +4303,7 @@ function wirePzmCanvas(){
   map.forEach(function(pair){
     var field=pair[0], val=pair[1]; var el=findByText(val); if(!el)return;
     el.dataset.ed=field; el.style.cursor="move"; el.title="Dra för att flytta · dubbelklicka för att ändra · dra hörnet för att ändra storlek"; el.style.userSelect="none"; el.style.webkitUserSelect="none"; el.style.touchAction="none"; var _bf=parseFloat(getComputedStyle(el).fontSize)||14; var _sc=(p.size&&p.size[field])||1; el.style.fontSize=(_bf*_sc)+"px"; var _cc=(p.color&&p.color[field]); if(_cc)el.style.color=_cc;
-    el.style.position="relative"; el.style.zIndex=String((p.zIndex&&p.zIndex[field])||1); var _bs=(p.boxSize&&p.boxSize[field]); if(_bs){ el.style.display="inline-block"; el.style.width=_bs.w+"px"; el.style.height=_bs.h+"px"; el.style.overflow="hidden"; }
+    el.style.position="relative"; el.style.zIndex=String((p.zIndex&&p.zIndex[field])||1); var _bs=(p.boxSize&&p.boxSize[field]); if(_bs){ el.style.display="inline-block"; el.style.width=_bs.w+"px"; el.style.height=_bs.h+"px"; el.style.overflow="visible"; } var _bs=(p.boxSize&&p.boxSize[field]); if(_bs){ el.style.display="inline-block"; el.style.width=_bs.w+"px"; el.style.height=_bs.h+"px"; el.style.overflow="hidden"; }
     var baseT=el.style.transform||""; el.dataset.baseT=baseT; el.dataset.baseFont=String(_bf);
     var pos=p.pos[field]; if(pos){ el.style.transform="translate("+pos.dx+"px,"+pos.dy+"px) "+baseT; }
     el.addEventListener("dblclick", function(ev){ ev.stopPropagation(); el.setAttribute("contenteditable","true"); el.style.outline="2px solid var(--m)"; el.style.userSelect="text"; el.style.webkitUserSelect="text"; window._pzmActiveField=field; el.focus(); });
@@ -4317,7 +4317,7 @@ function wirePzmCanvas(){
       document.addEventListener("pointermove",mv); document.addEventListener("pointerup",up); ev.preventDefault();
     });
     handle.addEventListener("pointerdown", function(ev){ ev.stopPropagation(); ev.preventDefault(); window._pzmActiveField=field; try{handle.setPointerCapture(ev.pointerId);}catch(_){} var sx=ev.clientX, sy=ev.clientY; var _r0=el.getBoundingClientRect(); var startW=(p.boxSize&&p.boxSize[field]&&p.boxSize[field].w)||_r0.width; var startH=(p.boxSize&&p.boxSize[field]&&p.boxSize[field].h)||_r0.height;
-      function mv(e){ var nw=Math.max(24,Math.round(startW+(e.clientX-sx))), nh=Math.max(16,Math.round(startH+(e.clientY-sy))); if(!p.boxSize)p.boxSize={}; p.boxSize[field]={w:nw,h:nh}; el.style.display="inline-block"; el.style.width=nw+"px"; el.style.height=nh+"px"; el.style.overflow="hidden"; }
+      function mv(e){ var nw=Math.max(24,Math.round(startW+(e.clientX-sx))), nh=Math.max(16,Math.round(startH+(e.clientY-sy))); if(!p.boxSize)p.boxSize={}; p.boxSize[field]={w:nw,h:nh}; el.style.display="inline-block"; el.style.width=nw+"px"; el.style.height=nh+"px"; el.style.overflow="visible"; }
       function up(){ document.removeEventListener("pointermove",mv); document.removeEventListener("pointerup",up); }
       document.addEventListener("pointermove",mv); document.addEventListener("pointerup",up);
     });
