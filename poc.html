@@ -1371,7 +1371,7 @@ function getPostImageHTML(post, size='card') {
       <div style="position:relative;flex:1;overflow:hidden">
         <div style="position:absolute;left:0;right:0;top:0;height:72%;overflow:hidden">${_imgOrGray(post)}</div>
         <div style="position:absolute;left:11px;right:11px;top:30%;font-family:${SERIF};font-size:${_autoFit(t,29,16,14)}px;line-height:.95;color:#fff;text-shadow:0 2px 14px rgba(0,0,0,.4);max-height:62%;overflow:hidden">${t}</div>
-        ${c?`<div style="position:absolute;left:11px;right:11px;bottom:6px;font-size:8px;color:rgba(255,255,255,.9);line-height:1.4;max-height:36px;overflow:hidden">${_truncateCaption(c,110)}</div>`:''}
+        ${c?`<div style="position:absolute;left:11px;right:11px;bottom:6px;font-size:8px;color:rgba(255,255,255,.9);line-height:1.4;max-height:120px;overflow:hidden">${_truncateCaption(c,260)}</div>`:''}
       </div>
       <div style="text-align:center;padding:5px 0 8px;font-size:8px;color:rgba(255,255,255,.92);font-weight:600;letter-spacing:.03em">@spotstudio.se${authorStr?` · 👤 ${authorStr}`:``}</div>
     </div>`;
