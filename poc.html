@@ -1296,7 +1296,8 @@ function _withImgBg(post, inner) {
 
 // Display-serif (matchar SPOT:s Higuen i mallarna) med fallback
 function _fontStackFor(name) { if (!name) return "'Higuen','Higuen Regular',Georgia,'Times New Roman',serif"; if (/higuen/i.test(name)) return "'" + name + "','Higuen Regular',Georgia,'Times New Roman',serif"; return "'" + name.replace(/\s+(Bold|Regular|Light|Italic|Medium)$/i,'') + "',Helvetica,Arial,sans-serif"; }
-  var _dispT = (typeof TYPOGRAPHY !== 'undefined' && TYPOGRAPHY.find(function(t){ return /display|editorial/i.test(t.role); })) || (typeof TYPOGRAPHY !== 'undefined' && TYPOGRAPHY[TYPOGRAPHY.length-1]) || {name:'Higuen Regular'};
+  var _dispT = {name:'Higuen Regular'};
+  try { _dispT = TYPOGRAPHY.find(function(t){ return /display|editorial/i.test(t.role); }) || TYPOGRAPHY[TYPOGRAPHY.length-1] || _dispT; } catch(_e){}
   const SERIF = _fontStackFor(_dispT.name);
 // Bild (uppladdad/AI) eller grå platshållare – fyller en position:relative-container
 function _imgTransform(post){
@@ -2036,13 +2037,19 @@ var BRAND_TAGLINE = 'a creative studio';
 var BRAND_LOCATION = 'Halmstad, Sverige';
 var BRAND_TONE = 'Självständig, kreativ och avskalad. Aldrig överdrivet säljig. Kortfattad och träffsäker. Lowercase-känsla.';
 function getBrandProfile() {
+  var _colorsStr = 'Grenache (#b31e59): Primär, Malbec (#82093e): Mörk accent';
+  try { _colorsStr = COLORS.map(function(c){ return c.name + ' (' + c.hex + '): ' + c.use; }).join(', '); } catch(_e){}
+  var _typoStr = 'Helvetica – bold för rubriker, regular för brödtext';
+  try { _typoStr = TYPOGRAPHY.map(function(t){ return t.name + ' (' + t.role + ')'; }).join(', '); } catch(_e){}
+  var _visualStr = 'Gråskaliga foton med magenta (#b31e59) accentfärg. Clean, minimalistisk estetik. Alltid lowercase varumärkesnamn.';
+  try { var _s = IMG_STYLES.find(function(x){ return x.id === S.imageStyle; }) || IMG_STYLES[0]; var _c = (COLORS && COLORS[0] && COLORS[0].hex) || '#b31e59'; _visualStr = _s.desc + ' (bildstil: ' + _s.label + '). Primärfärg ' + _c + ' som accent. Clean, minimalistisk estetik. Alltid lowercase varumärkesnamn.'; } catch(_e){}
   return {
     name: BRAND_NAME,
     tagline: BRAND_TAGLINE,
     location: BRAND_LOCATION,
-    colors: COLORS.map(c => `${c.name} (${c.hex}): ${c.use}`).join(', '),
-    typography: TYPOGRAPHY.map(function(t){ return t.name + ' (' + t.role + ')'; }).join(', '),
-    visualStyle: (function(){ var _s = IMG_STYLES.find(function(x){ return x.id === S.imageStyle; }) || IMG_STYLES[0]; var _c = (COLORS && COLORS[0] && COLORS[0].hex) || '#b31e59'; return _s.desc + ' (bildstil: ' + _s.label + '). Primärfärg ' + _c + ' som accent. Clean, minimalistisk estetik. Alltid lowercase varumärkesnamn.'; })(),
+    colors: _colorsStr,
+    typography: _typoStr,
+    visualStyle: _visualStr,
     tone: BRAND_TONE,
     services: 'Grafisk design, foto, innehållsproduktion, SoMe-mallar',
     dos: DOS_RULES.filter(r => r.active).map(r => r.text),
