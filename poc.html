@@ -2844,7 +2844,7 @@ function emRenderPreview() {
       }
     });
     node.appendChild(rh);
-    if (_emActiveWidget === key) { node.style.outline = '2px solid #b31e59'; x.style.display = 'flex'; rh.style.display = 'block'; }
+    if (_emActiveWidget === key) { node.style.outline = '2px solid #b31e59'; x.style.display = 'flex'; rh.style.display = 'block'; if (key !== 'hashtags' && node.isContentEditable) { setTimeout(function(){ node.focus(); try { var _rng = document.createRange(); _rng.selectNodeContents(node); _rng.collapse(false); var _sel = window.getSelection(); _sel.removeAllRanges(); _sel.addRange(_rng); } catch(_e){} }, 0); } }
   });
   card.addEventListener('click', function(ev){ if (ev.target === card || ev.target.tagName === 'IMG') emSelectWidget(null); });
   // Canvas: drag image to pan, wheel to zoom
