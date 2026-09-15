@@ -1329,6 +1329,14 @@ function _autoFit(str, base, maxLen, min) {
   var scale = Math.max(min/base, Math.sqrt(maxLen/len));
   return Math.round(base*scale*10)/10;
 }
+function _truncateCaption(str, maxChars) {
+  str = str || '';
+  if (str.length <= maxChars) return str;
+  var cut = str.slice(0, maxChars);
+  var lastSpace = cut.lastIndexOf(' ');
+  if (lastSpace > maxChars * 0.6) cut = cut.slice(0, lastSpace);
+  return cut.trim() + '…';
+}
 function getPostImageHTML(post, size='card') {
   const layout = post.layout || 'gradient';
   const _blocks = post.blocks || ['brand','title','content','hashtags','cta'];
@@ -1363,7 +1371,7 @@ function getPostImageHTML(post, size='card') {
       <div style="position:relative;flex:1;overflow:hidden">
         <div style="position:absolute;left:0;right:0;top:0;height:72%;overflow:hidden">${_imgOrGray(post)}</div>
         <div style="position:absolute;left:11px;right:11px;top:30%;font-family:${SERIF};font-size:${_autoFit(t,29,16,14)}px;line-height:.95;color:#fff;text-shadow:0 2px 14px rgba(0,0,0,.4);max-height:62%;overflow:hidden">${t}</div>
-        ${c?`<div style="position:absolute;left:11px;right:11px;bottom:6px;font-size:8px;color:rgba(255,255,255,.9);line-height:1.4;max-height:30px;overflow:hidden">${c}</div>`:''}
+        ${c?`<div style="position:absolute;left:11px;right:11px;bottom:6px;font-size:8px;color:rgba(255,255,255,.9);line-height:1.4;max-height:36px;overflow:hidden">${_truncateCaption(c,110)}</div>`:''}
       </div>
       <div style="text-align:center;padding:5px 0 8px;font-size:8px;color:rgba(255,255,255,.92);font-weight:600;letter-spacing:.03em">@spotstudio.se${authorStr?` · 👤 ${authorStr}`:``}</div>
     </div>`;
