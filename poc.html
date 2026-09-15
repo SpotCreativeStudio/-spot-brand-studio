@@ -2820,11 +2820,14 @@ function emRenderPreview() {
         window.addEventListener('mouseup', onUp);
       } else {
         var _r0 = node.getBoundingClientRect();
+        var _cardRect = card.getBoundingClientRect();
+        var _maxW = Math.max(24, Math.round(_cardRect.right - _r0.left - 8));
+        var _maxH = Math.max(16, Math.round(_cardRect.bottom - _r0.top - 8));
         var sx = ev.clientX, sy = ev.clientY;
         var startW = (post.textBoxSize && post.textBoxSize[key] && post.textBoxSize[key].w) || _r0.width;
         var startH = (post.textBoxSize && post.textBoxSize[key] && post.textBoxSize[key].h) || _r0.height;
         function onMove(e2){
-          var nw = Math.max(24, Math.round(startW + (e2.clientX - sx))), nh = Math.max(16, Math.round(startH + (e2.clientY - sy)));
+          var nw = Math.min(_maxW, Math.max(24, Math.round(startW + (e2.clientX - sx)))), nh = Math.min(_maxH, Math.max(16, Math.round(startH + (e2.clientY - sy))));
           post.textBoxSize = post.textBoxSize || {};
           post.textBoxSize[key] = { w: nw, h: nh };
           node.style.display = 'inline-block';
