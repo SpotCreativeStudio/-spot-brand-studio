@@ -1295,7 +1295,9 @@ function _withImgBg(post, inner) {
 }
 
 // Display-serif (matchar SPOT:s Higuen i mallarna) med fallback
-const SERIF = "'Higuen','Higuen Regular',Georgia,'Times New Roman',serif";
+function _fontStackFor(name) { if (!name) return "'Higuen','Higuen Regular',Georgia,'Times New Roman',serif"; if (/higuen/i.test(name)) return "'" + name + "','Higuen Regular',Georgia,'Times New Roman',serif"; return "'" + name.replace(/\s+(Bold|Regular|Light|Italic|Medium)$/i,'') + "',Helvetica,Arial,sans-serif"; }
+  var _dispT = (typeof TYPOGRAPHY !== 'undefined' && TYPOGRAPHY.find(function(t){ return /display|editorial/i.test(t.role); })) || (typeof TYPOGRAPHY !== 'undefined' && TYPOGRAPHY[TYPOGRAPHY.length-1]) || {name:'Higuen Regular'};
+  const SERIF = _fontStackFor(_dispT.name);
 // Bild (uppladdad/AI) eller grå platshållare – fyller en position:relative-container
 function _imgTransform(post){
   var p = (post && post.imgPos) ? post.imgPos : { x:0, y:0, zoom:1 };
