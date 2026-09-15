@@ -2763,7 +2763,7 @@ function emRenderPreview() {
     // Drag to move (hold and drag anywhere on the widget)
     var dragging = false, sx = 0, sy = 0, startX = 0, startY = 0, moved = false;
     node.addEventListener('mousedown', function(ev){
-      if (ev.target.classList && ev.target.classList.contains('em-wx')) return;
+      if (ev.target.classList && (ev.target.classList.contains('em-wx') || ev.target.classList.contains('em-wr'))) return;
       dragging = true; moved = false;
       sx = ev.clientX; sy = ev.clientY;
       var cur = post.textPos[key] || { x:0, y:0 };
@@ -2803,7 +2803,7 @@ function emRenderPreview() {
     rh.contentEditable = 'false';
     rh.style.cssText = 'position:absolute;bottom:-8px;right:-8px;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid #b31e59;cursor:nwse-resize;z-index:31;display:none';
     rh.addEventListener('mousedown', function(ev){
-      ev.preventDefault(); ev.stopPropagation();
+      ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation();
       if (key === 'brand') {
         var startY = ev.clientY;
         var startScale = (post.textScale && post.textScale[key]) || 1;
@@ -4575,3 +4575,4 @@ renderDashboard();
 </script>
 </body>
 </html>
+bb
