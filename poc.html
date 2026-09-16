@@ -2047,9 +2047,14 @@ function pickAspectRatio(el, val) {
   document.querySelectorAll('#aspectRatioGrid .ch-pill').forEach(function(p){ p.classList.remove('active'); });
   el.classList.add('active');
   S.aspectRatio = val;
-  try { if (typeof updateManualPreview === 'function') updateManualPreview(); } catch(e){}
-  try { if (typeof renderPreview === 'function') renderPreview(); } catch(e){}
-  try { if (typeof renderPropCards === 'function') renderPropCards(); } catch(e){}
+  try {
+    if (window._aiProposals) {
+      if (typeof renderPropCards === 'function') renderPropCards();
+      if (typeof renderPreview === 'function') renderPreview();
+    } else if (typeof updateManualPreview === 'function') {
+      updateManualPreview();
+    }
+  } catch(e){}
 }
 function openAIAssist() {
   // Reset channel pills to all active
