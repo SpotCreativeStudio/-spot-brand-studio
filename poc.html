@@ -4604,6 +4604,7 @@ function createForDay(dateStr) {
 // ════════════════════════════════════════════════════════
 //  INIT
 // ════════════════════════════════════════════════════════
+try { loadBrandSettings(); if (typeof S !== 'undefined') S._brandLoaded = true; } catch (e) {}
 renderDashboard();
 
 </script>
