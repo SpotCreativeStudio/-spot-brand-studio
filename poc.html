@@ -676,6 +676,17 @@ textarea.field-input{resize:vertical;line-height:1.5}
           <div id="liCompanyStatusBox" style="padding:10px 14px;border:1px solid #f0f0f0;border-radius:8px;font-size:12px;color:#6b7280">Kollar status…</div>
         </div>
       </div>
+      <div class="card">
+        <div class="card-header">Hemsida</div>
+        <div style="padding:16px 18px">
+          <div style="font-size:12px;color:#6b7280;margin-bottom:12px">Hämta info från er hemsida (rubrik och beskrivning) som stöd när AI:n genererar innehåll.</div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <input id="brandWebsiteInput" value="" onchange="BRAND_WEBSITE=this.value;saveBrandSettings();" placeholder="https://din-hemsida.se" style="flex:1;font-size:13px;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px"/>
+            <button onclick="fetchWebsiteInfo()" style="font-size:12px;font-weight:600;padding:8px 14px;border-radius:8px;border:1.5px solid #b31e59;background:#fff;color:#b31e59;cursor:pointer;white-space:nowrap">Hämta info</button>
+          </div>
+          <div id="websiteInfoBox" style="display:none;padding:10px 14px;border:1px solid #f0f0f0;border-radius:8px;font-size:12px;color:#374151"></div>
+        </div>
+      </div>
       <div class="card"><div class="card-header" style="display:flex;align-items:center;justify-content:space-between">Färgpalett <button id="secBtn-colors" onclick="toggleSecEdit('colors')" style="font-size:12px;font-weight:600;padding:6px 14px;border-radius:8px;border:1.5px solid #b31e59;background:#fff;color:#b31e59;cursor:pointer">Redigera</button></div><div style="padding:18px"><div class="color-row" id="colorRow"></div></div></div>
       <div class="card">
         <div class="card-header">📸 Bildstil för uppladdade bilder</div>
@@ -2075,7 +2086,8 @@ function getModalChannels() {
 var BRAND_NAME = 'spot.';
 var BRAND_TAGLINE = 'a creative studio';
 var BRAND_LOCATION = 'Halmstad, Sverige';
-var BRAND_TONE = 'Självständig, kreativ och avskalad. Aldrig överdrivet säljig. Kortfattad och träffsäker. Lowercase-känsla.';
+var BRAND_TONE = 'Självständig, kreativ och avskalad. Aldrig överdrivet säljig. Kortfattad och träffsäker. Lowercase-känsla.'
+var BRAND_WEBSITE = '';
 function getBrandProfile() {
   var _colorsStr = 'Grenache (#b31e59): Primär, Malbec (#82093e): Mörk accent';
   try { _colorsStr = COLORS.map(function(c){ return c.name + ' (' + c.hex + '): ' + c.use; }).join(', '); } catch(_e){}
@@ -3575,6 +3587,7 @@ function loadBrandSettings(){
     if (b.tagline) BRAND_TAGLINE = b.tagline;
     if (b.location) BRAND_LOCATION = b.location;
     if (b.tone) BRAND_TONE = b.tone;
+    if (b.website) BRAND_WEBSITE = b.website;
     if (b.customFonts && b.customFonts.length) { CUSTOM_FONTS = b.customFonts; injectCustomFontFaces(); }
     if (typeof renderBrand === "function") renderBrand();
   }).catch(function(){});
@@ -3585,9 +3598,32 @@ function saveBrandSettings(){
     name: (typeof BRAND_NAME!=="undefined"?BRAND_NAME:"spot."),
     tagline: (typeof BRAND_TAGLINE!=="undefined"?BRAND_TAGLINE:"a creative studio"),
     location: (typeof BRAND_LOCATION!=="undefined"?BRAND_LOCATION:"Halmstad, Sverige"),
-    tone: (typeof BRAND_TONE!=="undefined"?BRAND_TONE:undefined)
+    tone: (typeof BRAND_TONE!=="undefined"?BRAND_TONE:undefined),
+    website: (typeof BRAND_WEBSITE!=="undefined"?BRAND_WEBSITE:undefined)
   };
   fetch("/api/brand", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload) }).catch(function(){});
+}
+async function fetchWebsiteInfo(){
+  var input = document.getElementById('brandWebsiteInput');
+  var box = document.getElementById('websiteInfoBox');
+  var url = input ? input.value.trim() : '';
+  if(!url){ if(box){box.style.display='block';box.textContent='Ange en URL först.';} return; }
+  if(box){ box.style.display='block'; box.textContent='Hämtar info…'; }
+  try {
+    var res = await fetch('/api/brand/fetch-website', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url: url }) });
+    var data = await res.json();
+    if(!res.ok || data.error){ if(box) box.textContent = 'Kunde inte hämta info: ' + (data.error || 'okänt fel'); return; }
+    BRAND_WEBSITE = data.url || url;
+    if(input) input.value = BRAND_WEBSITE;
+    saveBrandSettings();
+    if(box){
+      var t = data.title ? ('<div style="font-weight:600;margin-bottom:4px">' + data.title + '</div>') : '';
+      var d = data.description ? ('<div>' + data.description + '</div>') : '<div style="color:#9ca3af">Ingen beskrivning hittades.</div>';
+      box.innerHTML = t + d;
+    }
+  } catch(e) {
+    if(box) box.textContent = 'Kunde inte hämta info från sidan.';
+  }
 }
 function _dataUrlToBinary(dataUrl){var parts=dataUrl.split(",");var meta=parts[0];var b64=parts[1];var ext="png";var m=/data:image\/(\w+)/.exec(meta);if(m)ext=m[1]==="jpeg"?"jpg":m[1];return {base64:b64,ext:ext};}
 async function downloadBrandFolder(){
