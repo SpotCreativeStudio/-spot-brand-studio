@@ -529,6 +529,16 @@ textarea.field-input{resize:vertical;line-height:1.5}
           <textarea class="field-input" id="m-content" rows="6" placeholder="Skriv ditt inlägg här..." oninput="updateManualPreview()"></textarea>
         </div>
 
+        <!-- BILDFÖRHÅLLANDE -->
+        <div class="section-card" style="display:flex;flex-direction:column;gap:10px">
+          <div class="field-label">Bildförhållande</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap" id="aspectRatioGrid">
+            <div class="ch-pill active" onclick="pickAspectRatio(this,null)" data-ar="auto">Auto (per kanal)</div>
+            <div class="ch-pill" onclick="pickAspectRatio(this,'5:4')" data-ar="5:4">5:4</div>
+            <div class="ch-pill" onclick="pickAspectRatio(this,'1:1')" data-ar="1:1">1:1</div>
+          </div>
+        </div>
+
         <!-- KANALER -->
         <div class="section-card" style="display:flex;flex-direction:column;gap:10px">
           <div class="field-label">Kanaler</div>
@@ -539,16 +549,6 @@ textarea.field-input{resize:vertical;line-height:1.5}
             <div class="ch-pill" onclick="pickManualCh(this,'tiktok')" data-ch="tiktok" style="display:none"><span>🎵</span> TikTok</div>
           </div>
           <div style="font-size:11px;color:#9ca3af;margin-top:4px">Välj en eller flera kanaler — ett inlägg skapas per kanal.</div>
-        </div>
-
-        <!-- BILDFÖRHÅLLANDE -->
-        <div class="section-card" style="display:flex;flex-direction:column;gap:10px">
-          <div class="field-label">Bildförhållande</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap" id="aspectRatioGrid">
-            <div class="ch-pill active" onclick="pickAspectRatio(this,null)" data-ar="auto">Auto (per kanal)</div>
-            <div class="ch-pill" onclick="pickAspectRatio(this,'5:4')" data-ar="5:4">5:4</div>
-            <div class="ch-pill" onclick="pickAspectRatio(this,'1:1')" data-ar="1:1">1:1</div>
-          </div>
         </div>
 
         <!-- BILD -->
@@ -1899,6 +1899,7 @@ function addToReview() {
     status: 'review', createdAt: new Date().toISOString(),
     author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
     channels: [ch],
+    aspectRatio: S.aspectRatio || null,
   };
   S.reviewQueue.push(post);
   updateBadge();
