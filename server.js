@@ -523,9 +523,22 @@ app.get('/api/brand', auth, async (req, res) => {
 app.post('/api/brand', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
-    const data = req.body || {}
+    const incoming = req.body || {}
+    const workspace = s.workspace || 'spot'
     await ensureBrandTable()
-    await getAuthPool().query('INSERT INTO workspace_brand (workspace,data) VALUES ($1,$2) ON CONFLICT (workspace) DO UPDATE SET data=$2', [s.workspace || 'spot', JSON.stringify(data)])
+    const pool = getAuthPool()
+    const existingRes = await pool.query('SELECT data FROM workspace_brand WHERE workspace=$1', [workspace])
+    const existing = (existingRes.rows[0] && existingRes.rows[0].data) || {}
+    // Merge instead of blind overwrite: a field that is missing, undefined, or an empty array
+    // in the incoming payload will NOT wipe out previously saved data for that field.
+    const merged = Object.assign({}, existing)
+    for (const key of Object.keys(incoming)) {
+      const val = incoming[key]
+      if (val === undefined) continue
+      if (Array.isArray(val) && val.length === 0 && Array.isArray(existing[key]) && existing[key].length > 0) continue
+      merged[key] = val
+    }
+    await pool.query('INSERT INTO workspace_brand (workspace,data) VALUES ($1,$2) ON CONFLICT (workspace) DO UPDATE SET data=$2', [workspace, JSON.stringify(merged)])
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
