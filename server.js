@@ -542,6 +542,33 @@ app.post('/api/brand', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+app.post('/api/brand/fetch-website', auth, async (req, res) => {
+  try {
+    let { url } = req.body || {}
+    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'URL saknas' })
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url
+    let parsed
+    try { parsed = new URL(url) } catch (e) { return res.status(400).json({ error: 'Ogiltig URL' }) }
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+    let html = ''
+    try {
+      const r = await fetch(parsed.toString(), { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0 (SpotBrandStudio)' } })
+      html = await r.text()
+    } finally { clearTimeout(timeout) }
+    html = html.slice(0, 500000)
+    const titleMatch = /<title[^>]*>([^<]*)<\/title>/i.exec(html)
+    const descMatch = /<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i.exec(html) || /<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i.exec(html)
+    const ogTitleMatch = /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["']/i.exec(html)
+    const ogDescMatch = /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["']/i.exec(html)
+    const decode = (s) => (s || '').replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim()
+    res.json({
+      url: parsed.toString(),
+      title: decode(titleMatch ? titleMatch[1] : (ogTitleMatch ? ogTitleMatch[1] : '')),
+      description: decode(descMatch ? descMatch[1] : (ogDescMatch ? ogDescMatch[1] : ''))
+    })
+  } catch (e) { res.status(500).json({ error: e.message || 'Kunde inte hämta sidan' }) }
+})
 app.post('/api/admin/create-workspace', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
