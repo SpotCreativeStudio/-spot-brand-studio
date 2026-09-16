@@ -2087,7 +2087,8 @@ var BRAND_NAME = 'spot.';
 var BRAND_TAGLINE = 'a creative studio';
 var BRAND_LOCATION = 'Halmstad, Sverige';
 var BRAND_TONE = 'Självständig, kreativ och avskalad. Aldrig överdrivet säljig. Kortfattad och träffsäker. Lowercase-känsla.'
-var BRAND_WEBSITE = '';
+var BRAND_WEBSITE = ''
+var BRAND_WEBSITE_INFO = { title:'', description:'' };
 function getBrandProfile() {
   var _colorsStr = 'Grenache (#b31e59): Primär, Malbec (#82093e): Mörk accent';
   try { _colorsStr = COLORS.map(function(c){ return c.name + ' (' + c.hex + '): ' + c.use; }).join(', '); } catch(_e){}
@@ -2107,6 +2108,7 @@ function getBrandProfile() {
     dos: DOS_RULES.filter(r => r.active).map(r => r.text),
     donts: DONTS_RULES.filter(r => r.active).map(r => r.text),
     forbidden: FORBIDDEN,
+    website: (function(){ try { var u = (typeof BRAND_WEBSITE!=="undefined"?BRAND_WEBSITE:""); var d = (typeof BRAND_WEBSITE_INFO!=="undefined"&&BRAND_WEBSITE_INFO.description)?BRAND_WEBSITE_INFO.description:""; return u ? (u + (d ? " — " + d : "")) : ""; } catch(e){ return ""; } })(),
   };
 }
 var _draftsCache = [];
@@ -3588,6 +3590,7 @@ function loadBrandSettings(){
     if (b.location) BRAND_LOCATION = b.location;
     if (b.tone) BRAND_TONE = b.tone;
     if (b.website) BRAND_WEBSITE = b.website;
+    if (b.websiteInfo) BRAND_WEBSITE_INFO = b.websiteInfo;
     if (b.customFonts && b.customFonts.length) { CUSTOM_FONTS = b.customFonts; injectCustomFontFaces(); }
     if (typeof renderBrand === "function") renderBrand();
   }).catch(function(){});
@@ -3599,7 +3602,8 @@ function saveBrandSettings(){
     tagline: (typeof BRAND_TAGLINE!=="undefined"?BRAND_TAGLINE:"a creative studio"),
     location: (typeof BRAND_LOCATION!=="undefined"?BRAND_LOCATION:"Halmstad, Sverige"),
     tone: (typeof BRAND_TONE!=="undefined"?BRAND_TONE:undefined),
-    website: (typeof BRAND_WEBSITE!=="undefined"?BRAND_WEBSITE:undefined)
+    website: (typeof BRAND_WEBSITE!=="undefined"?BRAND_WEBSITE:undefined),
+    websiteInfo: (typeof BRAND_WEBSITE_INFO!=="undefined"?BRAND_WEBSITE_INFO:undefined)
   };
   fetch("/api/brand", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload) }).catch(function(){});
 }
@@ -3614,6 +3618,7 @@ async function fetchWebsiteInfo(){
     var data = await res.json();
     if(!res.ok || data.error){ if(box) box.textContent = 'Kunde inte hämta info: ' + (data.error || 'okänt fel'); return; }
     BRAND_WEBSITE = data.url || url;
+    BRAND_WEBSITE_INFO = { title: data.title || '', description: data.description || '' };
     if(input) input.value = BRAND_WEBSITE;
     saveBrandSettings();
     if(box){
