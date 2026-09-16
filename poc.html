@@ -541,6 +541,16 @@ textarea.field-input{resize:vertical;line-height:1.5}
           <div style="font-size:11px;color:#9ca3af;margin-top:4px">Välj en eller flera kanaler — ett inlägg skapas per kanal.</div>
         </div>
 
+        <!-- BILDFÖRHÅLLANDE -->
+        <div class="section-card" style="display:flex;flex-direction:column;gap:10px">
+          <div class="field-label">Bildförhållande</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap" id="aspectRatioGrid">
+            <div class="ch-pill active" onclick="pickAspectRatio(this,null)" data-ar="auto">Auto (per kanal)</div>
+            <div class="ch-pill" onclick="pickAspectRatio(this,'5:4')" data-ar="5:4">5:4</div>
+            <div class="ch-pill" onclick="pickAspectRatio(this,'1:1')" data-ar="1:1">1:1</div>
+          </div>
+        </div>
+
         <!-- BILD -->
         <div class="section-card" style="display:flex;flex-direction:column;gap:10px">
           <div class="field-label">Bild (valfritt)</div>
@@ -957,6 +967,7 @@ const S = {
   manualChannel: 'linkedin',
   manualChannels: ['linkedin'],
   manualTags: [],
+  aspectRatio: null, // null=auto by channel, or '5:4' | '1:1'
   layoutPickerPostId: null,
   imageStyle: 'grayscale', // 'natural' | 'grayscale' | 'duotone' | 'dark'
   _aiImageUrl: null,       // AI-genererad bild från senaste briefen
@@ -1170,7 +1181,7 @@ function renderTrash(){
     grid.innerHTML = posts.map(function(post, i){
       var when = post.deletedAt ? new Date(Number(post.deletedAt)).toLocaleDateString('sv-SE') : '';
       return '<div class="pub-card" style="opacity:.75">' +
-        '<div style="aspect-ratio:' + (typeof _arFor==='function'? _arFor(post.channel) : '4/5') + ';overflow:hidden;position:relative">' + getPostImageHTML(post) + '</div>' +
+        '<div style="aspect-ratio:' + (typeof _arFor==='function'? _arFor(post.channel,post) : '4/5') + ';overflow:hidden;position:relative">' + getPostImageHTML(post) + '</div>' +
         '<div style="padding:10px 12px">' +
         '<div style="font-size:13px;font-weight:600;color:#111">' + (post.title||'(Utan titel)') + '</div>' +
         '<div style="font-size:11px;color:#9ca3af;margin-top:3px">' + (typeof _authorLine==='function'? _authorLine(post) : '') + '</div>' +
@@ -1869,7 +1880,7 @@ function renderPreview() {
   const mockPost = { channel: ch, layout: 'gradient', ...p };
   body.innerHTML = `
     <div style="width:220px">
-      <div onclick="openCreateEditor()" style="cursor:pointer;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.15);aspect-ratio:${_arFor(mockPost.channel)}">
+      <div onclick="openCreateEditor()" style="cursor:pointer;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.15);aspect-ratio:${_arFor(mockPost.channel,mockPost)}">
         ${getPostImageHTML(mockPost)}
       </div>
       <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:8px;font-family:Helvetica,Arial,sans-serif">${CH_LABEL[ch]} · spot.</div>
@@ -2031,6 +2042,14 @@ function pickManualCh(el, ch) {
   S.manualChannel = S.manualChannels[0];
   updateManualPreview();
 }
+function pickAspectRatio(el, val) {
+  document.querySelectorAll('#aspectRatioGrid .ch-pill').forEach(function(p){ p.classList.remove('active'); });
+  el.classList.add('active');
+  S.aspectRatio = val;
+  try { if (typeof updateManualPreview === 'function') updateManualPreview(); } catch(e){}
+  try { if (typeof renderPreview === 'function') renderPreview(); } catch(e){}
+  try { if (typeof renderPropCards === 'function') renderPropCards(); } catch(e){}
+}
 function openAIAssist() {
   // Reset channel pills to all active
   document.querySelectorAll('#modalChGrid .ch-pill').forEach(p => p.classList.add('active'));
@@ -2111,7 +2130,7 @@ function rejectPost(id){
     if(typeof showToast==="function")showToast("Inlägget nekades och skickades till utkast.");
   };
 }
-function _arFor(ch){return ({instagram:"4/5",tiktok:"9/16",facebook:"1/1",linkedin:"1/1"})[ch]||"4/5";}
+function _arFor(ch,obj){try{if(obj&&obj.aspectRatio)return obj.aspectRatio==="1:1"?"1/1":"5/4";if(typeof S!=="undefined"&&S.aspectRatio)return S.aspectRatio==="1:1"?"1/1":"5/4"}catch(e){}return ({instagram:"4/5",tiktok:"9/16",facebook:"1/1",linkedin:"1/1"})[ch]||"4/5";}
 (function(){function _syncAR(){try{var ch=window._activeProposalTab||(typeof S!=="undefined"&&S.previewChannel)||(typeof S!=="undefined"&&S.manualChannel)||"instagram";document.documentElement.style.setProperty("--post-ar",_arFor(ch));}catch(e){}}setInterval(_syncAR,400);document.addEventListener("DOMContentLoaded",_syncAR);})();
 var _liConnected = false;
 function _loadLinkedInStatus(){
@@ -2405,7 +2424,7 @@ function updateManualPreview() {
   if (panelTitle) panelTitle.textContent = 'Förhandsvisning';
   body.innerHTML = `
     <div style="width:100%">
-      <div onclick="openCreateEditor()" style="cursor:pointer;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.15);aspect-ratio:${_arFor(mockPost.channel)}">
+      <div onclick="openCreateEditor()" style="cursor:pointer;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.15);aspect-ratio:${_arFor(mockPost.channel,mockPost)}">
         ${getPostImageHTML(mockPost)}
       </div>
       <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:8px">${CH_LABEL[S.manualChannel]}</div>
@@ -2444,6 +2463,7 @@ function addManualToReview() {
         status: 'review', createdAt: new Date().toISOString(),
         scheduledAt, imageUrl: activeImageUrl(),
         imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
+        aspectRatio: S.aspectRatio || null,
       });
       added++;
     });
@@ -2465,6 +2485,7 @@ function addManualToReview() {
         status: 'review', createdAt: new Date().toISOString(),
         scheduledAt, imageUrl: activeImageUrl(),
         imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
+        aspectRatio: S.aspectRatio || null,
       });
     });
   }
@@ -2518,7 +2539,7 @@ function renderReview() {
     if (c.isValid && !c.warnings.length) badges = quickActions;
     else badges = quickActions + '<div style="margin-top:6px">' + [...c.issues.map(i => `<span class="rule-err">✗ ${i}</span>`), ...c.warnings.map(w => `<span class="rule-warn">⚠ ${w}</span>`)].join('') + '</div>';
     return `<div class="review-card ${S.selectedReviewId === post.id ? 'selected' : ''}" onclick="selectReview('${post.id}')">
-      <div class="rc-thumb" style="aspect-ratio:${_arFor(post.channel)};position:relative;overflow:hidden;" onclick="event.stopPropagation();openLightbox(${idx})">
+      <div class="rc-thumb" style="aspect-ratio:${_arFor(post.channel,post)};position:relative;overflow:hidden;" onclick="event.stopPropagation();openLightbox(${idx})">
         ${getPostImageHTML(post)}
         <button class="rc-layout-btn" onclick="event.stopPropagation();openLayoutPicker('${post.id}')">🎨 Layout</button>
         <div class="rc-ch-badge" style="background:rgba(255,255,255,.9);color:${CH_TC[post.channel]}">${CH_LABEL[post.channel]}</div>
@@ -2568,7 +2589,7 @@ function renderDetailPanel() {
         <span class="dp-close" onclick="document.getElementById('detailPanel').style.display='none';S.selectedReviewId=null;renderReview()">✕</span>
       </div>
       <div class="dp-body">
-        <div style="aspect-ratio:${_arFor(post.channel)};border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.1)">${getPostImageHTML(post)}</div>
+        <div style="aspect-ratio:${_arFor(post.channel,post)};border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.1)">${getPostImageHTML(post)}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:6px">
           ${LAYOUTS.map(l => `<button onclick="setReviewLayout('${post.id}','${l}')"
             style="padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;
@@ -2733,7 +2754,7 @@ function emRenderPreview() {
   if (!post) return;
   const card = document.getElementById('emPreviewCard');
   if (!card) return;
-  card.style.aspectRatio = (typeof _arFor==='function') ? _arFor(post.channel) : '4/5';
+  card.style.aspectRatio = (typeof _arFor==='function') ? _arFor(post.channel,post) : '4/5';
   card.style.position = 'relative';
   setTimeout(_emFitPreview, 0);
   // Render the post card with contenteditable regions
@@ -3401,7 +3422,7 @@ function _fitLightboxCard(post) {
   const card = document.getElementById('lbCard');
   const wrap = document.getElementById('lbImgWrap');
   if (!card || !wrap) return;
-  const arStr = _arFor(post.channel);
+  const arStr = _arFor(post.channel,post);
   const parts = arStr.split('/').map(Number);
   const ratio = parts[0] / parts[1];
   const footer = card.querySelector('.lb-footer');
