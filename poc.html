@@ -100,7 +100,7 @@ textarea,input{font-family:inherit}
 .pzm-title{font-size:15px;font-weight:700;color:#111;margin-bottom:6px}
 .pzm-content{font-size:13px;color:#6b7280;line-height:1.6;margin-bottom:10px}
 .pzm-tags{font-size:12px;color:#b31e59;margin-bottom:10px}
-.pzm-cta{background:var(--m);color:#fff;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;text-align:center}
+
 .pzm-nav{display:flex;flex-direction:column;gap:12px}
 .pzm-nav-btn{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
 .pzm-nav-btn:hover{background:rgba(255,255,255,.3)}
@@ -183,7 +183,7 @@ textarea.field-input{resize:vertical;line-height:1.5}
 .dp-textbox{background:#f9fafb;border-radius:8px;padding:10px;font-size:12px;color:#374151;line-height:1.6}
 .dp-tags{display:flex;flex-wrap:wrap;gap:5px}
 .dp-tag{font-size:11px;color:var(--m);background:#fff5f7;padding:2px 8px;border-radius:99px}
-.dp-cta-box{background:#f9fafb;border-radius:8px;padding:10px;font-size:13px;font-weight:500;color:#111}
+
 .compliance-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;font-size:12px;margin-bottom:4px}
 .ci-ok{background:#dcfce7;color:#15803d}.ci-err{background:#fee2e2;color:#dc2626}.ci-warn{background:#fef3c7;color:#b45309}
 .dp-footer,.ce-footer{padding:14px;border-top:1px solid #f3f4f6;display:flex;flex-direction:column;gap:8px}
@@ -579,7 +579,7 @@ textarea.field-input{resize:vertical;line-height:1.5}
           <div style="display:flex;gap:8px;flex-wrap:wrap;width:100%"><button onclick="openLibraryPicker()" style="flex:1 1 auto;min-width:110px;font-size:12px;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer;white-space:nowrap;text-align:center">📚 Bibliotek</button><button id="imgSwapBtn" onclick="document.getElementById('imgFileInput').click()" style="display:none;flex:1 1 auto;min-width:110px;font-size:12px;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer;white-space:nowrap;text-align:center">🔄 Byt bild</button><button id="imgRemoveBtn" onclick="removeImg()" style="display:none;flex:1 1 auto;min-width:110px;font-size:12px;color:#ef4444;border:1.5px solid #fecaca;border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer;white-space:nowrap;text-align:center">✕ Ta bort</button></div>
         </div>
 
-        <!-- HASHTAGS & CTA -->
+        <!-- HASHTAGS -->
         <div class="section-card" style="display:flex;flex-direction:column;gap:12px">
           <div>
             <div class="field-label"># Hashtags</div>
@@ -588,10 +588,6 @@ textarea.field-input{resize:vertical;line-height:1.5}
               <input class="field-input" id="m-tag-input" placeholder="Lägg till hashtag + Enter" onkeydown="if(event.key==='Enter'){addManualTag();event.preventDefault()}">
               <button class="tag-add-btn" onclick="addManualTag()">+</button>
             </div>
-          </div>
-          <div style="display:none">
-            <div class="field-label">Call-to-Action</div>
-            <input class="field-input" id="m-cta" placeholder="t.ex. Besök vår webbplats!" oninput="updateManualPreview()">
           </div>
         </div>
 
@@ -835,7 +831,7 @@ textarea.field-input{resize:vertical;line-height:1.5}
         <div class="pzm-title" id="pzmTitle" contenteditable="true" spellcheck="false" onblur="pzmEditField('title',this)" style="outline:none;cursor:text"></div>
         <div class="pzm-content" id="pzmContent" contenteditable="true" spellcheck="false" onblur="pzmEditField('content',this)" style="outline:none;cursor:text"></div>
         <div class="pzm-tags" id="pzmTags" contenteditable="true" spellcheck="false" onblur="pzmEditField('tags',this)" style="outline:none;cursor:text"></div>
-        <div class="pzm-cta" id="pzmCta" contenteditable="true" spellcheck="false" onblur="pzmEditField('cta',this)" style="display:none;outline:none;cursor:text"></div><div style="margin-top:12px;display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:rgba(255,255,255,.7)">Textstorlek</span><select id="pzmSizeSel" onchange="pzmSetTextSize(this.value)" style="flex:1;font-size:13px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.35);color:#fff;border-radius:8px;padding:6px 8px"><option value="0.5">50%</option><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option><option value="2.5">250%</option></select><input type="color" id="pzmColorSel" onchange="pzmSetTextColor(this.value)" title="Textfärg" style="width:40px;height:34px;border:1px solid rgba(255,255,255,.25);background:none;cursor:pointer;border-radius:8px;margin-left:6px"><button onclick="pzmBringFront()" title="Flytta fram (överst)" style="font-size:15px;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.35);color:#fff;cursor:pointer;margin-left:6px;line-height:1">⬆</button><button onclick="pzmSendBack()" title="Flytta bak (underst)" style="font-size:15px;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.35);color:#fff;cursor:pointer;line-height:1">⬇</button></div><div style="margin-top:10px;display:flex;gap:6px"><input id="pzmReprompt" placeholder="Beskriv hur bilden ska ändras..." style="flex:1;font-size:13px;border:1px solid rgba(255,255,255,.25);background:#fff;color:#111;border-radius:8px;padding:8px 10px;outline:none"><button onclick="pzmReprompt()" style="font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;border:none;background:var(--m);color:#fff;cursor:pointer;white-space:nowrap">🎨 Skapa bild</button></div>
+        <div style="margin-top:12px;display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:rgba(255,255,255,.7)">Textstorlek</span><select id="pzmSizeSel" onchange="pzmSetTextSize(this.value)" style="flex:1;font-size:13px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.35);color:#fff;border-radius:8px;padding:6px 8px"><option value="0.5">50%</option><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option><option value="2.5">250%</option></select><input type="color" id="pzmColorSel" onchange="pzmSetTextColor(this.value)" title="Textfärg" style="width:40px;height:34px;border:1px solid rgba(255,255,255,.25);background:none;cursor:pointer;border-radius:8px;margin-left:6px"><button onclick="pzmBringFront()" title="Flytta fram (överst)" style="font-size:15px;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.35);color:#fff;cursor:pointer;margin-left:6px;line-height:1">⬆</button><button onclick="pzmSendBack()" title="Flytta bak (underst)" style="font-size:15px;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.35);color:#fff;cursor:pointer;line-height:1">⬇</button></div><div style="margin-top:10px;display:flex;gap:6px"><input id="pzmReprompt" placeholder="Beskriv hur bilden ska ändras..." style="flex:1;font-size:13px;border:1px solid rgba(255,255,255,.25);background:#fff;color:#111;border-radius:8px;padding:8px 10px;outline:none"><button onclick="pzmReprompt()" style="font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;border:none;background:var(--m);color:#fff;cursor:pointer;white-space:nowrap">🎨 Skapa bild</button></div>
       </div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px">
@@ -1259,24 +1255,24 @@ const LAYOUTS = ['studio','case','louisiana','gradient','minimal','dark','editor
 const LAYOUT_LABELS = {studio:'studio.',case:'case.',louisiana:'louisiana.',gradient:'Gradient',minimal:'Minimal',dark:'Dark',editorial:'Editorial',bold:'Bold'};
 const MOCK_PROPOSALS = {
   instagram:[
-    {title:'bakom kulisserna.',content:'Så här ser en vanlig dag ut på spot. – idéer, kaffe och grafisk design med ett distinkt uttryck. Varje projekt börjar med ett samtal. 📷',hashtags:['spotcreative','bakomkulisserna','kreativtstudio','Halmstad','design'],cta:'Följ oss för mer – länk i bio'},
-    {title:'din berättelse börjar här.',content:'Varje varumärke har ett unikt uttryck värt att visa världen. Vi hjälper dig hitta det – genom foto, grafik och innehåll som faktiskt känns rätt.',hashtags:['spotcreative','varumärke','kreativitet','fotografering','contentcreation'],cta:'Boka ett samtal med oss idag'},
-    {title:'det är detaljerna som gör det.',content:'Vi tror att det lilla extra alltid syns. Rätt ljus, rätt komposition, rätt känsla. Det är så vi jobbar på spot. 🖤',hashtags:['spotcreative','design','foto','Halmstad','studio'],cta:'Se fler projekt – länk i bio'},
+    {title:'bakom kulisserna.',content:'Så här ser en vanlig dag ut på spot. – idéer, kaffe och grafisk design med ett distinkt uttryck. Varje projekt börjar med ett samtal. 📷',hashtags:['spotcreative','bakomkulisserna','kreativtstudio','Halmstad','design'],},
+    {title:'din berättelse börjar här.',content:'Varje varumärke har ett unikt uttryck värt att visa världen. Vi hjälper dig hitta det – genom foto, grafik och innehåll som faktiskt känns rätt.',hashtags:['spotcreative','varumärke','kreativitet','fotografering','contentcreation'],},
+    {title:'det är detaljerna som gör det.',content:'Vi tror att det lilla extra alltid syns. Rätt ljus, rätt komposition, rätt känsla. Det är så vi jobbar på spot. 🖤',hashtags:['spotcreative','design','foto','Halmstad','studio'],},
   ],
   linkedin:[
-    {title:'Varför visuell identitet är affärskritiskt',content:'I en marknad full av brus är ett konsekvent visuellt uttryck det som avgör om du stannar i minnet. På spot. hjälper vi företag att bygga ett grafiskt språk som håller – och som berättar rätt sak.',hashtags:['varumärke','grafiskdesign','contentmarketing','spotcreative'],cta:'Läs mer om hur vi arbetar via länken nedan'},
-    {title:'5 saker vi lärt oss om kreativt samarbete',content:'Efter år av projekt med företag i alla storlekar har vi lärt oss vad som verkligen gör skillnad. Det handlar nästan aldrig om tekniken – det handlar om förtroendet.',hashtags:['kreativitet','byrå','samarbete','spotcreative','Halmstad'],cta:'Kontakta oss för att starta ett samtal'},
-    {title:'Foto som förstärker varumärket',content:'Stockbilder räcker inte längre. Autentiska bilder från er verklighet skapar tillit och igenkänning. spot. producerar foto anpassat för er identitet – inte för alla.',hashtags:['fotografering','varumärkesfoto','contentproduktion','spotcreative'],cta:'Boka en fotografering med oss'},
+    {title:'Varför visuell identitet är affärskritiskt',content:'I en marknad full av brus är ett konsekvent visuellt uttryck det som avgör om du stannar i minnet. På spot. hjälper vi företag att bygga ett grafiskt språk som håller – och som berättar rätt sak.',hashtags:['varumärke','grafiskdesign','contentmarketing','spotcreative'],},
+    {title:'5 saker vi lärt oss om kreativt samarbete',content:'Efter år av projekt med företag i alla storlekar har vi lärt oss vad som verkligen gör skillnad. Det handlar nästan aldrig om tekniken – det handlar om förtroendet.',hashtags:['kreativitet','byrå','samarbete','spotcreative','Halmstad'],},
+    {title:'Foto som förstärker varumärket',content:'Stockbilder räcker inte längre. Autentiska bilder från er verklighet skapar tillit och igenkänning. spot. producerar foto anpassat för er identitet – inte för alla.',hashtags:['fotografering','varumärkesfoto','contentproduktion','spotcreative'],},
   ],
   facebook:[
-    {title:'Vi visar hur det görs 🎯',content:'Grafisk design behöver inte vara komplicerad – men den måste vara genomtänkt. Här delar vi tre saker som gör skillnaden i varje projekt vi tar oss an.',hashtags:['design','tips','spotcreative','Halmstad','kreativt'],cta:'Spara det här inlägget och dela det'},
-    {title:'vad gör spot. annorlunda?',content:'Vi är en liten studio med ett stort fokus. Varje kund vi jobbar med får vår fulla uppmärksamhet – och ett resultat som faktiskt känns som dem.',hashtags:['spotcreative','studio','grafiskdesign','Halmstad'],cta:'Klicka för att se våra projekt'},
-    {title:'Gemenskapen som driver oss',content:'Det bästa med det vi gör? Människorna vi möter. Kunder och samarbetspartners i Halland och runt om i Sverige som vill något mer. ❤️',hashtags:['gemenskap','kreativitet','spotcreative','Halmstad'],cta:'Berätta i kommentarerna – vad driver dig?'},
+    {title:'Vi visar hur det görs 🎯',content:'Grafisk design behöver inte vara komplicerad – men den måste vara genomtänkt. Här delar vi tre saker som gör skillnaden i varje projekt vi tar oss an.',hashtags:['design','tips','spotcreative','Halmstad','kreativt'],},
+    {title:'vad gör spot. annorlunda?',content:'Vi är en liten studio med ett stort fokus. Varje kund vi jobbar med får vår fulla uppmärksamhet – och ett resultat som faktiskt känns som dem.',hashtags:['spotcreative','studio','grafiskdesign','Halmstad'],},
+    {title:'Gemenskapen som driver oss',content:'Det bästa med det vi gör? Människorna vi möter. Kunder och samarbetspartners i Halland och runt om i Sverige som vill något mer. ❤️',hashtags:['gemenskap','kreativitet','spotcreative','Halmstad'],},
   ],
   tiktok:[
-    {title:'POV: du hittar rätt kreativ studio 🎥',content:'Den känslan när du ser en portfolio och tänker – det där är precis vad vi letar efter. Det är vad vi vill att du ska känna.',hashtags:['spotcreative','studio','foto','design','Halmstad'],cta:'Följ oss för mer – länk i bio'},
-    {title:'3 saker som förstör ditt content',content:'Nr 1: stockbilder utan personlighet. Nr 2: inkonsekventa färger. Nr 3: ingen tydlig känsla. Vi hjälper dig fixa alla tre.',hashtags:['contenttips','design','spotcreative','grafik'],cta:'Spara och tagga någon som behöver se detta'},
-    {title:'spot. – en dag på studion ✨',content:'Idéer flyger, kaffe rinner och vi skapar grafik och foto som faktiskt gör skillnad. Välkommen in.',hashtags:['bakomkulisserna','studio','spotcreative','creatorlife'],cta:'Följ @spotcreative för mer'},
+    {title:'POV: du hittar rätt kreativ studio 🎥',content:'Den känslan när du ser en portfolio och tänker – det där är precis vad vi letar efter. Det är vad vi vill att du ska känna.',hashtags:['spotcreative','studio','foto','design','Halmstad'],},
+    {title:'3 saker som förstör ditt content',content:'Nr 1: stockbilder utan personlighet. Nr 2: inkonsekventa färger. Nr 3: ingen tydlig känsla. Vi hjälper dig fixa alla tre.',hashtags:['contenttips','design','spotcreative','grafik'],},
+    {title:'spot. – en dag på studion ✨',content:'Idéer flyger, kaffe rinner och vi skapar grafik och foto som faktiskt gör skillnad. Välkommen in.',hashtags:['bakomkulisserna','studio','spotcreative','creatorlife'],},
   ],
 };
 
@@ -1365,11 +1361,10 @@ function _truncateCaption(str, maxChars) {
 }
 function getPostImageHTML(post, size='card') {
   const layout = post.layout || 'gradient';
-  const _blocks = post.blocks || ['brand','title','content','hashtags','cta'];
+  const _blocks = post.blocks || ['brand','title','content','hashtags'];
   const t    = _blocks.includes('title')   ? ((post.imgTitle !== undefined && post.imgTitle !== null) ? post.imgTitle : (post.title || '')) : '';
   const c    = _blocks.includes('content') ? ((post.imgContent !== undefined && post.imgContent !== null) ? post.imgContent : (post.content || '')) : '';
-  const cta  = '';
-  const tags = _blocks.includes('hashtags') ? (post.hashtags || []).slice(0,3).map(h=>`#${h.replace(/^#/,'')}`).join(' ') : '';
+    const tags = _blocks.includes('hashtags') ? (post.hashtags || []).slice(0,3).map(h=>`#${h.replace(/^#/,'')}`).join(' ') : '';
   const grad = CH_GRAD[post.channel] || CH_GRAD.instagram;
   const hasImg = !!post.imageUrl;
   const dateStr = post.date || new Date().toISOString().slice(0,10);
@@ -1423,8 +1418,6 @@ function getPostImageHTML(post, size='card') {
         <div style="width:36px;height:36px;background:rgba(255,255,255,.2);border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:#fff;margin-bottom:8px;font-family:${_getSANS()}">s.</div>
         <div style="font-size:${_autoFit(t,11,40,8)}px;font-weight:700;color:#fff;margin-bottom:4px;line-height:1.3;text-shadow:0 1px 4px rgba(0,0,0,.4)">${t}</div>
         <div style="font-size:9px;color:rgba(255,255,255,.8);line-height:1.4;margin-bottom:6px;overflow:hidden;max-height:70px;text-shadow:0 1px 3px rgba(0,0,0,.3)">${_truncateCaption(c,150)}</div>
-        
-        <div style="background:rgba(255,255,255,.2);border-radius:99px;padding:3px 10px;font-size:9px;font-weight:600;color:#fff">${cta}</div>
       </div>`;
     return hasImg ? _withImgBg(post, inner)
       : `<div style="width:100%;height:100%;background:${grad};display:flex;flex-direction:column">${inner}</div>`;
@@ -1442,7 +1435,6 @@ function getPostImageHTML(post, size='card') {
           <div style="font-size:9px;color:${hasImg?'rgba(255,255,255,.75)':'#6b7280'};line-height:1.5;overflow:hidden;max-height:60px">${_truncateCaption(c,130)}</div>
           
         </div>
-        <div style="background:var(--m);border-radius:6px;padding:5px;text-align:center;font-size:9px;font-weight:600;color:#fff">${cta}</div>
       </div>`;
     const inner = topBar + body;
     return hasImg ? _withImgBg(post, inner)
@@ -1460,7 +1452,6 @@ function getPostImageHTML(post, size='card') {
         
       </div>
       <div style="padding:0 14px 14px 22px">
-        <div style="border:1px solid rgba(177,30,89,.5);border-radius:6px;padding:5px 8px;font-size:9px;font-weight:600;color:var(--m);display:inline-block">${cta}</div>
       </div>`;
     return hasImg
       ? `<div style="width:100%;height:100%;position:relative;overflow:hidden">
@@ -1487,8 +1478,6 @@ function getPostImageHTML(post, size='card') {
           <div style="position:relative;padding:12px;display:flex;flex-direction:column;justify-content:center;height:100%">
             <div style="font-size:${_autoFit(t,10,35,8)}px;font-weight:700;color:#fff;line-height:1.3;margin-bottom:5px">${t}</div>
             <div style="font-size:8px;color:rgba(255,255,255,.7);line-height:1.4;overflow:hidden;max-height:55px">${_truncateCaption(c,120)}</div>
-            
-            <div style="background:rgba(177,30,89,.85);border-left:2px solid #fff;padding:4px 7px;margin-top:7px;font-size:8px;font-weight:600;color:#fff">${cta}</div>
           </div>
         </div>
       </div>`;
@@ -1502,8 +1491,6 @@ function getPostImageHTML(post, size='card') {
       <div style="flex:1;background:#fff;padding:12px;display:flex;flex-direction:column;justify-content:center;overflow:hidden">
         <div style="font-size:${_autoFit(t,10,35,8)}px;font-weight:700;color:#111;line-height:1.3;margin-bottom:5px">${t}</div>
         <div style="font-size:8px;color:#6b7280;line-height:1.4;overflow:hidden;max-height:55px">${_truncateCaption(c,120)}</div>
-        
-        <div style="background:#f9fafb;border-left:2px solid var(--m);padding:4px 7px;margin-top:7px;font-size:8px;font-weight:600;color:#111">${cta}</div>
       </div>
     </div>`;
   }
@@ -1516,7 +1503,6 @@ function getPostImageHTML(post, size='card') {
         <div style="font-size:${_autoFit(t,14,30,10)}px;font-weight:900;color:#fff;line-height:1.2;margin-bottom:12px;text-transform:uppercase;letter-spacing:-.02em;text-shadow:0 2px 8px rgba(0,0,0,.5)">${t}</div>
         <div style="width:30px;height:2px;background:var(--m);margin-bottom:12px"></div>
         <div style="font-size:8px;color:rgba(255,255,255,.55);line-height:1.5;margin-bottom:10px;overflow:hidden;max-height:55px">${_truncateCaption(c,120)}</div>
-        <div style="background:var(--m);border-radius:99px;padding:5px 14px;font-size:9px;font-weight:700;color:#fff;letter-spacing:.04em;text-transform:uppercase">${cta}</div>
       </div>`;
     return hasImg
       ? `<div style="width:100%;height:100%;position:relative;overflow:hidden">
@@ -1537,11 +1523,10 @@ function getPostImageLargeHTML(post) {
   if (layout === 'studio' || layout === 'case' || layout === 'louisiana') {
     return getPostImageHTML(post, 'large');
   }
-  const _blocksL = post.blocks || ['brand','title','content','hashtags','cta'];
+  const _blocksL = post.blocks || ['brand','title','content','hashtags'];
   const t = _blocksL.includes('title') ? ((post.imgTitle !== undefined && post.imgTitle !== null) ? post.imgTitle : (post.title || '')) : '';
   const c = _blocksL.includes('content') ? ((post.imgContent !== undefined && post.imgContent !== null) ? post.imgContent : (post.content || '')) : '';
-  const cta = '';
-  const tags = _blocksL.includes('hashtags') ? (post.hashtags || []).map(t=>`#${t.replace(/^#/,'')}`).join(' ') : '';
+    const tags = _blocksL.includes('hashtags') ? (post.hashtags || []).map(t=>`#${t.replace(/^#/,'')}`).join(' ') : '';
   const grad = CH_GRAD[post.channel] || CH_GRAD.instagram;
 
   if (layout === 'gradient') return `
@@ -1550,7 +1535,6 @@ function getPostImageLargeHTML(post) {
       <div style="font-size:20px;font-weight:700;color:#fff;margin-bottom:10px;line-height:1.3">${t}</div>
       <div style="font-size:13px;color:rgba(255,255,255,.8);line-height:1.6;margin-bottom:12px;max-width:340px">${c}</div>
       <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:14px">${tags}</div>
-      <div style="background:rgba(255,255,255,.2);border-radius:99px;padding:10px 28px;font-size:14px;font-weight:600;color:#fff">${cta}</div>
     </div>`;
 
   if (layout === 'minimal') return `
@@ -1565,7 +1549,6 @@ function getPostImageLargeHTML(post) {
           <div style="font-size:14px;color:#6b7280;line-height:1.6">${c}</div>
           <div style="font-size:12px;color:var(--m);margin-top:14px">${tags}</div>
         </div>
-        <div style="background:var(--m);border-radius:10px;padding:14px;text-align:center;font-size:14px;font-weight:600;color:#fff">${cta}</div>
       </div>
     </div>`;
 
@@ -1578,7 +1561,7 @@ function getPostImageLargeHTML(post) {
         <div style="font-size:13px;color:rgba(255,255,255,.6);line-height:1.6;margin-bottom:14px">${c}</div>
         <div style="font-size:11px;color:rgba(255,255,255,.35);margin-bottom:20px">${tags}</div>
       </div>
-      <div style="padding-left:16px"><div style="border:1.5px solid rgba(177,30,89,.5);border-radius:8px;padding:12px 20px;font-size:14px;font-weight:600;color:var(--m);display:inline-block">${cta}</div></div>
+      <div style="padding-left:16px"></div>
     </div>`;
 
   if (layout === 'editorial') return `
@@ -1591,7 +1574,6 @@ function getPostImageLargeHTML(post) {
         <div style="font-size:20px;font-weight:700;color:#111;line-height:1.3;margin-bottom:12px;font-family:Helvetica,Arial,sans-serif">${t}</div>
         <div style="font-size:13px;color:#6b7280;line-height:1.6;margin-bottom:12px">${c}</div>
         <div style="font-size:11px;color:var(--m);margin-bottom:16px">${tags}</div>
-        <div style="background:#f9fafb;border-left:3px solid var(--m);padding:10px 16px;font-size:13px;font-weight:600;color:#111">${cta}</div>
       </div>
     </div>`;
 
@@ -1601,7 +1583,6 @@ function getPostImageLargeHTML(post) {
       <div style="font-size:28px;font-weight:900;color:#fff;line-height:1.1;margin-bottom:20px;text-transform:uppercase;letter-spacing:-.02em;font-family:Helvetica,Arial,sans-serif">${t}</div>
       <div style="width:40px;height:3px;background:var(--m);margin-bottom:20px"></div>
       <div style="font-size:13px;color:rgba(255,255,255,.45);line-height:1.6;margin-bottom:24px;max-width:300px">${c}</div>
-      <div style="background:var(--m);border-radius:99px;padding:12px 32px;font-size:13px;font-weight:700;color:#fff;letter-spacing:.05em;text-transform:uppercase">${cta}</div>
     </div>`;
 
   return `<div style="width:100%;height:100%;background:#eee"></div>`;
@@ -1906,7 +1887,7 @@ function addToReview() {
     id: 'p-' + Date.now() + '-' + Math.random().toString(36).slice(2),
     brief: document.getElementById('briefInput').value,
     channel: ch, title: p.title, content: p.content,
-    hashtags: [...p.hashtags], cta: p.cta, layout: 'gradient',
+    hashtags: [...p.hashtags], layout: 'gradient',
     status: 'review', createdAt: new Date().toISOString(),
     author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
     channels: [ch],
@@ -2368,7 +2349,7 @@ function renderProposalCards(ch) {
   body.innerHTML = `<div class="ai-proposals" style="width:100%">` +
     proposals.slice(0,3).map((p, i) => {
       const cardLayouts = ['studio','case','louisiana'];
-      const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), cta: p.cta||'', imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos };
+      const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos };
       const dim = i!==selectedIdx;
       return `<div class="ai-prop-card ${i===selectedIdx?'selected':''}" onclick="openProposalEditor('${ch}',${i})" style="${dim ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
         <div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(ch)}">
@@ -2400,10 +2381,8 @@ function selectProposalCard(ch, i) {
 function fillFormFromProposal(p) {
   const ti = document.getElementById('m-title');
   const co = document.getElementById('m-content');
-  const ct = document.getElementById('m-cta');
   if (ti) ti.value = p.title || '';
   if (co) co.value = p.content || '';
-  if (ct) ct.value = p.cta || '';
   S.manualTags = (p.hashtags||[]).map(t=>t.replace(/^#/,''));
   renderManualTags();
 }
@@ -2436,8 +2415,7 @@ function updateManualPreview() {
   if (window._aiProposals) return;
   const title   = document.getElementById('m-title')?.value   || '';
   const content = document.getElementById('m-content')?.value || '';
-  const cta     = document.getElementById('m-cta')?.value     || '';
-  const mockPost = { channel: S.manualChannel, layout: 'gradient', title, content, hashtags: S.manualTags, cta, imageUrl: activeImageUrl(), imageStyle: S.imageStyle };
+  const mockPost = { channel: S.manualChannel, layout: 'gradient', title, content, hashtags: S.manualTags, imageUrl: activeImageUrl(), imageStyle: S.imageStyle };
   const body = document.getElementById('prevBody');
   if (!body) return;
   const panelTitle = document.getElementById('prevPanelTitle');
@@ -2476,7 +2454,7 @@ function addManualToReview() {
         id: 'pm-' + Date.now() + '-' + ch + '-' + Math.random().toString(36).slice(2,5),
         brief: document.getElementById('briefInput')?.value || 'spot. content studio',
         channel: ch, title: p.title, content: p.content,
-        hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), cta: p.cta,
+        hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')),
         layout: cardLayouts[idx] || 'gradient',
         author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
         channels: [ch],
@@ -2492,14 +2470,13 @@ function addManualToReview() {
     // Manual mode: use form fields for all selected channels
     const title   = document.getElementById('m-title').value.trim();
     const content = document.getElementById('m-content').value.trim();
-    const cta     = document.getElementById('m-cta').value.trim();
-    if (!title || !content || !cta) { showToast('Fyll i titel, innehåll och CTA', 'err'); return; }
+    if (!title || !content) { showToast('Fyll i titel och innehåll', 'err'); return; }
     channels.forEach(ch => {
       S.reviewQueue.push({
         id: 'pm-' + Date.now() + '-' + ch + '-' + Math.random().toString(36).slice(2,5),
         brief: 'spot. content studio',
         channel: ch, title, content,
-        hashtags: [...S.manualTags], cta, layout: 'gradient',
+        hashtags: [...S.manualTags], layout: 'gradient',
         author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
         channels: [...(S.manualChannels||[S.manualChannel])],
         status: 'review', createdAt: new Date().toISOString(),
@@ -2512,7 +2489,6 @@ function addManualToReview() {
   // Reset
   document.getElementById('m-title').value   = '';
   document.getElementById('m-content').value = '';
-  document.getElementById('m-cta').value     = '';
   S.manualTags = []; renderManualTags();
   removeImg();
   window._aiProposals = null;
@@ -2660,7 +2636,6 @@ const BLOCK_META = {
   title:    { icon: '📝', label: 'Titel' },
   content:  { icon: '📄', label: 'Innehåll' },
   hashtags: { icon: '#',  label: 'Hashtags' },
-  cta:      { icon: '🔲', label: 'Call-to-Action' },
 };
 const DEFAULT_BLOCK_ORDER = ['brand','title','content','hashtags'];
 
@@ -2736,10 +2711,6 @@ function openEditorModal(post) {
         <button onclick="emRepromptImage()" style="padding:8px 12px;background:var(--m);color:#fff;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;border:none;white-space:nowrap">Ny bild</button>
       </div>
       <button id="emImgUndoBtn" onclick="emUndoImage()" style="display:none;font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;color:#374151;cursor:pointer">↶ Ångra bild</button>
-    </div>
-    <div style="display:none">
-      <div class="em-field-label">Call-to-Action</div>
-      <input id="em-cta" class="em-input" value="${(post.cta||'').replace(/"/g,'&quot;')}" placeholder="CTA..." oninput="emSyncFromForm()">
     </div>
     <div>
       <div class="em-order-label">🔀 Blockordning — dra för att ändra</div>
@@ -3046,10 +3017,8 @@ function emSyncFromForm() {
   if (!post) return;
   const t  = document.getElementById('em-title');
   const c  = document.getElementById('em-content');
-  const ca = document.getElementById('em-cta');
   if (t)  post.title   = t.value;
   if (c)  post.content = c.value;
-  if (ca) post.cta     = ca.value;
   emRenderPreview();
 }
 async function emRepromptImage(){
@@ -3187,7 +3156,6 @@ function emUndoImage(){
 function emSyncToForm(field, val) {
   if (field === 'title')   { const el = document.getElementById('em-title');   if(el) el.value = val; }
   if (field === 'content') { const el = document.getElementById('em-content'); if(el) el.value = val; }
-  if (field === 'cta')     { const el = document.getElementById('em-cta');     if(el) el.value = val; }
 }
 
 function emAddTag() {
@@ -3267,10 +3235,8 @@ function saveEditorModal() {
   // Final sync from form
   const t  = document.getElementById('em-title');
   const c  = document.getElementById('em-content');
-  const ca = document.getElementById('em-cta');
   if (t)  post.title   = t.value;
   if (c)  post.content = c.value;
-  if (ca) post.cta     = ca.value;
   document.getElementById('editorModal').classList.remove('open');
   S.editMode = false;
   if (S._editIsCreateMode) {
@@ -3304,14 +3270,12 @@ function _currentCreateLayout(){
 function openCreateEditor() {
   const t  = document.getElementById('m-title');
   const c  = document.getElementById('m-content');
-  const ca = document.getElementById('m-cta');
   const tempPost = {
     id: 'create-draft',
     channel: S.manualChannel || (S.manualChannels && S.manualChannels[0]) || 'linkedin',
     title: t ? t.value : '',
     content: c ? c.value : '',
     hashtags: [...(S.manualTags||[])],
-    cta: ca ? ca.value : '',
     imageUrl: (typeof activeImageUrl === 'function') ? activeImageUrl() : null,
     imgPos: S._imgPos || null,
     layout: _currentCreateLayout(),
@@ -3493,7 +3457,7 @@ async function saveToServer(post) {
 //  BRAND
 // ════════════════════════════════════════════════════════
 let COLORS = [
-  {name:'Grenache',  hex:'#b31e59', use:'Primär – logotyp, CTA, accenter'},
+  {name:'Grenache',  hex:'#b31e59', use:'Primär – logotyp, accenter'},
   {name:'Malbec',    hex:'#82093e', use:'Mörk accent, hover, djup'},
   {name:'Lakrits',   hex:'#000000', use:'Text, rubriker, bakgrunder'},
   {name:'Sakura',    hex:'#f0d5d6', use:'Subtil bakgrund, blush-toner'},
@@ -3508,7 +3472,6 @@ let TYPOGRAPHY = [
 let DOS_RULES = [
   {id:'logo',text:'Logotyp alltid synlig',active:true},
   {id:'hashtags',text:'Max 5 hashtags per inlägg',active:true},
-  {id:'cta',text:'Alltid en tydlig CTA',active:true},
   {id:'tone',text:'Varm och professionell ton',active:true},
   {id:'auth',text:'Autentiskt och relevant innehåll',active:true},
 ];
@@ -4176,9 +4139,9 @@ function renderAdvocacy() {
 
   // Add some demo posts if empty
   const demo = unique.length ? unique : [
-    {channel:'linkedin',title:'Q1 Resultat & Framtidsutsikter',content:'Vi är stolta att kunna dela våra Q1-resultat! Tillväxten har överträffat alla förväntningar med en ökning på 32% jämfört med föregående år.',hashtags:['Q1','Tillväxt','SpotOn'],cta:'Läs mer på vår hemsida'},
-    {channel:'instagram',title:'Teambuilding i Stockholm',content:'Fantastisk dag med hela teamet! Vi utforskade nya sätt att samarbeta och stärkte vår gemenskap. #TeamSpirit',hashtags:['Team','Stockholm','SpotOn'],cta:'Följ oss!'},
-    {channel:'facebook',title:'Ny produktlansering 🚀',content:'Stolt att presentera vår senaste innovation! En lösning byggd för framtidens utmaningar.',hashtags:['Lansering','Innovation','SpotOn'],cta:'Boka en demo idag!'},
+    {channel:'linkedin',title:'Q1 Resultat & Framtidsutsikter',content:'Vi är stolta att kunna dela våra Q1-resultat! Tillväxten har överträffat alla förväntningar med en ökning på 32% jämfört med föregående år.',hashtags:['Q1','Tillväxt','SpotOn'],},
+    {channel:'instagram',title:'Teambuilding i Stockholm',content:'Fantastisk dag med hela teamet! Vi utforskade nya sätt att samarbeta och stärkte vår gemenskap. #TeamSpirit',hashtags:['Team','Stockholm','SpotOn'],},
+    {channel:'facebook',title:'Ny produktlansering 🚀',content:'Stolt att presentera vår senaste innovation! En lösning byggd för framtidens utmaningar.',hashtags:['Lansering','Innovation','SpotOn'],},
   ];
 
   const list = document.getElementById('advPostList');
@@ -4191,7 +4154,7 @@ function renderAdvocacy() {
   list.innerHTML = demo.map((p, i) => {
     const chGrad = CH_GRAD[p.channel] || 'linear-gradient(135deg,#b31e59,#82093e)';
     const chLbl  = CH_LABEL[p.channel] || p.channel;
-    const mockPost = { channel: p.channel, layout:(p.layout||'gradient'), title:p.title||'', content:p.content||'', hashtags:(p.hashtags||[]), cta:p.cta||'', imageUrl:(p.imageUrl||p.aiImageUrl||null), aiImageUrl:(p.aiImageUrl||null), imgPos:(p.imgPos||null) };
+    const mockPost = { channel: p.channel, layout:(p.layout||'gradient'), title:p.title||'', content:p.content||'', hashtags:(p.hashtags||[]), imageUrl:(p.imageUrl||p.aiImageUrl||null), aiImageUrl:(p.aiImageUrl||null), imgPos:(p.imgPos||null) };
     return `<div class="adv-post-row">
       <div class="adv-post-thumb" style="cursor:pointer" onclick='advZoomPost(${i})'>${getPostImageHTML(mockPost)}</div>
       <div class="adv-post-info">
@@ -4225,7 +4188,7 @@ async function _copyTextAndImage(text, imageUrl){
 function advZoomPost(idx){
   const p = (window._advPosts||[])[idx];
   if (!p) return;
-  S._lbSingle = { channel: p.channel, layout:(p.layout||'gradient'), title:p.title||'', content:p.content||'', hashtags:(p.hashtags||[]), cta:p.cta||'', author:'', imageUrl:(p.imageUrl||p.aiImageUrl||null), aiImageUrl:(p.aiImageUrl||null), imgPos:(p.imgPos||null) };
+  S._lbSingle = { channel: p.channel, layout:(p.layout||'gradient'), title:p.title||'', content:p.content||'', hashtags:(p.hashtags||[]), author:'', imageUrl:(p.imageUrl||p.aiImageUrl||null), aiImageUrl:(p.aiImageUrl||null), imgPos:(p.imgPos||null) };
   renderLightbox();
   document.getElementById('lightbox').classList.add('open');
 }
@@ -4272,7 +4235,7 @@ function downloadAdvocacyPost(idx, posts){
   a.download = chLabel + '-' + titleSlug + '.' + (ext==='jpeg'?'jpg':ext);
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   const tags = (p.hashtags||[]).map(t=>'#'+t.replace(/^#/,'')).join(' ');
-  const fullText = `${p.title||''}\n\n${p.content||''}\n\n${tags}${p.cta?'\n\n'+p.cta:''}`;
+  const fullText = `${p.title||''}\n\n${p.content||''}\n\n${tags}`;
   navigator.clipboard.writeText(fullText).then(()=>{ if(typeof showToast==='function') showToast('⬇️ Bild nedladdad (märkt med kanal) + text kopierad'); }).catch(()=>{ if(typeof showToast==='function') showToast('⬇️ Bild nedladdad (märkt med kanal)'); });
 }
 function quickShareAdvocacy(idx, posts) {
@@ -4282,7 +4245,7 @@ function quickShareAdvocacy(idx, posts) {
   const match = chans.find(c => c.platform === (p.channel||'linkedin'));
   if ((p.channel||'') === 'linkedin' && _liConnected) {
     const tags0 = (p.hashtags||[]).map(t=>'#'+t.replace(/^#/,'')).join(' ');
-    const fullText0 = `${p.title||''}\n\n${p.content||''}\n\n${tags0}${p.cta?'\n\n'+p.cta:''}`;
+    const fullText0 = `${p.title||''}\n\n${p.content||''}\n\n${tags0}`;
     const imgUrlLi = p.imageUrl || p.aiImageUrl || null;
     if (typeof showToast==='function') showToast('📤 Publicerar på LinkedIn…');
     fetch('/api/linkedin/publish', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ text: fullText0, imageDataUrl: imgUrlLi }) })
@@ -4296,7 +4259,7 @@ function quickShareAdvocacy(idx, posts) {
   }
   if (!match) { openShareModal(idx, posts); return; }
   const tags = (p.hashtags||[]).map(t=>'#'+t.replace(/^#/,'')).join(' ');
-  const fullText = `${p.title||''}\n\n${p.content||''}\n\n${tags}${p.cta?'\n\n'+p.cta:''}`;
+  const fullText = `${p.title||''}\n\n${p.content||''}\n\n${tags}`;
   const encodedText = encodeURIComponent(fullText.slice(0,500));
   const encodedTitle = encodeURIComponent(p.title||'');
   const urls = {
@@ -4323,7 +4286,7 @@ function openShareModal(idx, posts) {
   if (!p) return;
   _sharePost = p;
   const tags = (p.hashtags||[]).map(t=>'#'+t.replace(/^#/,'')).join(' ');
-  const fullText = `${p.title||''}\n\n${p.content||''}\n\n${tags}${p.cta?'\n\n'+p.cta:''}`;
+  const fullText = `${p.title||''}\n\n${p.content||''}\n\n${tags}`;
   document.getElementById('sharePreviewBox').textContent = fullText;
 
   const ch = p.channel || 'linkedin';
@@ -4372,7 +4335,7 @@ function copyShareText() {
   if (!_sharePost) return;
   const p = _sharePost;
   const tags = (p.hashtags||[]).map(t=>'#'+t.replace(/^#/,'')).join(' ');
-  const text = `${p.title||''}\n\n${p.content||''}\n\n${tags}${p.cta?'\n\n'+p.cta:''}`;
+  const text = `${p.title||''}\n\n${p.content||''}\n\n${tags}`;
   navigator.clipboard.writeText(text).then(()=>showToast('📋 Text kopierad!')).catch(()=>showToast('Kunde inte kopiera','err'));
 }
 
@@ -4404,7 +4367,7 @@ function pzmSelect() {
   selectProposalCard(_pzmCh, _pzmIdx);
   closePropZoom();
 }
-function pzmEditField(field, el){var props=(window._allChannelProposals||{})[_pzmCh]||[];var p=props[_pzmIdx];if(!p)return;var v=el.textContent.trim();if(field==="title")p.title=v;else if(field==="content")p.content=v;else if(field==="cta")p.cta=v;else if(field==="tags"){p.hashtags=v.split(/\s+/).map(function(s){return s.replace(/^#/,"");}).filter(Boolean);}if((window._selectedProposalPerChannel||{})[_pzmCh]===_pzmIdx)fillFormFromProposal(p);renderPzmSlide();}
+function pzmEditField(field, el){var props=(window._allChannelProposals||{})[_pzmCh]||[];var p=props[_pzmIdx];if(!p)return;var v=el.textContent.trim();if(field==="title")p.title=v;else if(field==="content")p.content=v;else if(field==="tags"){p.hashtags=v.split(/\s+/).map(function(s){return s.replace(/^#/,"");}).filter(Boolean);}if((window._selectedProposalPerChannel||{})[_pzmCh]===_pzmIdx)fillFormFromProposal(p);renderPzmSlide();}
 function pzmReprompt(){var t=document.getElementById("pzmReprompt");var extra=t?t.value.trim():"";var base=S._aiImageBrief||S._lastBrief||"";if(!base&&!extra){showToast("Skriv en beskrivning av bilden.");return;}if(S._uploadedImageUrl){showToast("Ta bort uppladdad bild för att använda AI-bild.");return;}var brief=extra?(base?(base+". Ändring: "+extra):extra):base;showToast("🎨 Skapar bild...");generateBrandImage(brief,true);}
 function setupPzmDrag(){var thumb=document.getElementById("pzmThumb");if(!thumb||thumb._dragSet)return;thumb._dragSet=true;thumb.style.cursor="grab";thumb.style.touchAction="none";var dragging=false,sx=0,sy=0,spx=0,spy=0;function applyLive(){var p=S._imgPos||{x:0,y:0,zoom:1};var z0=(p.zoom||1);var z=z0<=1?z0*1.06:z0;var mx=(1-1/z)*50;var x=Math.max(-mx,Math.min(mx,p.x||0)),y=Math.max(-mx,Math.min(mx,p.y||0));thumb.querySelectorAll("img").forEach(function(im){im.style.objectPosition="center";im.style.transformOrigin="center";im.style.transform="scale("+z.toFixed(3)+") translate("+x.toFixed(2)+"%,"+y.toFixed(2)+"%)";});}thumb.addEventListener("pointerdown",function(e){dragging=true;thumb.style.cursor="grabbing";sx=e.clientX;sy=e.clientY;var p=S._imgPos||{x:0,y:0,zoom:1};spx=p.x||0;spy=p.y||0;try{thumb.setPointerCapture(e.pointerId);}catch(_){}e.preventDefault();});thumb.addEventListener("pointermove",function(e){if(!dragging)return;var r=thumb.getBoundingClientRect();var z0=(S._imgPos&&S._imgPos.zoom)||1;var z=z0<=1?z0*1.06:z0;var mx=(1-1/z)*50;var nx=spx+(e.clientX-sx)/r.width*100/z;var ny=spy+(e.clientY-sy)/r.height*100/z;nx=Math.max(-mx,Math.min(mx,nx));ny=Math.max(-mx,Math.min(mx,ny));S._imgPos={x:nx,y:ny,zoom:(S._imgPos&&S._imgPos.zoom)||1};applyLive();});thumb.addEventListener("pointerup",function(e){if(!dragging)return;dragging=false;thumb.style.cursor="grab";if(typeof refreshActiveProposalCards==="function")refreshActiveProposalCards();});}
 function pzmSetZoom(v){if(!S._imgPos)S._imgPos={x:0,y:0,zoom:1};S._imgPos.zoom=parseFloat(v)||1;var thumb=document.getElementById("pzmThumb");if(!thumb)return;var p=S._imgPos;var z0=(p.zoom||1);var z=z0<=1?z0*1.06:z0;var mx=(1-1/z)*50;var x=Math.max(-mx,Math.min(mx,p.x||0)),y=Math.max(-mx,Math.min(mx,p.y||0));thumb.querySelectorAll("img").forEach(function(im){im.style.objectPosition="center";im.style.transformOrigin="center";im.style.transform="scale("+z.toFixed(3)+") translate("+x.toFixed(2)+"%,"+y.toFixed(2)+"%)";});}
@@ -4419,7 +4382,7 @@ function wirePzmCanvas(){
   if(!p.pos)p.pos={}; if(!p.size)p.size={}; if(!p.color)p.color={};
   function findByText(txt){ if(!txt)return null; var t=String(txt).trim(); var els=thumb.querySelectorAll("div"); for(var i=els.length-1;i>=0;i--){ if(els[i].children.length===0 && els[i].textContent.trim()===t) return els[i]; } return null; }
   var tagsStr=(p.hashtags||[]).slice(0,3).map(function(h){return "#"+String(h).replace(/^#/,"");}).join(" ");
-  var map=[["title",p.title],["content",p.content],["cta",p.cta],["tags",tagsStr]];
+  var map=[["title",p.title],["content",p.content],["tags",tagsStr]];
   if(!p.zIndex)p.zIndex={};
   map.forEach(function(pair){
     var field=pair[0], val=pair[1]; var el=findByText(val); if(!el)return;
@@ -4461,13 +4424,12 @@ function renderPzmSlide() {
   const p = props[_pzmIdx];
   if (!p) return;
   const zoomLayouts = ['studio','case','louisiana'];
-  const mockPost = { channel: _pzmCh, layout: zoomLayouts[_pzmIdx] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), cta: p.cta||'', imageUrl: activeImageUrl(), imageStyle: S.imageStyle };
+  const mockPost = { channel: _pzmCh, layout: zoomLayouts[_pzmIdx] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle };
   document.getElementById('pzmThumb').innerHTML    = getPostImageHTML(mockPost);
   wirePzmCanvas();
   document.getElementById('pzmTitle').textContent  = p.title || '';
   document.getElementById('pzmContent').textContent = p.content || '';
   document.getElementById('pzmTags').textContent   = (p.hashtags||[]).map(t=>'#'+t.replace(/^#/,'')).join(' ');
-  document.getElementById('pzmCta').textContent    = '';
   document.getElementById('pzmCounter').textContent = `Förslag ${_pzmIdx + 1} / ${props.length}`;
   document.getElementById('pzmPrev').disabled = _pzmIdx === 0;
   document.getElementById('pzmNext').disabled = _pzmIdx === props.length - 1;
@@ -4486,9 +4448,9 @@ let _calMonthOffset = 0; // months from current month
 const _dm = new Date(); // use current month for demo posts
 const _y = _dm.getFullYear(), _m = String(_dm.getMonth()+1).padStart(2,'0');
 const DEMO_SCHEDULED = [
-  { id:'demo-1', channel:'facebook', title:'Ny produktlansering 🚀', content:'Spännande nyheter! Vår senaste produkt är nu tillgänglig. Kolla in den och berätta vad ni tycker!', hashtags:['Lansering','Produkt','SpotOn'], cta:'Handla nu', scheduledAt:`${_y}-${_m}-05T09:00`, status:'published' },
-  { id:'demo-2', channel:'linkedin', title:'Hållbarhetsrapport 2025', content:'Vår hållbarhetsrapport för 2025 är nu publicerad. Läs om våra framsteg och mål för framtiden.', hashtags:['Hållbarhet','CSR','SpotOn'], cta:'Läs rapporten', scheduledAt:`${_y}-${_m}-10T10:00`, status:'review' },
-  { id:'demo-3', channel:'instagram', title:'Bakom kulisserna', content:'Idag öppnar vi dörrarna till hur vi jobbar varje dag. Passion, precision och genuint engagemang.', hashtags:['BakomKulisserna','SpotOn'], cta:'Följ oss!', scheduledAt:`${_y}-${_m}-18T12:00`, status:'review' },
+  { id:'demo-1', channel:'facebook', title:'Ny produktlansering 🚀', content:'Spännande nyheter! Vår senaste produkt är nu tillgänglig. Kolla in den och berätta vad ni tycker!', hashtags:['Lansering','Produkt','SpotOn'], scheduledAt:`${_y}-${_m}-05T09:00`, status:'published' },
+  { id:'demo-2', channel:'linkedin', title:'Hållbarhetsrapport 2025', content:'Vår hållbarhetsrapport för 2025 är nu publicerad. Läs om våra framsteg och mål för framtiden.', hashtags:['Hållbarhet','CSR','SpotOn'], scheduledAt:`${_y}-${_m}-10T10:00`, status:'review' },
+  { id:'demo-3', channel:'instagram', title:'Bakom kulisserna', content:'Idag öppnar vi dörrarna till hur vi jobbar varje dag. Passion, precision och genuint engagemang.', hashtags:['BakomKulisserna','SpotOn'], scheduledAt:`${_y}-${_m}-18T12:00`, status:'review' },
 ];
 
 var TEAM_POSTS = [];
