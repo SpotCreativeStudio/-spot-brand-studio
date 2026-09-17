@@ -1441,9 +1441,12 @@ function getPostImageHTML(post, size='card') {
 
   // ── GRADIENT ─────────────────────────────────────────────
   if (layout === 'gradient') {
+    const _brandPosC = (post.textPos && post.textPos.brand) || {x:0,y:0};
+    const _brandScaleC = (post.textScale && post.textScale.brand) || 1;
+    const brandBadgeC = _blocks.includes('brand') ? `<div class="brand-badge" data-widget="brand" style="width:36px;height:36px;background:rgba(255,255,255,.2);border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:#fff;margin-bottom:8px;font-family:${_getSANS()};transform:translate(${_brandPosC.x}px,${_brandPosC.y}px) scale(${_brandScaleC})">s.</div>` : '';
     const inner = `
       <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px;text-align:center">
-        <div style="width:36px;height:36px;background:rgba(255,255,255,.2);border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:#fff;margin-bottom:8px;font-family:${_getSANS()}">s.</div>
+        ${brandBadgeC}
         <div style="font-size:${_autoFit(t,11,40,8)}px;font-weight:700;color:#fff;margin-bottom:4px;line-height:1.3;text-shadow:0 1px 4px rgba(0,0,0,.4)">${t}</div>
         <div style="font-size:9px;color:rgba(255,255,255,.8);line-height:1.4;margin-bottom:6px;overflow:hidden;max-height:70px;text-shadow:0 1px 3px rgba(0,0,0,.3)">${_truncateCaption(c,150)}</div>
       </div>`;
@@ -1559,8 +1562,11 @@ function getPostImageLargeHTML(post) {
   const hasImg = !!post.imageUrl;
 
   if (layout === 'gradient') {
+    const _brandPosL = (post.textPos && post.textPos.brand) || {x:0,y:0};
+    const _brandScaleL = (post.textScale && post.textScale.brand) || 1;
+    const brandBadgeL = _blocksL.includes('brand') ? `<div class="brand-badge" data-widget="brand" style="width:56px;height:56px;background:rgba(255,255,255,.2);border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:26px;color:#fff;margin-bottom:14px;transform:translate(${_brandPosL.x}px,${_brandPosL.y}px) scale(${_brandScaleL})">S</div>` : '';
     const inner = `
-      <div style="width:56px;height:56px;background:rgba(255,255,255,.2);border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:26px;color:#fff;margin-bottom:14px">S</div>
+      ${brandBadgeL}
       <div style="font-size:20px;font-weight:700;color:#fff;margin-bottom:10px;line-height:1.3">${t}</div>
       <div style="font-size:13px;color:rgba(255,255,255,.8);line-height:1.6;margin-bottom:12px;max-width:340px">${c}</div>
       <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:14px">${tags}</div>`;
@@ -2751,10 +2757,10 @@ function openEditorModal(post) {
       <div class="dnd-blocks" id="dndBlocks">
         ${post.blocks.map(bk => {
           const meta = BLOCK_META[bk];
-          const draggable = bk !== 'brand' ? 'draggable="true"' : '';
-          const delBtn = bk !== 'brand' ? `<span class="bk-del" onclick="emRemoveBlock('${bk}')" style="margin-left:auto;color:#b31e59;cursor:pointer;font-size:14px;padding:0 4px">✕</span>` : '';
+          const draggable = 'draggable="true"';
+          const delBtn = `<span class="bk-del" onclick="emRemoveBlock('${bk}')" style="margin-left:auto;color:#b31e59;cursor:pointer;font-size:14px;padding:0 4px">✕</span>`;
           return `<div class="dnd-block" data-block="${bk}" ${draggable} style="display:flex;align-items:center">
-            <span class="drag-dots">${bk !== 'brand' ? '⠿' : '⠀'}</span>
+            <span class="drag-dots">⠿</span>
             <span class="bk-icon">${meta.icon}</span>
             <span class="bk-label">${meta.label}</span>
             ${delBtn}
