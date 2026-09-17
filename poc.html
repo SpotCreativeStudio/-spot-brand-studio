@@ -638,7 +638,15 @@ textarea.field-input{resize:vertical;line-height:1.5}
       <!-- PREVIEW PANEL -->
       <div class="create-right">
         <div class="prev-header">
-          <div class="prev-title" id="prevPanelTitle">Förhandsvisning</div>
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div class="prev-title" id="prevPanelTitle">Förhandsvisning</div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:10px;font-weight:600;color:#9ca3af;letter-spacing:.02em">AI-generering</span>
+              <div id="aiGenToggle" onclick="toggleAiGenerate()" role="switch" aria-checked="true" title="Slå av/på AI-generering" style="width:34px;height:18px;border-radius:9px;background:var(--m);position:relative;cursor:pointer;transition:background .15s;flex-shrink:0">
+                <div id="aiGenToggleKnob" style="width:14px;height:14px;border-radius:50%;background:#fff;position:absolute;top:2px;left:18px;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.3)"></div>
+              </div>
+            </div>
+          </div>
           <div class="prev-tabs" id="prevTabs"></div>
           <button id="regenImgBtn" onclick="regenerateImage()" style="display:none;margin-left:auto;font-size:11px;font-weight:600;color:var(--m);border:1.5px solid var(--m);background:#fff5f7;border-radius:6px;padding:4px 10px;cursor:pointer">🎨 Skapa bild</button>
         </div>
@@ -983,6 +991,21 @@ const S = {
 };
 var CURRENT_WORKSPACE = null;
 var CURRENT_USER_NAME = null;
+var AI_GENERATE_ENABLED = (function(){ try{ var v=localStorage.getItem('spotAiGenEnabled'); return v===null?true:v==='1'; }catch(e){ return true; } })();
+function applyAiGenToggleUI(){
+  var btn=document.getElementById('genFromPostBtn');
+  if(btn) btn.style.display = AI_GENERATE_ENABLED ? '' : 'none';
+  var trk=document.getElementById('aiGenToggle');
+  var knb=document.getElementById('aiGenToggleKnob');
+  if(trk){ trk.style.background = AI_GENERATE_ENABLED ? 'var(--m)' : '#d1d5db'; trk.setAttribute('aria-checked', AI_GENERATE_ENABLED ? 'true':'false'); }
+  if(knb){ knb.style.left = AI_GENERATE_ENABLED ? '18px' : '2px'; }
+}
+function toggleAiGenerate(){
+  AI_GENERATE_ENABLED = !AI_GENERATE_ENABLED;
+  try{ localStorage.setItem('spotAiGenEnabled', AI_GENERATE_ENABLED ? '1' : '0'); }catch(e){}
+  applyAiGenToggleUI();
+}
+applyAiGenToggleUI();
 function _authorLine(p){
   var who = p.author || 'Okänd';
   var chs = (p.channels && p.channels.length) ? p.channels : (p.channel ? [p.channel] : []);
