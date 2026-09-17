@@ -1927,7 +1927,7 @@ function addToReview() {
     imageUrl: activeImageUrl(),
     imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
   };
-  S.reviewQueue.push(post);
+  S.reviewQueue.push(post); _instrumentImageUrl(post);
   updateBadge();
   showToast('✅ Inlägg lagt till i granskning');
   navigate('review');
@@ -2496,7 +2496,7 @@ function addManualToReview() {
         scheduledAt, imageUrl: activeImageUrl(),
         imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
         aspectRatio: S.aspectRatio || null,
-      });
+      }); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
       added++;
     });
     if (!added) { showToast('Välj minst ett förslag', 'err'); return; }
@@ -2517,7 +2517,7 @@ function addManualToReview() {
         scheduledAt, imageUrl: activeImageUrl(),
         imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
         aspectRatio: S.aspectRatio || null,
-      });
+      }); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
     });
   }
   // Reset
@@ -3901,7 +3901,7 @@ function reusePost(idx) {
     blocks: original.blocks ? [...original.blocks] : undefined,
     hashtags: original.hashtags ? [...original.hashtags] : [],
   };
-  S.reviewQueue.push(clone);
+  S.reviewQueue.push(clone); _instrumentImageUrl(clone);
   S.selectedReviewId = clone.id;
   // Close the detail modal
   document.getElementById('pubDetailModal').style.display = 'none';
