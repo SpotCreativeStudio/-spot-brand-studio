@@ -1528,14 +1528,18 @@ function getPostImageLargeHTML(post) {
   const c = _blocksL.includes('content') ? ((post.imgContent !== undefined && post.imgContent !== null) ? post.imgContent : (post.content || '')) : '';
     const tags = _blocksL.includes('hashtags') ? (post.hashtags || []).map(t=>`#${t.replace(/^#/,'')}`).join(' ') : '';
   const grad = CH_GRAD[post.channel] || CH_GRAD.instagram;
+  const hasImg = !!post.imageUrl;
 
-  if (layout === 'gradient') return `
-    <div style="width:100%;height:100%;background:${grad};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center">
+  if (layout === 'gradient') {
+    const inner = `
       <div style="width:56px;height:56px;background:rgba(255,255,255,.2);border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:26px;color:#fff;margin-bottom:14px">S</div>
       <div style="font-size:20px;font-weight:700;color:#fff;margin-bottom:10px;line-height:1.3">${t}</div>
       <div style="font-size:13px;color:rgba(255,255,255,.8);line-height:1.6;margin-bottom:12px;max-width:340px">${c}</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:14px">${tags}</div>
-    </div>`;
+      <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:14px">${tags}</div>`;
+    return hasImg
+      ? _withImgBg(post, `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center">${inner}</div>`)
+      : `<div style="width:100%;height:100%;background:${grad};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center">${inner}</div>`;
+  }
 
   if (layout === 'minimal') return `
     <div style="width:100%;height:100%;background:#fff;display:flex;flex-direction:column;overflow:hidden">
