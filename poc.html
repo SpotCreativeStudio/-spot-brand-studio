@@ -990,7 +990,35 @@ function _authorLine(p){
   return '👤 ' + who + (lbls ? (' · 📣 ' + lbls) : '');
 }
 function _saveAppState(){ if(!CURRENT_WORKSPACE) return; try{ localStorage.setItem('spotAppState', JSON.stringify({workspace:CURRENT_WORKSPACE, reviewQueue:S.reviewQueue, publishedPosts:S.publishedPosts, archiveOverride:S.archiveOverride})); }catch(e){} }
-function _restoreAppStateIfSameWorkspace(){ try{ var _as=JSON.parse(localStorage.getItem('spotAppState')||'null'); if(_as && _as.workspace===CURRENT_WORKSPACE){ if(Array.isArray(_as.reviewQueue))S.reviewQueue=_as.reviewQueue; if(Array.isArray(_as.publishedPosts))S.publishedPosts=_as.publishedPosts; if(_as.archiveOverride)S.archiveOverride=_as.archiveOverride; } else { localStorage.removeItem('spotAppState'); } }catch(e){} }
+// TEMP DIAGNOSTIC: remove after imageUrl-loss bug is found
+function _instrumentImageUrl(post) {
+  try {
+    if (!post || typeof post !== 'object') return;
+    if (post.__imageUrlTrapped) return;
+    var initial = post.imageUrl;
+    Object.defineProperty(post, '_imageUrl', { value: initial, writable: true, configurable: true, enumerable: false });
+    Object.defineProperty(post, 'imageUrl', {
+      configurable: true,
+      enumerable: true,
+      get: function () { return post._imageUrl; },
+      set: function (v) {
+        try {
+          if (!v && post._imageUrl) {
+            console.warn('[imageUrl-trap] Clearing imageUrl on post', post.id, post.title, new Error().stack);
+          }
+        } catch (e2) {}
+        post._imageUrl = v;
+      }
+    });
+    Object.defineProperty(post, '__imageUrlTrapped', { value: true, writable: true, configurable: true, enumerable: false });
+  } catch (e) {}
+}
+// TEMP DIAGNOSTIC: one-time migration to strip stale legacy 'cta' field from old posts
+function _migrateLegacyPost(post) {
+  try { if (post && 'cta' in post) delete post.cta; } catch (e) {}
+  return post;
+}
+function _restoreAppStateIfSameWorkspace(){ try{ var _as=JSON.parse(localStorage.getItem('spotAppState')||'null'); if(_as && _as.workspace===CURRENT_WORKSPACE){ if(Array.isArray(_as.reviewQueue)){S.reviewQueue=_as.reviewQueue; S.reviewQueue.forEach(function(p){_migrateLegacyPost(p); _instrumentImageUrl(p);});} if(Array.isArray(_as.publishedPosts)){S.publishedPosts=_as.publishedPosts; S.publishedPosts.forEach(function(p){_migrateLegacyPost(p); _instrumentImageUrl(p);});} if(_as.archiveOverride)S.archiveOverride=_as.archiveOverride; } else { localStorage.removeItem('spotAppState'); } }catch(e){} }
 var CURRENT_ROLE = 'admin';
 function _loadUserInfo(){ fetch('/api/me').then(function(r){ return r.json(); }).then(function(u){ var el=document.getElementById('avatarInitials'); if(el && u.initials) el.textContent=u.initials; var el2=document.getElementById('avatarInitials2'); if(el2 && u.initials) el2.textContent=u.initials; var btn=document.getElementById('avatarBtn'); if(btn && u.firstName) btn.title=u.firstName+' '+u.lastName; var nameEl=document.getElementById('userFullName'); if(nameEl) nameEl.textContent=(u.firstName||'')+' '+(u.lastName||''); CURRENT_ROLE = u.role || 'admin'; CURRENT_WORKSPACE = u.workspace || 'spot'; CURRENT_USER_NAME = ((u.firstName||'') + ' ' + (u.lastName||'')).trim() || 'Okänd'; _restoreAppStateIfSameWorkspace(); if (typeof renderDashboard === 'function') renderDashboard(); applyRolePermissions(); if (typeof _loadMyChannels === 'function') _loadMyChannels(); if (typeof _loadLinkedInStatus === 'function') _loadLinkedInStatus(); if (typeof _loadLinkedInCompanyStatus === 'function') _loadLinkedInCompanyStatus(); if (typeof _loadImgLibrary === 'function') _loadImgLibrary(); if (typeof _loadDrafts === 'function') _loadDrafts(); if (typeof _loadTeamPosts === 'function') _loadTeamPosts(); }).catch(function(){}); }
 function applyRolePermissions(){
