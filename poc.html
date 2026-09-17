@@ -522,32 +522,9 @@ textarea.field-input{resize:vertical;line-height:1.5}
 
         <!-- INNEHÅLL -->
         <div class="section-card" style="display:flex;flex-direction:column;gap:4px">
-          <style>
-.ai-toggle-switch{position:relative;display:inline-block;width:32px;height:18px;vertical-align:middle}
-.ai-toggle-switch input{opacity:0;width:0;height:0}
-.ai-toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;transition:.2s;border-radius:18px}
-.ai-toggle-slider:before{position:absolute;content:"";height:14px;width:14px;left:2px;bottom:2px;background:#fff;transition:.2s;border-radius:50%}
-.ai-toggle-switch input:checked + .ai-toggle-slider{background:var(--m,#e11d48)}
-.ai-toggle-switch input:checked + .ai-toggle-slider:before{transform:translateX(14px)}
-</style>
-<script>
-var AI_GENERATE_ENABLED = (typeof AI_GENERATE_ENABLED === 'undefined') ? true : AI_GENERATE_ENABLED;
-function toggleGenFromPostBtn(checked){
-  AI_GENERATE_ENABLED = checked;
-  var b = document.getElementById('genFromPostBtn');
-  if(b) b.style.display = checked ? '' : 'none';
-}
-</script>
-<div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;justify-content:space-between">
             <div class="field-label">Innehåll</div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <label class="ai-toggle-switch" title="Visa/dölj AI-generering">
-                <input type="checkbox" id="genFromPostToggle" checked onchange="toggleGenFromPostBtn(this.checked)">
-                <span class="ai-toggle-slider"></span>
-              </label>
-              <button id="genFromPostBtn" onclick="generateFromPost()" style="font-size:11px;color:var(--m);font-weight:600;padding:3px 10px;border:1.5px solid var(--m);border-radius:6px;background:#fff5f7;cursor:pointer">✨ Generera med AI</button>
-            </div>
-          </div>
+            <button id="genFromPostBtn" onclick="generateFromPost()" style="font-size:11px;color:var(--m);font-weight:600;padding:3px 10px;border:1.5px solid var(--m);border-radius:6px;background:#fff5f7;cursor:pointer">✨ Generera med AI</button>
           </div>
           <textarea class="field-input" id="m-content" rows="6" placeholder="Skriv ditt inlägg här..." oninput="updateManualPreview()"></textarea>
         </div>
