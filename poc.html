@@ -1892,6 +1892,8 @@ function addToReview() {
     author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
     channels: [ch],
     aspectRatio: S.aspectRatio || null,
+    imageUrl: activeImageUrl(),
+    imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
   };
   S.reviewQueue.push(post);
   updateBadge();
