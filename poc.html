@@ -606,7 +606,7 @@ textarea.field-input{resize:vertical;line-height:1.5}
           </div>
         </div>
 
-        <button class="add-review-btn" onclick="addManualToReview();resetCreateForm()">+ Lägg till granskning</button><div style="display:flex;gap:8px;margin-top:10px"><button onclick="saveDraft()" style="flex:1;font-size:13px;color:#374151;font-weight:600;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer">💾 Spara utkast</button><button onclick="toggleDrafts()" style="flex:1;font-size:13px;color:#374151;font-weight:600;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer">📝 Utkast</button></div><div id="draftsPanel" style="display:none;margin-top:8px;background:#fff;border:1px solid #eee;border-radius:10px;max-height:240px;overflow-y:auto"></div>
+        <button class="add-review-btn" onclick="addManualToReview();resetCreateForm()">+ Lägg till granskning</button><button class="add-review-btn" style="border-color:#ef4444;color:#ef4444;margin-top:8px" onclick="clearCreatePostForm()">🗑️ Radera</button><div style="display:flex;gap:8px;margin-top:10px"><button onclick="saveDraft()" style="flex:1;font-size:13px;color:#374151;font-weight:600;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer">💾 Spara utkast</button><button onclick="toggleDrafts()" style="flex:1;font-size:13px;color:#374151;font-weight:600;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer">📝 Utkast</button></div><div id="draftsPanel" style="display:none;margin-top:8px;background:#fff;border:1px solid #eee;border-radius:10px;max-height:240px;overflow-y:auto"></div>
 
         <!-- AI ASSIST MODAL -->
         <div id="aiAssistModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center">
@@ -2158,6 +2158,14 @@ function getBrandProfile() {
 var _draftsCache = [];
 function _getDrafts(){ return _draftsCache; }
 function _loadDrafts(){ fetch('/api/drafts').then(function(r){return r.json();}).then(function(data){ _draftsCache = data.drafts || []; var el=document.getElementById("draftsPanel"); if(el && el.style.display==="block") renderDraftsPanel(); }).catch(function(){}); }
+function clearCreatePostForm(){
+  if(!confirm("Radera allt innehåll i formuläret?")) return;
+  S.manualTags = [];
+  renderManualTags();
+  var sc = document.getElementById("m-schedule"); if(sc) sc.value = "";
+  resetCreateForm();
+  updateManualPreview();
+}
 function resetCreateForm(){
   var t=document.getElementById("m-title"); if(t)t.value="";
   var c=document.getElementById("m-content"); if(c)c.value="";
