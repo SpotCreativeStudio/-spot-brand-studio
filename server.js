@@ -79,6 +79,13 @@ async function sendAppMail({ to, subject, text, html }) {
 app.use(express.json({ limit: '20mb' }))
 app.use(express.urlencoded({ extended: true }))
 const _TPL = { 'tpl-studio.png': '4.png', 'tpl-case-hallanning.png': '5.png', 'tpl-case-gardsstyling.png': '7.png', 'tpl-louisiana.png': '6.png' }
+const FAVICON_PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAE2ElEQVR42u1Wa2xURRQ+Z2bu3bu3u9tdyrYFti1gbStStFYggS5RCVGIwUhREiPRBEMiRoMgPv6YQIgx8Y8kakyqJmpiDCEQENFglPoAhGqgppIW2qbPbWnZbXfv7t3d+5jjj8UCDSRG4ZecZCaZmfN9X3LOmZmDh6qegltpDG6x3Ra4LfC/FECG1wggInIGiICInCFj01yRMeQMOQfEaUQFLPIrEJLkmPmrPfmTaq2byQEi2a6dNMl2mCIAGRDInI2cO4bpmpZjZJEzJjhIQsbIla5pkZROKuuaea6pyBAAyXHnb1rNGEt3x7hHAQJRXD8v1HgnSBI+Tfi8iVOdibbz0rKRs2BDdbKjb9ajS8MrFjHBuz84ZPaP8SLNNXPCr8+M1hdVlRUvqJxs7x3c+6Nr2mo4MP+5NbVb13Xs/Jx5ROrcoDVhsNrt6yfP9owcOT249yfjwvCidzarM/xF1bOjh3fX73627OFGktT36VF/bcXyAztFQHeMrDcSnrfpEbP/YuzgiaEDx6u3rI0e3u0pD5oD44nTnUCUaOsaa2130lnkjCXaukaOnsqNxPPjycEvW08077Qn05numBLQvXNKJtq6Rr8+PXm25/cte/TZJXMeW2ZNGAt3PZM41Zls73XM/MXvz7Suek2vLF3csk3aDhEVEkCSLid54Zsbm/btKl+zRK8q5UWacX6YCOx01ozFs0PxTO+oWuJXQ34rkbbTWb0iHGy4I9hQPdneq5YEAEgrDeXHk3+88XHJkroZ99e46dy0ohI9Hx2JPL68ojkKAMaF4fN79g/t/4VxjogoGKqCXEmSmMpQcNvIFs0tV4M+FExaNnIubUcJ6GOt7dKyixfOTfeOXFuzyNpfbTl635ZjD+04s+3DfDzV+N6LM5fdXQgfEAARIJLjaqUhoampjj57Ii00NXBXlZu1kDEgQsGclJmPG46Zh6n6RABEshzGOCcpU50DfZ9990PT1uGvTpatbHDsHDAkSYDIFGFPpstXL3bM3KVfzxldg/kJo277etfMk5QoONmuCOh2KhM//qfi00lKICJHypzlKQ2yutc3AIC0HBRcKS6Sjpv4rYsLlRypFOvgytxoIrCgsubl5rM7Whwj6+bsMy+9H47W37vneSedtZMZJ5OLrGvq/eTbTP9FIkLGuK5xjzKnuWnl8Xf5Kxs3hx+8RwsH/bWRiieiqY7+oX0/M0WJrFvur4kYPTE9Eq5+YW1vy5GBL46pxUVMFcmOvnhbZ+WGB8pXNXKP4q+tyMbisYMn1JA/N5IoWVoXjtZnBsYRYfbqJbjPv1avCGvlIQDIjSRyowkl5LfiqRXfvMU9ysmn3/bOKsn0jVoJQw35yJUAgJzZKRMZ+msiTFWysUtW3BA+jQjIdlDhWtmMbCwubUcrDwnPzICdzOTHk4DAFKEEfUAEAIXZHBizJ9JM4VPsAECuVAI6SUp3x4iIqUL4tELhoyKAyBwYY6rgmmqNJwW5EjnjuqdAWlgCAKoCFcFVhXs95LpT7FMaAMA09TLq72sFRIDAPAoQAREqQlw5uAos/F6mClS48HvJcaa9o1fp0PU2L4+CA16n8SJAzpSADgh2yiRHAv7770Fc78sAcmX+UhIAkPP/wn4DAQBAQEXcMAg3QeBmUN/uKv6h/QVNLGWbh4CtIwAAAABJRU5ErkJggg==';
+const FAVICON_PNG_BUF = Buffer.from(FAVICON_PNG_B64, 'base64');
+app.get('/favicon.ico', (req, res) => {
+  res.set('Content-Type', 'image/png');
+  res.send(FAVICON_PNG_BUF);
+});
+
 app.get('/assets/:f', (req, res) => { const f = _TPL[req.params.f] || req.params.f; if (f.indexOf('..') !== -1 || f.indexOf('/') !== -1) return res.status(400).end(); const p = path.join(__dirname, 'assets', f); if (fs.existsSync(p)) return res.sendFile(p); res.status(404).end() })
 function makeToken() { return crypto.randomBytes(32).toString('hex') }
 function getToken(req) { const c = req.headers.cookie || ''; const p = c.split(';').map(x => x.trim()).find(x => x.startsWith('spot_session=')); return p ? p.split('=')[1] : null }
