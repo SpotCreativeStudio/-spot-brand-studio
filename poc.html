@@ -2716,11 +2716,10 @@ function renderDetailPanel() {
 // ════════════════════════════════════════════════════════
 const BLOCK_META = {
   brand:    { icon: '🏷️', label: 'Varumärke', fixed: true },
-  title:    { icon: '📝', label: 'Titel' },
   content:  { icon: '📄', label: 'Innehåll' },
   hashtags: { icon: '#',  label: 'Hashtags' },
 };
-const DEFAULT_BLOCK_ORDER = ['brand','title','content','hashtags'];
+const DEFAULT_BLOCK_ORDER = ['brand','content','hashtags'];
 
 let dndDragSrc = null;
 
@@ -2731,7 +2730,7 @@ function renderCanvasEditor(post) {
 
 function openEditorModal(post) {
   if (!post.blocks) post.blocks = [...DEFAULT_BLOCK_ORDER];
-  post.blocks = post.blocks.filter(function(b){ return b !== 'cta'; });
+  post.blocks = post.blocks.filter(function(b){ return b !== 'cta' && b !== 'title'; });
   const _isSamePost = S._editPost === post;
   S._editPost = post; // working copy reference
   if (!_isSamePost) {
@@ -2855,7 +2854,7 @@ function emRenderPreview() {
   const p  = _findLeaf(_imgC);
   const tagsEl = _findLeaf(_tagStr);
   var brandEl = _findLeaf((typeof BRAND_NAME !== 'undefined' && BRAND_NAME) ? BRAND_NAME : 'spot.') || card.querySelector('[class*="logo"],[class*="brand"]');
-  const widgets = [ ['brand', brandEl], ['title', h1], ['content', p], ['hashtags', tagsEl] ];
+  const widgets = [ ['brand', brandEl], ['content', p], ['hashtags', tagsEl] ];
   widgets.forEach(function(pair){
     var key = pair[0], node = pair[1];
     if (!node) return;
