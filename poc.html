@@ -531,6 +531,12 @@ textarea.field-input{resize:vertical;line-height:1.5}
           <textarea class="field-input" id="m-content" rows="6" placeholder="Skriv ditt inlägg här..." oninput="updateManualPreview()"></textarea>
         </div>
 
+        <!-- INKLUDERA VARUMÄRKE I BILD -->
+        <div class="section-card" style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="m-include-brand" checked style="width:16px;height:16px">
+          <label for="m-include-brand" class="field-label" style="margin:0">Inkludera varumärke i bilden</label>
+        </div>
+
         <!-- BILDFÖRHÅLLANDE -->
         <div class="section-card" style="display:flex;flex-direction:column;gap:10px">
           <div class="field-label">Bildförhållande</div>
@@ -2352,7 +2358,7 @@ async function generateBrandImage(brief, force) {
     const res = await fetch('/api/generate-image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brief, style: S.imageStyle, brand: (typeof getBrandProfile==='function'?getBrandProfile():undefined), previousImageBase64: (!force && !S._uploadedImageUrl && S._aiImageBase64) ? S._aiImageBase64 : undefined, previousImageMimeType: (!force && !S._uploadedImageUrl && S._aiImageMime) ? S._aiImageMime : undefined }),
+      body: JSON.stringify({ brief, style: S.imageStyle, brand: (typeof getBrandProfile==='function'?getBrandProfile():undefined), includeBrand: (document.getElementById('m-include-brand') ? document.getElementById('m-include-brand').checked : true), previousImageBase64: (!force && !S._uploadedImageUrl && S._aiImageBase64) ? S._aiImageBase64 : undefined, previousImageMimeType: (!force && !S._uploadedImageUrl && S._aiImageMime) ? S._aiImageMime : undefined }),
     });
     const data = await res.json();
     if (!res.ok || !data.imageUrl) throw new Error(data.error || 'Bild misslyckades');
