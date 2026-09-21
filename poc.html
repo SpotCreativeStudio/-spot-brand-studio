@@ -2349,7 +2349,7 @@ async function generateBrandImage(brief, force) {
     const res = await fetch('/api/generate-image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brief, style: S.imageStyle, brand: (typeof getBrandProfile==='function'?getBrandProfile():undefined), previousImage: (!force && !S._uploadedImageUrl && S._aiImageBase64 && S._aiImageMime) ? { base64: S._aiImageBase64, mimeType: S._aiImageMime } : undefined }),
+      body: JSON.stringify({ brief, style: S.imageStyle, brand: (typeof getBrandProfile==='function'?getBrandProfile():undefined), previousImageBase64: (!force && !S._uploadedImageUrl && S._aiImageBase64) ? S._aiImageBase64 : undefined, previousImageMimeType: (!force && !S._uploadedImageUrl && S._aiImageMime) ? S._aiImageMime : undefined }),
     });
     const data = await res.json();
     if (!res.ok || !data.imageUrl) throw new Error(data.error || 'Bild misslyckades');
