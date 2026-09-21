@@ -518,16 +518,15 @@ textarea.field-input{resize:vertical;line-height:1.5}
 
         <!-- TITEL -->
         <div class="section-card" style="display:flex;flex-direction:column;gap:4px">
-          <div class="field-label" id="m-title-label">Titel</div>
-          <input class="field-input" id="m-title" placeholder="Skriv en titel..." oninput="updateManualPreview()">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div class="field-label" id="m-title-label">Titel</div>
+            <button id="genFromPostBtn" onclick="generateFromPost()" style="font-size:11px;color:var(--m);font-weight:600;padding:3px 10px;border:1.5px solid var(--m);border-radius:6px;background:#fff5f7;cursor:pointer">✨ Generera med AI</button>
+          </div>
+          <input class="field-input" id="m-title" placeholder="Skriv en titel..." oninput="updateManualPreview();onTitlePromptInput()">
         </div>
 
         <!-- INNEHÅLL -->
-        <div class="section-card" style="display:flex;flex-direction:column;gap:4px">
-          <div style="display:flex;align-items:center;justify-content:space-between">
-            <div class="field-label">Innehåll</div>
-            <button id="genFromPostBtn" onclick="generateFromPost()" style="font-size:11px;color:var(--m);font-weight:600;padding:3px 10px;border:1.5px solid var(--m);border-radius:6px;background:#fff5f7;cursor:pointer">✨ Generera med AI</button>
-          </div>
+        <div class="field-label">Innehåll</div>
           <textarea class="field-input" id="m-content" rows="6" placeholder="Skriv ditt inlägg här..." oninput="updateManualPreview()"></textarea>
         </div>
 
@@ -2296,7 +2295,8 @@ function renderDraftsPanel(){
   [].slice.call(el.querySelectorAll(".dft-del")).forEach(function(b){ b.onclick=function(){ deleteDraft(b.dataset.id); }; });
 }
 function toggleDrafts(){ var el=document.getElementById("draftsPanel"); if(!el)return; var open=el.style.display==="block"; var bd=document.getElementById("draftsBackdrop"); if(open){ el.style.display="none"; if(bd)bd.remove(); return; } if(!bd){ bd=document.createElement("div"); bd.id="draftsBackdrop"; bd.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99998"; bd.onclick=function(){ el.style.display="none"; bd.remove(); }; document.body.appendChild(bd); } el.style.cssText="display:block;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,92vw);max-height:75vh;overflow-y:auto;background:#fff;border:1px solid #eee;border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.35);z-index:99999"; document.body.appendChild(el); renderDraftsPanel(); }
-async function generateFromPost(){var title=(document.getElementById("m-title").value||"").trim();var content=(document.getElementById("m-content").value||"").trim();var channels=[...document.querySelectorAll("#manualChGrid .ch-pill.active")].map(function(t){return t.dataset.ch;});if(!channels.length){if(typeof showToast==="function")showToast("Välj minst en kanal först");return;}var brief=((title?("Titel: "+title+". "):"")+(content?("Innehåll: "+content):"")).trim();if(!brief){if(typeof showToast==="function")showToast("Fyll i titel eller innehåll först");return;}var btn=document.getElementById("genFromPostBtn");if(btn){btn.disabled=true;btn.dataset.ot=btn.textContent;btn.textContent="✨ Genererar...";}try{var brand=(typeof getBrandProfile==="function")?getBrandProfile():undefined;var res=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({brief:brief,channels:channels,brand:brand})});var data=await res.json();if(!res.ok)throw new Error(data.error||"API-fel");var hasAny=channels.some(function(ch){return (data.proposals[ch]||[]).length>0;});if(hasAny){S.manualChannels=channels;S.manualChannel=channels[0];S._lastBrief=brief;renderMultiChannelProposals(data.proposals,channels);if(!S._uploadedImageUrl)generateBrandImage(brief);if(typeof showToast==="function")showToast("✨ Förslag klara!");}else{if(typeof showToast==="function")showToast("Inga förslag genererades. Försök igen.");}}catch(e){if(typeof showToast==="function")showToast("Fel: "+e.message);}if(btn){btn.disabled=false;btn.textContent=btn.dataset.ot||"✨ Generera med AI";}}
+async function generateFromPost(){var title=(document.getElementById("m-title").value||"").trim();var content=(document.getElementById("m-content").value||"").trim();var channels=[...document.querySelectorAll("#manualChGrid .ch-pill.active")].map(function(t){return t.dataset.ch;});if(!channels.length){if(typeof showToast==="function")showToast("Välj minst en kanal först");return;}var brief=((title?("Titel: "+title+". "):"")+(content?("Innehåll: "+content):"")).trim();if(!brief){if(typeof showToast==="function")showToast("Fyll i titel eller innehåll först");return;}if(title && title===S._lastGenPrompt && (S._regenCount||0)>=3){if(typeof showToast==="function")showToast("Max antal försök nått för denna prompt — ändra prompten för att generera igen");return;}if(title===S._lastGenPrompt){S._regenCount=(S._regenCount||0)+1;}else{S._lastGenPrompt=title;S._regenCount=1;}var btn=document.getElementById("genFromPostBtn");if(btn){btn.disabled=true;btn.dataset.ot=btn.textContent;btn.textContent="✨ Genererar...";}try{var brand=(typeof getBrandProfile==="function")?getBrandProfile():undefined;var res=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({brief:brief,channels:channels,brand:brand})});var data=await res.json();if(!res.ok)throw new Error(data.error||"API-fel");var hasAny=channels.some(function(ch){return (data.proposals[ch]||[]).length>0;});if(hasAny){S.manualChannels=channels;S.manualChannel=channels[0];S._lastBrief=brief;renderMultiChannelProposals(data.proposals,channels);if(!S._uploadedImageUrl)generateBrandImage(brief);if(typeof showToast==="function")showToast("✨ Förslag klara!");}else{if(typeof showToast==="function")showToast("Inga förslag genererades. Försök igen.");}}catch(e){if(typeof showToast==="function")showToast("Fel: "+e.message);}if(btn){btn.disabled=(title===S._lastGenPrompt && (S._regenCount||0)>=3)?true:false;btn.textContent=btn.dataset.ot||"✨ Generera med AI";}}
+function onTitlePromptInput(){var title=(document.getElementById("m-title").value||"").trim();if(title!==S._lastGenPrompt){S._regenCount=0;var btn=document.getElementById("genFromPostBtn");if(btn)btn.disabled=false;}}
 async function generateAndFill() {
   const brief = document.getElementById('briefInput').value.trim();
   if (!brief) return;
