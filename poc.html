@@ -1000,6 +1000,8 @@ function updateTitleFieldLabel(){
 }
 function applyAiGenToggleUI(){
   updateTitleFieldLabel();
+  var wdg=document.getElementById('m-title-widget');
+  if(wdg) wdg.style.display = AI_GENERATE_ENABLED ? '' : 'none';
   var btn=document.getElementById('genFromPostBtn');
   if(btn) btn.style.display = AI_GENERATE_ENABLED ? '' : 'none';
   var trk=document.getElementById('aiGenToggle');
