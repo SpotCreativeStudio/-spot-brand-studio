@@ -3117,7 +3117,7 @@ async function emRepromptImage(){
   if (btn) { btn.textContent = 'Skapar...'; btn.disabled = true; }
   try {
     const brand = (typeof getBrandProfile==='function') ? getBrandProfile() : undefined;
-    const res = await fetch('/api/generate-image', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ brief, style: S.imageStyle, brand }) });
+    const includeBrand = !(post.blocks) || post.blocks.includes('brand'); const res = await fetch('/api/generate-image', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ brief, style: S.imageStyle, brand, includeBrand }) });
     const data = await res.json();
     if (!res.ok || !data.imageUrl) throw new Error(data.error || 'Bild misslyckades');
     S._editImgUndoStack = S._editImgUndoStack || [];
