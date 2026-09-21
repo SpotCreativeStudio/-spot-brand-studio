@@ -518,7 +518,7 @@ textarea.field-input{resize:vertical;line-height:1.5}
 
         <!-- TITEL -->
         <div class="section-card" style="display:flex;flex-direction:column;gap:4px">
-          <div class="field-label">Titel</div>
+          <div class="field-label" id="m-title-label">Titel</div>
           <input class="field-input" id="m-title" placeholder="Skriv en titel..." oninput="updateManualPreview()">
         </div>
 
@@ -994,7 +994,12 @@ const S = {
 var CURRENT_WORKSPACE = null;
 var CURRENT_USER_NAME = null;
 var AI_GENERATE_ENABLED = (function(){ try{ var v=localStorage.getItem('spotAiGenEnabled'); return v===null?true:v==='1'; }catch(e){ return true; } })();
+function updateTitleFieldLabel(){
+  var lbl=document.getElementById('m-title-label');
+  if(lbl) lbl.textContent = AI_GENERATE_ENABLED ? 'Prompt' : 'Titel';
+}
 function applyAiGenToggleUI(){
+  updateTitleFieldLabel();
   var btn=document.getElementById('genFromPostBtn');
   if(btn) btn.style.display = AI_GENERATE_ENABLED ? '' : 'none';
   var trk=document.getElementById('aiGenToggle');
