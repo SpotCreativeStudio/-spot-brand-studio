@@ -57,6 +57,35 @@ async function ensureUsersTable() {
     ])
   }
 }
+async function ensureAdvocacyTable() {
+  await getAuthPool().query("CREATE TABLE IF NOT EXISTS advocacy_shares (id SERIAL PRIMARY KEY, workspace TEXT, username TEXT, action TEXT, post_id TEXT, created_at BIGINT)")
+}
+app.post('/api/advocacy/log-share', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    const { postId, action } = req.body || {}
+    await ensureAdvocacyTable()
+    await getAuthPool().query('INSERT INTO advocacy_shares (workspace, username, action, post_id, created_at) VALUES ($1,$2,$3,$4,$5)', [s.workspace || 'spot', s.u || '', action || 'share', String(postId||''), Date.now()])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+app.get('/api/advocacy/leaderboard', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    await ensureUsersTable()
+    await ensureAdvocacyTable()
+    const r = await getAuthPool().query(
+      "SELECT u.username, u.first_name, u.last_name, COALESCE(a.shared,0)::int AS shared " +
+      "FROM app_users u " +
+      "LEFT JOIN (SELECT username, COUNT(*) AS shared FROM advocacy_shares WHERE workspace=$1 GROUP BY username) a ON a.username = u.username " +
+      "WHERE u.workspace=$1 " +
+      "ORDER BY shared DESC, u.username ASC " +
+      "LIMIT 5",
+      [s.workspace || 'spot']
+    )
+    res.json({ advocates: r.rows })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 async function getUserByUsername(username) {
   try { await ensureUsersTable(); const r = await getAuthPool().query("SELECT * FROM app_users WHERE username=$1", [username]); return r.rows[0] || null } catch (e) { console.error('[auth] getUserByUsername error:', e.message); return null }
 }
