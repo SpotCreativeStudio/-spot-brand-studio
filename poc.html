@@ -827,7 +827,10 @@ textarea.field-input{resize:vertical;line-height:1.5}
 
       <!-- AVAILABLE POSTS -->
       <div class="card">
-        <div class="card-header">Tillgängliga inlägg <span id="advPostCount" style="font-size:12px;font-weight:400;color:#9ca3af"></span></div>
+        <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Tillgängliga inlägg <span id="advPostCount" style="font-size:12px;font-weight:400;color:#9ca3af"></span></span>
+          <button id="advArchiveToggleBtn" style="font-size:12px;font-weight:600;color:var(--m);background:none;border:none;cursor:pointer" onclick="toggleAdvArchiveView()">🗄️ Visa arkiverade</button>
+        </div>
         <div id="advPostList"></div>
         <div id="advPostEmpty" style="display:none;padding:40px;text-align:center;font-size:13px;color:#9ca3af">
           Inga publicerade inlägg att dela ännu. Godkänn inlägg i Granskning.
@@ -4258,14 +4261,25 @@ function renderAdvocacy() {
     {channel:'facebook',title:'Ny produktlansering 🚀',content:'Stolt att presentera vår senaste innovation! En lösning byggd för framtidens utmaningar.',hashtags:['Lansering','Innovation','SpotOn'],},
   ];
 
+  function _advKey(p){ return (p.title||'') + '|' + (p.channel||''); }
+  function _advGetSet(k){ try { return JSON.parse(localStorage.getItem(k)||'[]'); } catch(e){ return []; } }
+  const _advDismissed = _advGetSet('advDismissed');
+  const _advArchived = _advGetSet('advArchived');
+  const _showingArchived = !!S._advShowArchived;
+  const toggleBtn = document.getElementById('advArchiveToggleBtn');
+  if (toggleBtn) toggleBtn.textContent = _showingArchived ? '↩️ Visa aktiva' : ('🗄️ Visa arkiverade (' + _advArchived.length + ')');
+  let visible = demo.filter(p => !_advDismissed.includes(_advKey(p)));
+  visible = _showingArchived ? visible.filter(p => _advArchived.includes(_advKey(p))) : visible.filter(p => !_advArchived.includes(_advKey(p)));
+
   const list = document.getElementById('advPostList');
   const empty = document.getElementById('advPostEmpty');
-  document.getElementById('advPostCount').textContent = `${demo.length} tillgängliga`;
+  document.getElementById('advPostCount').textContent = (_showingArchived ? (visible.length + ' arkiverade') : (visible.length + ' tillgängliga'));
 
-  if (!demo.length) { list.innerHTML=''; empty.style.display='block'; return; }
+  if (!visible.length) { list.innerHTML=''; empty.style.display='block'; empty.textContent = _showingArchived ? 'Inga arkiverade inlägg.' : 'Inga tillgängliga inlägg.'; return; }
   empty.style.display = 'none';
 
-  list.innerHTML = demo.map((p, i) => {
+  window._advPosts = visible;
+  list.innerHTML = visible.map((p, i) => {
     const chGrad = CH_GRAD[p.channel] || 'linear-gradient(135deg,#b31e59,#82093e)';
     const chLbl  = CH_LABEL[p.channel] || p.channel;
     const mockPost = { channel: p.channel, layout:(p.layout||'gradient'), title:p.title||'', content:p.content||'', hashtags:(p.hashtags||[]), imageUrl:(p.imageUrl||p.aiImageUrl||null), aiImageUrl:(p.aiImageUrl||null), imgPos:(p.imgPos||null) };
@@ -4278,11 +4292,42 @@ function renderAdvocacy() {
         <div class="adv-post-title">${p.title||'(Utan titel)'}</div>
         <div class="adv-post-content">${p.content||''}</div>
         <div style="font-size:11px;color:#9ca3af;margin:3px 0 6px">${_authorLine(p)}</div>
-        <button class="adv-share-btn" onclick='quickShareAdvocacy(${i}, window._advPosts)'>🔗 Dela på min profil</button><button class="adv-share-btn" style="background:#fff;border:1.5px solid var(--m);color:var(--m);margin-left:6px" onclick='repostPost(${i}, window._advPosts)'>🔁 Reposta</button><button class="adv-share-btn" style="background:#374151" onclick='downloadAdvocacyPost(${i}, window._advPosts)'>⬇️ Ladda ner inlägg</button>
+        <button class="adv-share-btn" onclick='quickShareAdvocacy(${i}, window._advPosts)'>🔗 Dela på min profil</button><button class="adv-share-btn" style="background:#fff;border:1.5px solid var(--m);color:var(--m);margin-left:6px" onclick='repostPost(${i}, window._advPosts)'>🔁 Reposta</button><button class="adv-share-btn" style="background:#374151" onclick='downloadAdvocacyPost(${i}, window._advPosts)'>⬇️ Ladda ner inlägg</button>${_showingArchived ? `<button class="adv-share-btn" style="background:#fff;border:1.5px solid #059669;color:#059669;margin-left:6px" onclick='restoreAdvocacyPost(${i})'>↩️ Återställ</button>` : `<button class="adv-share-btn" style="background:#fff;border:1.5px solid #d97706;color:#d97706;margin-left:6px" onclick='archiveAdvocacyPost(${i})'>🗄️ Arkivera</button>`}<button class="adv-share-btn" style="background:#fff;border:1.5px solid #dc2626;color:#dc2626;margin-left:6px" onclick='deleteAdvocacyPost(${i})'>🗑️ Ta bort</button>
       </div>
     </div>`;
   }).join('');
-  window._advPosts = demo;
+}
+function _advSaveSet(k, arr){ try { localStorage.setItem(k, JSON.stringify(arr)); } catch(e){} }
+function toggleAdvArchiveView(){ S._advShowArchived = !S._advShowArchived; renderAdvocacy(); }
+function deleteAdvocacyPost(i){
+  const p = window._advPosts[i];
+  if (!p) return;
+  if (!confirm('Ta bort detta inlägg permanent från Advocacy-listan?')) return;
+  const key = (p.title||'') + '|' + (p.channel||'');
+  const dismissed = (function(){ try { return JSON.parse(localStorage.getItem('advDismissed')||'[]'); } catch(e){ return []; } })();
+  if (!dismissed.includes(key)) dismissed.push(key);
+  _advSaveSet('advDismissed', dismissed);
+  if (typeof showToast === 'function') showToast('Inlägg borttaget');
+  renderAdvocacy();
+}
+function archiveAdvocacyPost(i){
+  const p = window._advPosts[i];
+  if (!p) return;
+  const key = (p.title||'') + '|' + (p.channel||'');
+  const archived = (function(){ try { return JSON.parse(localStorage.getItem('advArchived')||'[]'); } catch(e){ return []; } })();
+  if (!archived.includes(key)) archived.push(key);
+  _advSaveSet('advArchived', archived);
+  if (typeof showToast === 'function') showToast('Inlägg arkiverat');
+  renderAdvocacy();
+}
+function restoreAdvocacyPost(i){
+  const p = window._advPosts[i];
+  if (!p) return;
+  const key = (p.title||'') + '|' + (p.channel||'');
+  const archived = (function(){ try { return JSON.parse(localStorage.getItem('advArchived')||'[]'); } catch(e){ return []; } })().filter(k => k !== key);
+  _advSaveSet('advArchived', archived);
+  if (typeof showToast === 'function') showToast('Inlägg återställt');
+  renderAdvocacy();
 }
 
 let _sharePost = null;
