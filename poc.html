@@ -829,10 +829,6 @@ textarea.field-input{resize:vertical;line-height:1.5}
       <div class="card">
         <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
           <span>Tillgängliga inlägg <span id="advPostCount" style="font-size:12px;font-weight:400;color:#9ca3af"></span></span>
-          <span>
-          <button id="advArchiveToggleBtn" style="font-size:12px;font-weight:600;color:var(--m);background:none;border:none;cursor:pointer" onclick="toggleAdvArchiveView()">🗄️ Visa arkiverade</button>
-          <button id="advTrashToggleBtn" style="font-size:12px;font-weight:600;color:#dc2626;background:none;border:none;cursor:pointer;margin-left:10px" onclick="toggleAdvTrashView()">🗑️ Visa papperskorg</button>
-          </span>
         </div>
         <div id="advPostList"></div>
         <div id="advPostEmpty" style="display:none;padding:40px;text-align:center;font-size:13px;color:#9ca3af">
@@ -4264,33 +4260,14 @@ function renderAdvocacy() {
     {channel:'facebook',title:'Ny produktlansering 🚀',content:'Stolt att presentera vår senaste innovation! En lösning byggd för framtidens utmaningar.',hashtags:['Lansering','Innovation','SpotOn'],},
   ];
 
-  function _advKey(p){ return (p.title||'') + '|' + (p.channel||''); }
-  function _advGetSet(k){ try { return JSON.parse(localStorage.getItem(k)||'[]'); } catch(e){ return []; } }
-  function _advSaveSet(k, arr){ try { localStorage.setItem(k, JSON.stringify(arr)); } catch(e){} }
-  const _advArchived = _advGetSet('advArchived');
-  const _advTrashed = _advGetSet('advTrashed');
-  const _advDeleted = _advGetSet('advDeleted');
-  const _view = S._advView || 'active';
-
-  const archBtn = document.getElementById('advArchiveToggleBtn');
-  if (archBtn) archBtn.textContent = _view === 'archived' ? '↩️ Visa aktiva' : ('🗄️ Visa arkiverade (' + _advArchived.filter(function(k){ return !_advTrashed.includes(k) && !_advDeleted.includes(k); }).length + ')');
-  const trashBtn = document.getElementById('advTrashToggleBtn');
-  if (trashBtn) trashBtn.textContent = _view === 'trashed' ? '↩️ Visa aktiva' : ('🗑️ Visa papperskorg (' + _advTrashed.filter(function(k){ return !_advDeleted.includes(k); }).length + ')');
-
-  let visible = demo.filter(function(p){ return !_advDeleted.includes(_advKey(p)); });
-  if (_view === 'trashed') {
-    visible = visible.filter(function(p){ return _advTrashed.includes(_advKey(p)); });
-  } else if (_view === 'archived') {
-    visible = visible.filter(function(p){ return _advArchived.includes(_advKey(p)) && !_advTrashed.includes(_advKey(p)); });
-  } else {
-    visible = visible.filter(function(p){ return !_advArchived.includes(_advKey(p)) && !_advTrashed.includes(_advKey(p)); });
-  }
+  let visible = demo.filter(function(p){ return !isArchived(p); });
 
   const list = document.getElementById('advPostList');
   const empty = document.getElementById('advPostEmpty');
-  document.getElementById('advPostCount').textContent = (_view === 'trashed' ? (visible.length + ' i papperskorgen') : _view === 'archived' ? (visible.length + ' arkiverade') : (visible.length + ' tillgängliga'));
+  const countEl = document.getElementById('advPostCount');
+  if (countEl) countEl.textContent = visible.length + ' tillgängliga';
 
-  if (!visible.length) { list.innerHTML=''; empty.style.display='block'; empty.textContent = _view === 'trashed' ? 'Papperskorgen är tom.' : _view === 'archived' ? 'Inga arkiverade inlägg.' : 'Inga tillgängliga inlägg.'; return; }
+  if (!visible.length) { list.innerHTML=''; empty.style.display='block'; empty.textContent = 'Inga tillgängliga inlägg.'; return; }
   empty.style.display = 'none';
 
   window._advPosts = visible;
@@ -4298,79 +4275,42 @@ function renderAdvocacy() {
     const chGrad = CH_GRAD[p.channel] || 'linear-gradient(135deg,#b31e59,#82093e)';
     const chLbl  = CH_LABEL[p.channel] || p.channel;
     const mockPost = { channel: p.channel, layout:(p.layout||'gradient'), title:p.title||'', content:p.content||'', hashtags:(p.hashtags||[]), imageUrl:(p.imageUrl||p.aiImageUrl||null), aiImageUrl:(p.aiImageUrl||null), imgPos:(p.imgPos||null) };
-    const isTrashed = _view === 'trashed';
-    const isArchived = _view === 'archived';
-    let actionBtns;
-    if (isTrashed) {
-      actionBtns = `<button class="adv-share-btn" style="background:#fff;border:1.5px solid #059669;color:#059669;margin-left:6px" onclick='restoreAdvocacyPost(${i})'>↩️ Återställ</button><button class="adv-share-btn" style="background:#7f1d1d" onclick='permanentlyDeleteAdvocacyPost(${i})'>🗑️ Ta bort permanent</button>`;
-    } else if (isArchived) {
-      actionBtns = `<button class="adv-share-btn" style="background:#fff;border:1.5px solid #059669;color:#059669;margin-left:6px" onclick='unarchiveAdvocacyPost(${i})'>↩️ Återställ</button><button class="adv-share-btn" style="background:#fff;border:1.5px solid #dc2626;color:#dc2626;margin-left:6px" onclick='deleteAdvocacyPost(${i})'>🗑️ Ta bort</button>`;
-    } else {
-      actionBtns = `<button class="adv-share-btn" style="background:#fff;border:1.5px solid #d97706;color:#d97706;margin-left:6px" onclick='archiveAdvocacyPost(${i})'>🗄️ Arkivera</button><button class="adv-share-btn" style="background:#fff;border:1.5px solid #dc2626;color:#dc2626;margin-left:6px" onclick='deleteAdvocacyPost(${i})'>🗑️ Ta bort</button>`;
-    }
     return `<div class="adv-post-row">
       <div class="adv-post-thumb" style="cursor:pointer" onclick='advZoomPost(${i})'>${getPostImageHTML(mockPost)}</div>
       <div class="adv-post-info">
         <div style="display:flex;align-items:center;gap:6px">${_authorLine(p)}</div>
-        <button class="adv-share-btn" onclick='quickShareAdvocacy(${i}, window._advPosts)'>🔗 Dela på min profil</button><button class="adv-share-btn" style="background:#fff;border:1.5px solid var(--m);color:var(--m);margin-left:6px" onclick='repostPost(${i}, window._advPosts)'>🔁 Reposta</button><button class="adv-share-btn" style="background:#374151" onclick='downloadAdvocacyPost(${i}, window._advPosts)'>⬇️ Ladda ner inlägg</button>${actionBtns}
+        <button class="adv-share-btn" onclick='quickShareAdvocacy(${i}, window._advPosts)'>🔗 Dela på min profil</button><button class="adv-share-btn" style="background:#fff;border:1.5px solid var(--m);color:var(--m);margin-left:6px" onclick='repostPost(${i}, window._advPosts)'>🔁 Reposta</button><button class="adv-share-btn" style="background:#374151" onclick='downloadAdvocacyPost(${i}, window._advPosts)'>⬇️ Ladda ner inlägg</button><button class="adv-share-btn" style="background:#fff;border:1.5px solid #d97706;color:#d97706;margin-left:6px" onclick='advocacyArchivePost(${i})'>🗄️ Arkivera</button><button class="adv-share-btn" style="background:#fff;border:1.5px solid #dc2626;color:#dc2626;margin-left:6px" onclick='advocacyDeletePost(${i})'>🗑️ Ta bort</button>
       </div>
     </div>`;
   }).join('');
 }
-function _advSaveSet(k, arr){ try { localStorage.setItem(k, JSON.stringify(arr)); } catch(e){} }
-function _advKeyGlobal(p){ return (p.title||'') + '|' + (p.channel||''); }
-function toggleAdvArchiveView(){ S._advView = (S._advView === 'archived') ? 'active' : 'archived'; renderAdvocacy(); }
-function toggleAdvTrashView(){ S._advView = (S._advView === 'trashed') ? 'active' : 'trashed'; renderAdvocacy(); }
-function deleteAdvocacyPost(i){
-  const p = window._advPosts[i];
-  if (!p) return;
-  const key = _advKeyGlobal(p);
-  const trashed = (function(){ try { return JSON.parse(localStorage.getItem('advTrashed')||'[]'); } catch(e){ return []; } })();
-  if (!trashed.includes(key)) trashed.push(key);
-  _advSaveSet('advTrashed', trashed);
-  if (typeof showToast === 'function') showToast('Inlägg flyttat till papperskorgen');
+function advocacyArchivePost(i){
+  const post = window._advPosts[i];
+  if (!post) return;
+  const k = postKey(post);
+  const wasArchived = isArchived(post);
+  S.archiveOverride[k] = !wasArchived;
+  _saveAppState();
+  if (typeof showToast === 'function') showToast(!wasArchived ? '🗄️ Inlägg arkiverat' : '📂 Inlägg återställt');
   renderAdvocacy();
+  if (typeof renderPublished === 'function' && S.pubTab !== 'trash') renderPublished();
 }
-function archiveAdvocacyPost(i){
-  const p = window._advPosts[i];
-  if (!p) return;
-  const key = _advKeyGlobal(p);
-  const archived = (function(){ try { return JSON.parse(localStorage.getItem('advArchived')||'[]'); } catch(e){ return []; } })();
-  if (!archived.includes(key)) archived.push(key);
-  _advSaveSet('advArchived', archived);
-  if (typeof showToast === 'function') showToast('Inlägg arkiverat');
-  renderAdvocacy();
-}
-function unarchiveAdvocacyPost(i){
-  const p = window._advPosts[i];
-  if (!p) return;
-  const key = _advKeyGlobal(p);
-  const archived = (function(){ try { return JSON.parse(localStorage.getItem('advArchived')||'[]'); } catch(e){ return []; } })().filter(function(k){ return k !== key; });
-  _advSaveSet('advArchived', archived);
-  if (typeof showToast === 'function') showToast('Inlägg återställt');
-  renderAdvocacy();
-}
-function restoreAdvocacyPost(i){
-  const p = window._advPosts[i];
-  if (!p) return;
-  const key = _advKeyGlobal(p);
-  const trashed = (function(){ try { return JSON.parse(localStorage.getItem('advTrashed')||'[]'); } catch(e){ return []; } })().filter(function(k){ return k !== key; });
-  _advSaveSet('advTrashed', trashed);
-  if (typeof showToast === 'function') showToast('Inlägg återställt från papperskorgen');
-  renderAdvocacy();
-}
-function permanentlyDeleteAdvocacyPost(i){
-  const p = window._advPosts[i];
-  if (!p) return;
-  if (!confirm('Ta bort detta inlägg permanent? Detta går inte att ångra.')) return;
-  const key = _advKeyGlobal(p);
-  const trashed = (function(){ try { return JSON.parse(localStorage.getItem('advTrashed')||'[]'); } catch(e){ return []; } })().filter(function(k){ return k !== key; });
-  _advSaveSet('advTrashed', trashed);
-  const deleted = (function(){ try { return JSON.parse(localStorage.getItem('advDeleted')||'[]'); } catch(e){ return []; } })();
-  if (!deleted.includes(key)) deleted.push(key);
-  _advSaveSet('advDeleted', deleted);
-  if (typeof showToast === 'function') showToast('Inlägg permanent borttaget');
-  renderAdvocacy();
+function advocacyDeletePost(i){
+  const post = window._advPosts[i];
+  if (!post) return;
+  if (!confirm('Flytta "' + (post.title||'inlägget') + '" till papperskorgen? Du kan återställa det under Publicerade > Papperskorg.')) return;
+  const finish = function(){
+    S.publishedPosts = (S.publishedPosts||[]).filter(function(p){ return !(p.title===post.title && p.channel===post.channel); });
+    S.reviewQueue = (S.reviewQueue||[]).filter(function(p){ return p.id !== post.id; });
+    _saveAppState();
+    renderAdvocacy();
+    if (typeof renderPublished === 'function' && S.pubTab !== 'trash') renderPublished();
+    if (typeof showToast === 'function') showToast('🗑️ Inlägget flyttat till papperskorgen');
+  };
+  if (post.id) {
+    fetch('/api/delete-post', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: post.id }) })
+      .then(function(){ finish(); }).catch(function(){ finish(); });
+  } else { finish(); }
 }
 
 let _sharePost = null;
