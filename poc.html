@@ -4220,23 +4220,34 @@ function addMember() {
 // ════════════════════════════════════════════════════════
 //  ADVOCACY PORTAL
 // ════════════════════════════════════════════════════════
-const ADVOCATES = [
-  {initials:'AL', name:'Anna Lind',    color:'#b31e59', shared:24},
-  {initials:'EJ', name:'Erik Johansson',color:'#6b7280', shared:18},
-  {initials:'MS', name:'Maria Ström',  color:'#6b7280', shared:31},
-  {initials:'JA', name:'Johan Åberg',  color:'#6b7280', shared:12},
-  {initials:'SB', name:'Sofia Berg',   color:'#6b7280', shared:9},
-];
+function logAdvocacyShare(post, action){
+  try {
+    fetch('/api/advocacy/log-share', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ postId: (post && (post.id || post.title)) || '', action: action || 'share' }) }).catch(function(){});
+  } catch(e) {}
+}
+function renderAdvocacyLeaderboard(){
+  var row = document.getElementById('advocateRow');
+  if (!row) return;
+  fetch('/api/advocacy/leaderboard').then(function(r){ return r.json(); }).then(function(data){
+    var advocates = data.advocates || [];
+    if (!advocates.length) { row.innerHTML = '<div style="color:#9ca3af;font-size:13px">Inga team-medlemmar än.</div>'; return; }
+    row.innerHTML = advocates.map(function(a, i){
+      var name = ((a.first_name||'') + ' ' + (a.last_name||'')).trim() || a.username || '?';
+      var initials = ((a.first_name||'')[0]||'') + ((a.last_name||'')[0]||'');
+      var first = name.split(' ')[0];
+      return '<div class="adv-advocate">' +
+        '<div class="adv-av" style="background:' + (i===0?'var(--m)':'#e5e7eb') + ';color:' + (i===0?'#fff':'#6b7280') + '">' + initials.toUpperCase() + '</div>' +
+        '<div class="adv-av-name">' + first + '</div>' +
+        '<div class="adv-av-count">' + a.shared + ' inlägg</div>' +
+      '</div>';
+    }).join('');
+  }).catch(function(){});
+}
+
 
 function renderAdvocacy() {
-  // Leaderboard
-  const sorted = [...ADVOCATES].sort((a,b)=>b.shared-a.shared);
-  document.getElementById('advocateRow').innerHTML = sorted.map((a,i) => `
-    <div class="adv-advocate">
-      <div class="adv-av" style="background:${i===0?'var(--m)':'#e5e7eb'};color:${i===0?'#fff':'#6b7280'}">${a.initials}</div>
-      <div class="adv-av-name">${a.name.split(' ')[0]}</div>
-      <div class="adv-av-count">${a.shared} inlägg</div>
-    </div>`).join('');
+  // Leaderboard (live from real shares)
+  renderAdvocacyLeaderboard();
 
   // Posts available to share — from published + approved queue
   const posts = [
@@ -4337,6 +4348,7 @@ function advZoomPost(idx){
 function repostPost(idx, posts){
   const p = (posts||[])[idx];
   if (!p) return;
+  logAdvocacyShare(p, 'repost');
   _repostFromPost(p);
 }
 function repostScheduled(id){
@@ -4383,6 +4395,7 @@ function downloadAdvocacyPost(idx, posts){
 function quickShareAdvocacy(idx, posts) {
   const p = (posts||[])[idx];
   if (!p) return;
+  logAdvocacyShare(p, 'share');
   const chans = _getMyCh();
   const match = chans.find(c => c.platform === (p.channel||'linkedin'));
   if ((p.channel||'') === 'linkedin' && _liConnected) {
