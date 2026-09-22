@@ -1425,7 +1425,7 @@ function _truncateCaption(str, maxChars) {
   if (lastSpace > maxChars * 0.6) cut = cut.slice(0, lastSpace);
   return cut.trim() + '…';
 }
-function getPostImageHTML(post, size='card') {
+function _getPostImageHTMLRaw(post, size='card') {
   const layout = post.layout || 'gradient';
   const _blocks = post.blocks || ['content','hashtags'];
   const t    = _blocks.includes('title')   ? ((post.imgTitle !== undefined && post.imgTitle !== null) ? post.imgTitle : (post.title || '')) : '';
@@ -1584,6 +1584,27 @@ function getPostImageHTML(post, size='card') {
 
   return `<div style="width:100%;height:100%;background:#eee"></div>`;
 }
+function getPostImageHTML(post, size='card') {
+  var html = _getPostImageHTMLRaw(post, size);
+  var _blocks = post.blocks || ['content','hashtags'];
+  if (!_blocks.includes('brand')) {
+    try {
+      var tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      var toRemove = [];
+      tmp.querySelectorAll('*').forEach(function(el){
+        if (el.children.length === 0) {
+          var txt = el.textContent.trim();
+          if (txt === 'spot.' || txt === 's.') toRemove.push(el);
+        }
+      });
+      toRemove.forEach(function(el){ el.remove(); });
+      html = tmp.innerHTML;
+    } catch(e) {}
+  }
+  return html;
+}
+
 
 // Full-size version for lightbox
 function getPostImageLargeHTML(post) {
