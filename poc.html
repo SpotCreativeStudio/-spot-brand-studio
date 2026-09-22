@@ -533,7 +533,7 @@ textarea.field-input{resize:vertical;line-height:1.5}
 
         <!-- INKLUDERA VARUMÄRKE I BILD -->
         <div class="section-card" style="display:flex;align-items:center;gap:8px">
-          <input type="checkbox" id="m-include-brand" checked style="width:16px;height:16px">
+          <input type="checkbox" id="m-include-brand" style="width:16px;height:16px">
           <label for="m-include-brand" class="field-label" style="margin:0">Inkludera varumärke i bilden</label>
         </div>
 
@@ -2358,7 +2358,7 @@ async function generateBrandImage(brief, force) {
     const res = await fetch('/api/generate-image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brief, style: S.imageStyle, brand: (typeof getBrandProfile==='function'?getBrandProfile():undefined), includeBrand: (document.getElementById('m-include-brand') ? document.getElementById('m-include-brand').checked : true), previousImageBase64: (!force && !S._uploadedImageUrl && S._aiImageBase64) ? S._aiImageBase64 : undefined, previousImageMimeType: (!force && !S._uploadedImageUrl && S._aiImageMime) ? S._aiImageMime : undefined }),
+      body: JSON.stringify((function(){ var _ib = document.getElementById('m-include-brand') ? document.getElementById('m-include-brand').checked : false; var _usePrev = _ib && !force && !S._uploadedImageUrl && S._aiImageBase64; return { brief, style: S.imageStyle, brand: (typeof getBrandProfile==='function'?getBrandProfile():undefined), includeBrand: _ib, previousImageBase64: _usePrev ? S._aiImageBase64 : undefined, previousImageMimeType: _usePrev ? S._aiImageMime : undefined }; })()),
     });
     const data = await res.json();
     if (!res.ok || !data.imageUrl) throw new Error(data.error || 'Bild misslyckades');
