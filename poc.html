@@ -1060,7 +1060,7 @@ function _migrateLegacyPost(post) {
 }
 function _restoreAppStateIfSameWorkspace(){ try{ var _as=JSON.parse(localStorage.getItem('spotAppState')||'null'); if(_as && _as.workspace===CURRENT_WORKSPACE){ if(Array.isArray(_as.reviewQueue)){S.reviewQueue=_as.reviewQueue; S.reviewQueue.forEach(function(p){_migrateLegacyPost(p); _instrumentImageUrl(p);});} if(Array.isArray(_as.publishedPosts)){S.publishedPosts=_as.publishedPosts; S.publishedPosts.forEach(function(p){_migrateLegacyPost(p); _instrumentImageUrl(p);});} if(_as.archiveOverride)S.archiveOverride=_as.archiveOverride; } else { localStorage.removeItem('spotAppState'); } }catch(e){} }
 var CURRENT_ROLE = 'admin';
-function _loadUserInfo(){ fetch('/api/me').then(function(r){ return r.json(); }).then(function(u){ var el=document.getElementById('avatarInitials'); if(el && u.initials) el.textContent=u.initials; var el2=document.getElementById('avatarInitials2'); if(el2 && u.initials) el2.textContent=u.initials; var btn=document.getElementById('avatarBtn'); if(btn && u.firstName) btn.title=u.firstName+' '+u.lastName; var nameEl=document.getElementById('userFullName'); if(nameEl) nameEl.textContent=(u.firstName||'')+' '+(u.lastName||''); CURRENT_ROLE = u.role || 'admin'; CURRENT_WORKSPACE = u.workspace || 'spot'; CURRENT_USER_NAME = ((u.firstName||'') + ' ' + (u.lastName||'')).trim() || 'Okänd'; _restoreAppStateIfSameWorkspace(); if (typeof renderDashboard === 'function') renderDashboard(); applyRolePermissions(); if (typeof _loadMyChannels === 'function') _loadMyChannels(); if (typeof _loadLinkedInStatus === 'function') _loadLinkedInStatus(); if (typeof _loadLinkedInCompanyStatus === 'function') _loadLinkedInCompanyStatus(); if (typeof _loadImgLibrary === 'function') _loadImgLibrary(); if (typeof _loadDrafts === 'function') _loadDrafts(); if (typeof _loadTeamPosts === 'function') _loadTeamPosts(); }).catch(function(){}); }
+function _loadUserInfo(){ fetch('/api/me').then(function(r){ return r.json(); }).then(function(u){ var el=document.getElementById('avatarInitials'); if(el && u.initials) el.textContent=u.initials; var el2=document.getElementById('avatarInitials2'); if(el2 && u.initials) el2.textContent=u.initials; var btn=document.getElementById('avatarBtn'); if(btn && u.firstName) btn.title=u.firstName+' '+u.lastName; var nameEl=document.getElementById('userFullName'); if(nameEl) nameEl.textContent=(u.firstName||'')+' '+(u.lastName||''); CURRENT_ROLE = u.role || 'admin'; CURRENT_WORKSPACE = u.workspace || 'spot'; CURRENT_USER_NAME = ((u.firstName||'') + ' ' + (u.lastName||'')).trim() || 'Okänd'; _restoreAppStateIfSameWorkspace(); _hydrateFromServer(); if (typeof renderDashboard === 'function') renderDashboard(); applyRolePermissions(); if (typeof _loadMyChannels === 'function') _loadMyChannels(); if (typeof _loadLinkedInStatus === 'function') _loadLinkedInStatus(); if (typeof _loadLinkedInCompanyStatus === 'function') _loadLinkedInCompanyStatus(); if (typeof _loadImgLibrary === 'function') _loadImgLibrary(); if (typeof _loadDrafts === 'function') _loadDrafts(); if (typeof _loadTeamPosts === 'function') _loadTeamPosts(); }).catch(function(){}); }
 function applyRolePermissions(){
   var isAdmin = CURRENT_ROLE === 'admin';
   var isGranskare = CURRENT_ROLE === 'granskare';
@@ -1996,7 +1996,7 @@ function addToReview() {
     imageUrl: activeImageUrl(),
     imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
   };
-  S.reviewQueue.push(post); _instrumentImageUrl(post);
+  S.reviewQueue.push(post); _instrumentImageUrl(post); saveToServer(post);
   updateBadge();
   showToast('✅ Inlägg lagt till i granskning');
   navigate('review');
@@ -2576,7 +2576,7 @@ function addManualToReview() {
         scheduledAt, imageUrl: activeImageUrl(),
         imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
         aspectRatio: S.aspectRatio || null,
-      }); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
+      }); saveToServer(S.reviewQueue[S.reviewQueue.length-1]); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
       added++;
     });
     if (!added) { showToast('Välj minst ett förslag', 'err'); return; }
@@ -2597,7 +2597,7 @@ function addManualToReview() {
         scheduledAt, imageUrl: activeImageUrl(),
         imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
         aspectRatio: S.aspectRatio || null,
-      }); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
+      }); saveToServer(S.reviewQueue[S.reviewQueue.length-1]); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
     });
   }
   // Reset
@@ -3570,6 +3570,32 @@ async function saveToServer(post) {
     }
   }
 }
+async function _hydrateFromServer(){
+  try {
+    const res = await fetch('/api/all-posts');
+    if (!res.ok) return;
+    const data = await res.json();
+    const posts = data.posts || [];
+    if (!Array.isArray(posts) || !posts.length) return;
+    const review = [];
+    const pub = [];
+    posts.forEach(function(p){
+      if (!p) return;
+      _migrateLegacyPost(p);
+      _instrumentImageUrl(p);
+      p._synced = true;
+      if (!p.status || p.status === 'review') review.push(p);
+      else pub.push(p);
+    });
+    S.reviewQueue = review;
+    S.publishedPosts = pub;
+    _saveAppState();
+    updateBadge();
+    if (typeof renderDashboard === 'function') renderDashboard();
+    if (typeof renderReview === 'function') renderReview();
+    if (typeof renderPublished === 'function') renderPublished();
+  } catch(e) {}
+}
 
 // ════════════════════════════════════════════════════════
 //  BRAND
@@ -3985,7 +4011,7 @@ function reusePost(idx) {
     blocks: original.blocks ? [...original.blocks] : undefined,
     hashtags: original.hashtags ? [...original.hashtags] : [],
   };
-  S.reviewQueue.push(clone); _instrumentImageUrl(clone);
+  S.reviewQueue.push(clone); _instrumentImageUrl(clone); saveToServer(clone);
   S.selectedReviewId = clone.id;
   // Close the detail modal
   document.getElementById('pubDetailModal').style.display = 'none';
