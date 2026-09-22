@@ -1427,7 +1427,7 @@ function _truncateCaption(str, maxChars) {
 }
 function getPostImageHTML(post, size='card') {
   const layout = post.layout || 'gradient';
-  const _blocks = post.blocks || ['brand','title','content','hashtags'];
+  const _blocks = post.blocks || ['content','hashtags'];
   const t    = _blocks.includes('title')   ? ((post.imgTitle !== undefined && post.imgTitle !== null) ? post.imgTitle : (post.title || '')) : '';
   const c    = _blocks.includes('content') ? ((post.imgContent !== undefined && post.imgContent !== null) ? post.imgContent : (post.content || '')) : '';
     const tags = _blocks.includes('hashtags') ? (post.hashtags || []).slice(0,3).map(h=>`#${h.replace(/^#/,'')}`).join(' ') : '';
@@ -1592,7 +1592,7 @@ function getPostImageLargeHTML(post) {
   if (layout === 'studio' || layout === 'case' || layout === 'louisiana') {
     return getPostImageHTML(post, 'large');
   }
-  const _blocksL = post.blocks || ['brand','title','content','hashtags'];
+  const _blocksL = post.blocks || ['content','hashtags'];
   const t = _blocksL.includes('title') ? ((post.imgTitle !== undefined && post.imgTitle !== null) ? post.imgTitle : (post.title || '')) : '';
   const c = _blocksL.includes('content') ? ((post.imgContent !== undefined && post.imgContent !== null) ? post.imgContent : (post.content || '')) : '';
     const tags = _blocksL.includes('hashtags') ? (post.hashtags || []).map(t=>`#${t.replace(/^#/,'')}`).join(' ') : '';
@@ -2725,7 +2725,7 @@ const BLOCK_META = {
   content:  { icon: '📄', label: 'Innehåll' },
   hashtags: { icon: '#',  label: 'Hashtags' },
 };
-const DEFAULT_BLOCK_ORDER = ['brand','content','hashtags'];
+const DEFAULT_BLOCK_ORDER = ['content','hashtags'];
 
 let dndDragSrc = null;
 
