@@ -3437,6 +3437,7 @@ async function approvePost(id, scheduleMode = false) {
     const expiresAt = _computeExpiry(scheduledAt);
     const post = { ...S.reviewQueue[idx], status: 'scheduled', scheduledAt, expiresAt, archived: false };
     S.publishedPosts.push(post);
+    logAdvocacyShare(null, 'approve');
     S.reviewQueue.splice(idx, 1);
     S.selectedReviewId = null;
     document.getElementById('detailPanel').style.display = 'none';
@@ -3451,6 +3452,7 @@ async function approvePost(id, scheduleMode = false) {
     const expiresAt = _computeExpiry(scheduledAt || new Date().toISOString());
     const post = { ...S.reviewQueue[idx], status: 'published', scheduledAt, expiresAt, archived: false };
     S.publishedPosts.push(post);
+    logAdvocacyShare(null, 'approve');
     S.reviewQueue.splice(idx, 1);
     S.selectedReviewId = null;
     document.getElementById('detailPanel').style.display = 'none';
@@ -4348,7 +4350,6 @@ function advZoomPost(idx){
 function repostPost(idx, posts){
   const p = (posts||[])[idx];
   if (!p) return;
-  logAdvocacyShare(p, 'repost');
   _repostFromPost(p);
 }
 function repostScheduled(id){
@@ -4395,7 +4396,6 @@ function downloadAdvocacyPost(idx, posts){
 function quickShareAdvocacy(idx, posts) {
   const p = (posts||[])[idx];
   if (!p) return;
-  logAdvocacyShare(p, 'share');
   const chans = _getMyCh();
   const match = chans.find(c => c.platform === (p.channel||'linkedin'));
   if ((p.channel||'') === 'linkedin' && _liConnected) {
