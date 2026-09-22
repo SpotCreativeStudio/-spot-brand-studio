@@ -4260,7 +4260,7 @@ function renderAdvocacy() {
     {channel:'facebook',title:'Ny produktlansering 🚀',content:'Stolt att presentera vår senaste innovation! En lösning byggd för framtidens utmaningar.',hashtags:['Lansering','Innovation','SpotOn'],},
   ];
 
-  let visible = demo.filter(function(p){ return !isArchived(p); });
+  let visible = demo.filter(function(p){ var k = postKey(p); var manuallyArchived = (k in S.archiveOverride) ? S.archiveOverride[k] : !!p.archived; return !manuallyArchived; });
 
   const list = document.getElementById('advPostList');
   const empty = document.getElementById('advPostEmpty');
