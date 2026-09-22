@@ -2750,8 +2750,8 @@ function openEditorModal(post) {
   const tags = (post.hashtags||[]).map(t=>`<span class="tag-edit">#${t.replace(/^#/,'')}<span class="tag-rm" onclick="emRmTag('${t.replace(/^#/,'')}')">✕</span></span>`).join('');
   left.innerHTML = `
     <div>
-      <div class="em-field-label">Titel</div>
-      <input id="em-title" class="em-input" value="${(post.title||'').replace(/"/g,'&quot;')}" placeholder="Titel..." onfocus="emSnapshotText()" oninput="emSyncFromForm()">
+      <div class="em-field-label">Prompt</div>
+      <input id="em-title" class="em-input" value="${(post.title||'').replace(/"/g,'&quot;')}" placeholder="Prompt..." onfocus="emSnapshotText()" oninput="emSyncFromForm()">
     </div>
     <div>
       <div class="em-field-label">Innehåll</div>
