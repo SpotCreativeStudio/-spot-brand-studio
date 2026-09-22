@@ -1587,7 +1587,9 @@ function _getPostImageHTMLRaw(post, size='card') {
 function getPostImageHTML(post, size='card') {
   var html = _getPostImageHTMLRaw(post, size);
   var _blocks = post.blocks || ['content','hashtags'];
-  if (!_blocks.includes('brand')) {
+  var _ibCb = document.getElementById('m-include-brand');
+  var _showBrand = _ibCb ? _ibCb.checked : _blocks.includes('brand');
+  if (!_showBrand) {
     try {
       var tmp = document.createElement('div');
       tmp.innerHTML = html;
@@ -3379,6 +3381,8 @@ function _currentCreateLayout(){
 function openCreateEditor() {
   const t  = document.getElementById('m-title');
   const c  = document.getElementById('m-content');
+  const _ibCbCreate = document.getElementById('m-include-brand');
+  const _defaultBlocks = _ibCbCreate && _ibCbCreate.checked ? ['brand','content','hashtags'] : ['content','hashtags'];
   const tempPost = {
     id: 'create-draft',
     channel: S.manualChannel || (S.manualChannels && S.manualChannels[0]) || 'linkedin',
@@ -3388,6 +3392,7 @@ function openCreateEditor() {
     imageUrl: (typeof activeImageUrl === 'function') ? activeImageUrl() : null,
     imgPos: S._imgPos || null,
     layout: _currentCreateLayout(),
+    blocks: _defaultBlocks,
   };
   S._editIsCreateMode = true;
   openEditorModal(tempPost);
