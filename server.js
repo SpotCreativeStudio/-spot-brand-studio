@@ -164,7 +164,7 @@ app.post('/api/channels/add', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
     const { platform, handle } = req.body || {}
-    if (!platform || !handle) return res.status(400).json({ error: 'platform och handle krÃ¤vs' })
+    if (!platform || !handle) return res.status(400).json({ error: 'platform och handle krävs' })
     await ensureChannelsTable()
     await getAuthPool().query('INSERT INTO user_channels (username,platform,handle) VALUES ($1,$2,$3) ON CONFLICT (username,platform) DO UPDATE SET handle=$3', [s.u, platform, handle])
     res.json({ ok: true })
@@ -184,8 +184,8 @@ app.post('/api/team/invite', auth, async (req, res) => {
   if ((s.role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan bjuda in medlemmar' })
   try {
     const { name, email, password, role, username: wantedUsername } = req.body || {}
-    if (!name || !email || !password) return res.status(400).json({ error: 'Namn, e-post och lÃ¶senord krÃ¤vs' })
-    if (String(password).length < 4) return res.status(400).json({ error: 'LÃ¶senordet mÃ¥ste vara minst 4 tecken' })
+    if (!name || !email || !password) return res.status(400).json({ error: 'Namn, e-post och lösenord krävs' })
+    if (String(password).length < 4) return res.status(400).json({ error: 'Lösenordet måste vara minst 4 tecken' })
     const roleMap = { admin: 'admin', editor: 'redaktor', viewer: 'granskare' }
     const dbRole = roleMap[role] || 'granskare'
     const parts = String(name).trim().split(/\s+/)
@@ -195,7 +195,7 @@ app.post('/api/team/invite', auth, async (req, res) => {
     if (!username) username = String(email).split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '')
     if (wantedUsername) {
       const taken = await getAuthPool().query('SELECT 1 FROM app_users WHERE username=$1', [username])
-      if (taken.rows.length) return res.status(400).json({ error: 'AnvÃ¤ndarnamnet Ã¤r upptaget' })
+      if (taken.rows.length) return res.status(400).json({ error: 'Användarnamnet är upptaget' })
     }
     await ensureUsersTable()
     let candidate = username, n = 1
@@ -210,14 +210,14 @@ app.post('/api/team/invite', auth, async (req, res) => {
       to: email,
       subject: 'Du har bjudits in till spot. Brand Studio',
       text: 'Hej ' + firstName + '!\n\nDu har lagts till i spot. Brand Studio.\n\nAnvandarnamn: ' + username + '\nLosenord: ' + password + '\n\nLogga in har: ' + loginLink + '\n\nVi rekommenderar att du byter losenord efter forsta inloggningen.',
-      html: '<p>Hej ' + firstName + '!</p><p>Du har lagts till i <strong>spot. Brand Studio</strong>.</p><p>AnvÃ¤ndarnamn: <strong>' + username + '</strong><br>LÃ¶senord: <strong>' + password + '</strong></p><p><a href="' + loginLink + '">Logga in hÃ¤r</a></p><p>Vi rekommenderar att du byter lÃ¶senord efter fÃ¶rsta inloggningen.</p>'
+      html: '<p>Hej ' + firstName + '!</p><p>Du har lagts till i <strong>spot. Brand Studio</strong>.</p><p>Användarnamn: <strong>' + username + '</strong><br>Lösenord: <strong>' + password + '</strong></p><p><a href="' + loginLink + '">Logga in här</a></p><p>Vi rekommenderar att du byter lösenord efter första inloggningen.</p>'
     })
     res.json({ ok: true, username, mailSent })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 app.post('/api/team/role', auth, async (req, res) => {
   const s = sessions[getToken(req)] || {}
-  if ((s.role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan Ã¤ndra roller' })
+  if ((s.role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan ändra roller' })
   try {
     const { username, role } = req.body || {}
     const roleMap = { admin: 'admin', editor: 'redaktor', viewer: 'granskare' }
@@ -247,7 +247,7 @@ app.post('/api/team/remove', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
-app.post('/api/change-password', auth, async (req, res) => { const { currentPassword, newPassword } = req.body || {}; if (!newPassword || String(newPassword).length < 4) return res.status(400).json({ error: 'Nytt lÃ¶senord mÃ¥ste vara minst 4 tecken' }); if (currentPassword !== await getPassword()) return res.status(401).json({ error: 'Fel nuvarande lÃ¶senord' }); await setPassword(String(newPassword)); res.json({ ok: true }) })
+app.post('/api/change-password', auth, async (req, res) => { const { currentPassword, newPassword } = req.body || {}; if (!newPassword || String(newPassword).length < 4) return res.status(400).json({ error: 'Nytt lösenord måste vara minst 4 tecken' }); if (currentPassword !== await getPassword()) return res.status(401).json({ error: 'Fel nuvarande lösenord' }); await setPassword(String(newPassword)); res.json({ ok: true }) })
 app.get('/forgot', (_req, res) => res.send(FORGOT_HTML))
 app.post('/forgot', async (req, res) => {
   try {
@@ -273,7 +273,7 @@ app.post('/forgot', async (req, res) => {
       to: targetEmail,
       subject: 'spot. - Aterstall losenord',
       text: 'Nagon har begart att aterstalla losenordet for spot. Brand Studio.\n\nKlicka pa lanken nedan for att valja ett nytt losenord (giltig i 30 minuter):\n' + link + '\n\nOm det inte var du kan du ignorera detta mail.',
-      html: '<p>NÃ¥gon har begÃ¤rt att Ã¥terstÃ¤lla lÃ¶senordet fÃ¶r <strong>spot. Brand Studio</strong>.</p><p><a href="' + link + '">Klicka hÃ¤r fÃ¶r att vÃ¤lja ett nytt lÃ¶senord</a> (giltig i 30 minuter).</p><p>Om det inte var du kan du ignorera detta mail.</p>'
+      html: '<p>Någon har begärt att återställa lösenordet för <strong>spot. Brand Studio</strong>.</p><p><a href="' + link + '">Klicka här för att välja ett nytt lösenord</a> (giltig i 30 minuter).</p><p>Om det inte var du kan du ignorera detta mail.</p>'
     })
     if (!ok) return res.redirect('/forgot?err=1')
     res.redirect('/forgot?sent=1')
@@ -308,7 +308,7 @@ app.get('/auth/linkedin/callback', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
     const { code, state } = req.query
-    if (!code || state !== s.liState) return res.send('<p>Ogiltig eller utgÃ¥ngen LinkedIn-inloggning. <a href="/">Tillbaka</a></p>')
+    if (!code || state !== s.liState) return res.send('<p>Ogiltig eller utgången LinkedIn-inloggning. <a href="/">Tillbaka</a></p>')
     const redirectUri = req.protocol + '://' + req.get('host') + '/auth/linkedin/callback'
     const tokenRes = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
       method: 'POST',
@@ -322,7 +322,7 @@ app.get('/auth/linkedin/callback', auth, async (req, res) => {
       })
     })
     const tokenData = await tokenRes.json()
-    if (!tokenData.access_token) return res.send('<p>Kunde inte logga in med LinkedIn: ' + (tokenData.error_description || tokenData.error || 'okÃ¤nt fel') + '. <a href="/">Tillbaka</a></p>')
+    if (!tokenData.access_token) return res.send('<p>Kunde inte logga in med LinkedIn: ' + (tokenData.error_description || tokenData.error || 'okänt fel') + '. <a href="/">Tillbaka</a></p>')
     const meRes = await fetch('https://api.linkedin.com/v2/userinfo', { headers: { Authorization: 'Bearer ' + tokenData.access_token } })
     const me = await meRes.json()
     await ensureLinkedInTable()
@@ -360,7 +360,7 @@ app.post('/api/linkedin/publish', auth, async (req, res) => {
     if (!text) return res.status(400).json({ error: 'Text saknas' })
     await ensureLinkedInTable()
     const r = await getAuthPool().query('SELECT access_token, li_sub FROM linkedin_accounts WHERE username=$1', [s.u])
-    if (!r.rows.length) return res.status(400).json({ error: 'LinkedIn Ã¤r inte anslutet. Anslut kontot fÃ¶rst.' })
+    if (!r.rows.length) return res.status(400).json({ error: 'LinkedIn är inte anslutet. Anslut kontot först.' })
     const { access_token, li_sub } = r.rows[0]
     const author = 'urn:li:person:' + li_sub
     let mediaAsset = null
@@ -394,7 +394,7 @@ app.post('/api/linkedin/publish', auth, async (req, res) => {
       headers: { Authorization: 'Bearer ' + access_token, 'Content-Type': 'application/json', 'X-Restli-Protocol-Version': '2.0.0' },
       body: JSON.stringify(postBody)
     })
-    if (!postRes.ok) { const errText = await postRes.text(); return res.status(500).json({ error: 'LinkedIn avvisade inlÃ¤gget: ' + errText }) }
+    if (!postRes.ok) { const errText = await postRes.text(); return res.status(500).json({ error: 'LinkedIn avvisade inlägget: ' + errText }) }
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -418,7 +418,7 @@ app.get('/auth/linkedin/company/callback', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
     const { code, state } = req.query
-    if (!code || state !== s.liCompanyState) return res.send('<p>Ogiltig eller utgÃ¥ngen LinkedIn-inloggning (fÃ¶retag). <a href="/">Tillbaka</a></p>')
+    if (!code || state !== s.liCompanyState) return res.send('<p>Ogiltig eller utgången LinkedIn-inloggning (företag). <a href="/">Tillbaka</a></p>')
     const redirectUri = req.protocol + '://' + req.get('host') + '/auth/linkedin/company/callback'
     const tokenRes = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
       method: 'POST',
@@ -432,7 +432,7 @@ app.get('/auth/linkedin/company/callback', auth, async (req, res) => {
       })
     })
     const tokenData = await tokenRes.json()
-    if (!tokenData.access_token) return res.send('<p>Kunde inte ansluta LinkedIn-fÃ¶retagssida: ' + (tokenData.error_description || tokenData.error || 'okÃ¤nt fel') + '. <a href="/">Tillbaka</a></p>')
+    if (!tokenData.access_token) return res.send('<p>Kunde inte ansluta LinkedIn-företagssida: ' + (tokenData.error_description || tokenData.error || 'okänt fel') + '. <a href="/">Tillbaka</a></p>')
     const aclRes = await fetch('https://api.linkedin.com/v2/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&projection=(elements*(organization~(localizedName),organizationalTarget~(localizedName)))', {
       headers: { Authorization: 'Bearer ' + tokenData.access_token }
     })
@@ -440,7 +440,7 @@ app.get('/auth/linkedin/company/callback', auth, async (req, res) => {
     const first = (aclData.elements || [])[0] || {}
     const orgTargetUrn = first.organizationalTarget || first.organization || null
     const orgInfo = first['organizationalTarget~'] || first['organization~'] || {}
-    if (!orgTargetUrn) return res.send('<p>Inget LinkedIn-fÃ¶retag hittades dÃ¤r du Ã¤r administratÃ¶r. <a href="/">Tillbaka</a></p>')
+    if (!orgTargetUrn) return res.send('<p>Inget LinkedIn-företag hittades där du är administratör. <a href="/">Tillbaka</a></p>')
     await ensureLinkedInCompanyTable()
     const expiresAt = Date.now() + (tokenData.expires_in || 5000) * 1000
     await getAuthPool().query(
@@ -449,7 +449,7 @@ app.get('/auth/linkedin/company/callback', auth, async (req, res) => {
     )
     res.redirect('/?linkedin_company=connected')
   } catch (e) {
-    res.send('<p>Fel vid LinkedIn-fÃ¶retagsinloggning: ' + e.message + '. <a href="/">Tillbaka</a></p>')
+    res.send('<p>Fel vid LinkedIn-företagsinloggning: ' + e.message + '. <a href="/">Tillbaka</a></p>')
   }
 })
 app.get('/api/linkedin/company/status', auth, async (req, res) => {
@@ -476,7 +476,7 @@ app.post('/api/linkedin/company/publish', auth, async (req, res) => {
     if (!text) return res.status(400).json({ error: 'Text saknas' })
     await ensureLinkedInCompanyTable()
     const r = await getAuthPool().query('SELECT access_token, org_urn FROM linkedin_company_accounts WHERE username=$1', [s.u])
-    if (!r.rows.length) return res.status(400).json({ error: 'LinkedIn-fÃ¶retagssida Ã¤r inte ansluten. Anslut den fÃ¶rst under VarumÃ¤rke.' })
+    if (!r.rows.length) return res.status(400).json({ error: 'LinkedIn-företagssida är inte ansluten. Anslut den först under Varumärke.' })
     const { access_token, org_urn } = r.rows[0]
     const postRes = await fetch('https://api.linkedin.com/rest/posts', {
       method: 'POST',
@@ -495,7 +495,7 @@ app.post('/api/linkedin/company/publish', auth, async (req, res) => {
         isReshareDisabledByAuthor: false
       })
     })
-    if (!postRes.ok) { const errText = await postRes.text(); return res.status(500).json({ error: 'LinkedIn avvisade fÃ¶retagsinlÃ¤gget: ' + errText }) }
+    if (!postRes.ok) { const errText = await postRes.text(); return res.status(500).json({ error: 'LinkedIn avvisade företagsinlägget: ' + errText }) }
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -612,20 +612,20 @@ app.post('/api/brand/fetch-website', auth, async (req, res) => {
       title: decode(titleMatch ? titleMatch[1] : (ogTitleMatch ? ogTitleMatch[1] : '')),
       description: decode(descMatch ? descMatch[1] : (ogDescMatch ? ogDescMatch[1] : ''))
     })
-  } catch (e) { res.status(500).json({ error: e.message || 'Kunde inte hÃ¤mta sidan' }) }
+  } catch (e) { res.status(500).json({ error: e.message || 'Kunde inte hämta sidan' }) }
 })
 app.post('/api/admin/create-workspace', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
     if ((s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin kan skapa nya arbetsytor' })
     const { companyName, adminUsername, adminPassword, adminFirstName, adminLastName } = req.body || {}
-    if (!companyName || !adminUsername || !adminPassword) return res.status(400).json({ error: 'FÃ¶retagsnamn, anvÃ¤ndarnamn och lÃ¶senord krÃ¤vs' })
-    if (String(adminPassword).length < 4) return res.status(400).json({ error: 'LÃ¶senordet mÃ¥ste vara minst 4 tecken' })
+    if (!companyName || !adminUsername || !adminPassword) return res.status(400).json({ error: 'Företagsnamn, användarnamn och lösenord krävs' })
+    if (String(adminPassword).length < 4) return res.status(400).json({ error: 'Lösenordet måste vara minst 4 tecken' })
     await ensureUsersTable()
     const workspaceId = String(companyName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'workspace' + Date.now()
     const username = String(adminUsername).toLowerCase().replace(/[^a-z0-9]/g, '')
     const existing = await getAuthPool().query('SELECT 1 FROM app_users WHERE username=$1', [username])
-    if (existing.rows.length) return res.status(400).json({ error: 'AnvÃ¤ndarnamnet Ã¤r upptaget' })
+    if (existing.rows.length) return res.status(400).json({ error: 'Användarnamnet är upptaget' })
     await getAuthPool().query(
       'INSERT INTO app_users (username,password,role,first_name,last_name,workspace) VALUES ($1,$2,$3,$4,$5,$6)',
       [username, adminPassword, 'admin', adminFirstName || companyName, adminLastName || '', workspaceId]
@@ -801,9 +801,9 @@ app.post('/api/admin/billing-events/seen', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 restoreSessions().finally(function(){ app.listen(PORT, () => console.log('spot. running on ' + PORT)) })
-const LOGIN_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot.</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:32px}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">content studio</div><form method="POST" action="/login"><div class="f"><label>AnvÃ¤ndarnamn eller e-post</label><input type="text" name="username" autofocus/></div><div class="f"><label>LÃ¶senord</label><input type="password" name="password"/></div><div class="err" id="err">Fel.</div><button type="submit">Logga in</button><div style="text-align:center;margin-top:14px"><a href="/forgot" style="font-size:12px;color:#9ca3af;text-decoration:none">GlÃ¶mt lÃ¶senord?</a></div><div class="ok" id="ok" style="display:none;color:#16a34a;font-size:13px;margin-top:8px;text-align:center">LÃ¶senordet Ã¤r Ã¥terstÃ¤llt. Logga in med det nya lÃ¶senordet.</div></form></div><script>var q=new URLSearchParams(location.search);if(q.get("err"))document.getElementById("err").classList.add("show");if(q.get("reset"))document.getElementById("ok").style.display="block"<\/script></body></html>'
+const LOGIN_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot.</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:32px}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">content studio</div><form method="POST" action="/login"><div class="f"><label>Användarnamn eller e-post</label><input type="text" name="username" autofocus/></div><div class="f"><label>Lösenord</label><input type="password" name="password"/></div><div class="err" id="err">Fel.</div><button type="submit">Logga in</button><div style="text-align:center;margin-top:14px"><a href="/forgot" style="font-size:12px;color:#9ca3af;text-decoration:none">Glömt lösenord?</a></div><div class="ok" id="ok" style="display:none;color:#16a34a;font-size:13px;margin-top:8px;text-align:center">Lösenordet är återställt. Logga in med det nya lösenordet.</div></form></div><script>var q=new URLSearchParams(location.search);if(q.get("err"))document.getElementById("err").classList.add("show");if(q.get("reset"))document.getElementById("ok").style.display="block"<\/script></body></html>'
  
-const FORGOT_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot. - GlÃ¶mt lÃ¶senord</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:24px;line-height:1.5}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.msg{font-size:13px;margin-top:8px;display:none;padding:10px 12px;border-radius:8px}.msg.err{color:#b31e59;background:#fff5f7}.msg.ok{color:#16a34a;background:#f0fdf4}.msg.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}a.back{display:block;text-align:center;margin-top:14px;font-size:12px;color:#9ca3af;text-decoration:none}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">Vi skickar en lÃ¤nk fÃ¶r att Ã¥terstÃ¤lla lÃ¶senordet till adminens e-postadress.</div><form method="POST" action="/forgot"><div class="f"><label>E-postadress</label><input type="email" name="email" autofocus required placeholder="din@epost.se"/></div><div class="msg err" id="err">NÃ¥got gick fel. FÃ¶rsÃ¶k igen.</div><div class="msg err" id="nocfg">Ingen Ã¥terstÃ¤llnings-e-post Ã¤r konfigurerad. Kontakta utvecklaren.</div><div class="msg err" id="nomailer">E-postutskick Ã¤r inte konfigurerat pÃ¥ servern. Kontakta utvecklaren.</div><div class="msg err" id="nomatch">Ingen adminadress matchar den e-postadressen.</div><div class="msg ok" id="sent">Ett mail med en Ã¥terstÃ¤llningslÃ¤nk har skickats. Kolla inkorgen (giltig i 30 minuter).</div><button type="submit">Skicka Ã¥terstÃ¤llningslÃ¤nk</button></form><a class="back" href="/login">Tillbaka till inloggning</a></div><script>var q=new URLSearchParams(location.search);var e=q.get("err");if(e==="1")document.getElementById("err").classList.add("show");if(e==="nocfg")document.getElementById("nocfg").classList.add("show");if(e==="nomailer")document.getElementById("nomailer").classList.add("show");if(e==="nomatch")document.getElementById("nomatch").classList.add("show");if(q.get("sent"))document.getElementById("sent").classList.add("show")<\/script></body></html>'
-const RESET_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot. - Nytt lÃ¶senord</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:24px}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">VÃ¤lj ett nytt lÃ¶senord.</div><form method="POST" action="/reset"><input type="hidden" name="token" value="__TOKEN__"/><div class="f"><label>Nytt lÃ¶senord</label><input type="password" name="newPassword" autofocus/></div><div class="err" id="err">LÃ¶senordet mÃ¥ste vara minst 4 tecken.</div><button type="submit">Spara nytt lÃ¶senord</button></form></div><script>if(new URLSearchParams(location.search).get("err"))document.getElementById("err").classList.add("show")<\/script></body></html>'
-const RESET_INVALID_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot.</title><style>body{font-family:Segoe UI,sans-serif;background:#0f0f0f;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}a{color:#b31e59}</style></head><body><div><p>LÃ¤nken Ã¤r ogiltig eller har gÃ¥tt ut.</p><p><a href="/forgot">FÃ¶rsÃ¶k igen</a></p></div></body></html>'
+const FORGOT_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot. - Glömt lösenord</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:24px;line-height:1.5}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.msg{font-size:13px;margin-top:8px;display:none;padding:10px 12px;border-radius:8px}.msg.err{color:#b31e59;background:#fff5f7}.msg.ok{color:#16a34a;background:#f0fdf4}.msg.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}a.back{display:block;text-align:center;margin-top:14px;font-size:12px;color:#9ca3af;text-decoration:none}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">Vi skickar en länk för att återställa lösenordet till adminens e-postadress.</div><form method="POST" action="/forgot"><div class="f"><label>E-postadress</label><input type="email" name="email" autofocus required placeholder="din@epost.se"/></div><div class="msg err" id="err">Något gick fel. Försök igen.</div><div class="msg err" id="nocfg">Ingen återställnings-e-post är konfigurerad. Kontakta utvecklaren.</div><div class="msg err" id="nomailer">E-postutskick är inte konfigurerat på servern. Kontakta utvecklaren.</div><div class="msg err" id="nomatch">Ingen adminadress matchar den e-postadressen.</div><div class="msg ok" id="sent">Ett mail med en återställningslänk har skickats. Kolla inkorgen (giltig i 30 minuter).</div><button type="submit">Skicka återställningslänk</button></form><a class="back" href="/login">Tillbaka till inloggning</a></div><script>var q=new URLSearchParams(location.search);var e=q.get("err");if(e==="1")document.getElementById("err").classList.add("show");if(e==="nocfg")document.getElementById("nocfg").classList.add("show");if(e==="nomailer")document.getElementById("nomailer").classList.add("show");if(e==="nomatch")document.getElementById("nomatch").classList.add("show");if(q.get("sent"))document.getElementById("sent").classList.add("show")<\/script></body></html>'
+const RESET_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot. - Nytt lösenord</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:24px}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">Välj ett nytt lösenord.</div><form method="POST" action="/reset"><input type="hidden" name="token" value="__TOKEN__"/><div class="f"><label>Nytt lösenord</label><input type="password" name="newPassword" autofocus/></div><div class="err" id="err">Lösenordet måste vara minst 4 tecken.</div><button type="submit">Spara nytt lösenord</button></form></div><script>if(new URLSearchParams(location.search).get("err"))document.getElementById("err").classList.add("show")<\/script></body></html>'
+const RESET_INVALID_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot.</title><style>body{font-family:Segoe UI,sans-serif;background:#0f0f0f;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}a{color:#b31e59}</style></head><body><div><p>Länken är ogiltig eller har gått ut.</p><p><a href="/forgot">Försök igen</a></p></div></body></html>'
  
