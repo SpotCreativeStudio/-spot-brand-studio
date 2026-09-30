@@ -3841,6 +3841,10 @@ function downloadLogo(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 function renderBrand() {
+  // Fyll i sparad hemsida/SEO-URL så att den syns efter omladdning
+  var _wi=document.getElementById('brandWebsiteInput'); if(_wi && document.activeElement!==_wi) _wi.value=(typeof BRAND_WEBSITE!=="undefined"&&BRAND_WEBSITE)?BRAND_WEBSITE:'';
+  var _wb=document.getElementById('websiteInfoBox'); var _info=(typeof BRAND_WEBSITE_INFO!=="undefined")?BRAND_WEBSITE_INFO:null;
+  if(_wb && _info && (_info.title||_info.description)){ _wb.style.display='block'; _wb.innerHTML=''; if(_info.title){var _t=document.createElement('div');_t.style.fontWeight='600';_t.style.marginBottom='4px';_t.textContent=_info.title;_wb.appendChild(_t);} var _d=document.createElement('div'); _d.textContent=_info.description||'Ingen beskrivning hittades.'; if(!_info.description)_d.style.color='#9ca3af'; _wb.appendChild(_d); }
   renderImgLibrary();
   if(!S._brandLoaded){ loadBrandSettings(); S._brandLoaded=true; }
   renderImgStyleGrid();
