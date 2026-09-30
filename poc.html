@@ -3682,10 +3682,23 @@ function typoFontUpload(input,i){var f=input.files&&input.files[0];if(!f)return;
 function typoFontClear(i){var nm=TYPOGRAPHY[i].name;CUSTOM_FONTS=CUSTOM_FONTS.filter(function(x){return x.name!==nm;});injectCustomFontFaces();saveBrandSettings();renderTypography();}
 function typoFontFor(name){return CUSTOM_FONTS.find(function(x){return x.name===name;});}
 
+function _resetBrandForNewWorkspace(){
+  COLORS = []; TYPOGRAPHY = []; DOS_RULES = []; DONTS_RULES = []; TEMPLATES = [];
+  CUSTOM_FONTS = []; BRAND_LOGO = "";
+  BRAND_NAME = ""; BRAND_TAGLINE = ""; BRAND_LOCATION = ""; BRAND_TONE = "";
+  BRAND_WEBSITE = ""; BRAND_WEBSITE_INFO = { title:'', description:'' };
+}
 function loadBrandSettings(){
-  fetch("/api/brand").then(function(r){return r.json();}).then(function(res){
+  Promise.all([
+    fetch("/api/me").then(function(r){return r.json();}).catch(function(){return {};}),
+    fetch("/api/brand").then(function(r){return r.json();})
+  ]).then(function(arr){
+    var me = arr[0] || {}, res = arr[1] || {};
+    var ws = me.workspace || 'spot';
+    // Spots standardprofil gäller bara Spots egen arbetsyta. Andra team startar tomma.
+    if (ws !== 'spot') _resetBrandForNewWorkspace();
     var b = res.brand;
-    if (!b) return;
+    if (!b) { if (typeof renderBrand === "function") renderBrand(); return; }
     if (b.colors && b.colors.length) COLORS = b.colors;
     if (b.typography && b.typography.length) TYPOGRAPHY = b.typography;
     if (typeof b.logo === "string") BRAND_LOGO = b.logo;
