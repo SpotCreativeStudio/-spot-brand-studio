@@ -123,6 +123,7 @@ app.get('/favicon.ico', (req, res) => {
 });
 
 app.get('/assets/:f', (req, res) => { const f = _TPL[req.params.f] || req.params.f; if (f.indexOf('..') !== -1 || f.indexOf('/') !== -1) return res.status(400).end(); const p = path.join(__dirname, 'assets', f); if (fs.existsSync(p)) return res.sendFile(p); res.status(404).end() })
+function passwordError(pw) { pw = String(pw || ''); if (pw.length < 6 || !/[A-ZÅÄÖ]/.test(pw) || !/[^A-Za-z0-9ÅÄÖåäö]/.test(pw)) return 'Lösenordet måste vara minst 6 tecken och innehålla minst en versal och ett specialtecken'; return null }
 function makeToken() { return crypto.randomBytes(32).toString('hex') }
 function getToken(req) { const c = req.headers.cookie || ''; const p = c.split(';').map(x => x.trim()).find(x => x.startsWith('spot_session=')); return p ? p.split('=')[1] : null }
 function auth(req, res, next) { if (sessions[getToken(req)]) return next(); if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' }); res.redirect('/login') }
@@ -185,7 +186,7 @@ app.post('/api/team/invite', auth, async (req, res) => {
   try {
     const { name, email, password, role, username: wantedUsername } = req.body || {}
     if (!name || !email || !password) return res.status(400).json({ error: 'Namn, e-post och lösenord krävs' })
-    if (String(password).length < 4) return res.status(400).json({ error: 'Lösenordet måste vara minst 4 tecken' })
+    if (passwordError(password)) return res.status(400).json({ error: passwordError(password) })
     const roleMap = { admin: 'admin', editor: 'redaktor', viewer: 'granskare' }
     const dbRole = roleMap[role] || 'granskare'
     const parts = String(name).trim().split(/\s+/)
@@ -247,7 +248,7 @@ app.post('/api/team/remove', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
-app.post('/api/change-password', auth, async (req, res) => { const { currentPassword, newPassword } = req.body || {}; if (!newPassword || String(newPassword).length < 4) return res.status(400).json({ error: 'Nytt lösenord måste vara minst 4 tecken' }); if (currentPassword !== await getPassword()) return res.status(401).json({ error: 'Fel nuvarande lösenord' }); await setPassword(String(newPassword)); res.json({ ok: true }) })
+app.post('/api/change-password', auth, async (req, res) => { const { currentPassword, newPassword } = req.body || {}; if (passwordError(newPassword)) return res.status(400).json({ error: passwordError(newPassword) }); if (currentPassword !== await getPassword()) return res.status(401).json({ error: 'Fel nuvarande lösenord' }); await setPassword(String(newPassword)); res.json({ ok: true }) })
 app.get('/forgot', (_req, res) => res.send(FORGOT_HTML))
 app.post('/forgot', async (req, res) => {
   try {
@@ -280,7 +281,7 @@ app.post('/forgot', async (req, res) => {
   } catch (e) { console.error('[forgot] error:', e.message); res.redirect('/forgot?err=1') }
 })
 app.get('/reset', (req, res) => { const t = req.query.token || ''; if (!validResetToken(t)) return res.send(RESET_INVALID_HTML); res.send(RESET_HTML.split('__TOKEN__').join(t)) })
-app.post('/reset', async (req, res) => { const { token, newPassword } = req.body || {}; if (!validResetToken(token)) return res.redirect('/forgot?err=1'); if (!newPassword || String(newPassword).length < 4) return res.redirect('/reset?token=' + token + '&err=1'); const rt = resetTokens[token]; if (rt && rt.username) { await getAuthPool().query('UPDATE app_users SET password=$1 WHERE username=$2', [String(newPassword), rt.username]) } else { await setPassword(String(newPassword)) } delete resetTokens[token]; res.redirect('/login?reset=1') })
+app.post('/reset', async (req, res) => { const { token, newPassword } = req.body || {}; if (!validResetToken(token)) return res.redirect('/forgot?err=1'); if (passwordError(newPassword)) return res.redirect('/reset?token=' + token + '&err=1'); const rt = resetTokens[token]; if (rt && rt.username) { await getAuthPool().query('UPDATE app_users SET password=$1 WHERE username=$2', [String(newPassword), rt.username]) } else { await setPassword(String(newPassword)) } delete resetTokens[token]; res.redirect('/login?reset=1') })
 app.get('/inject.js', (_req, res) => { try { res.setHeader('Content-Type', 'application/javascript'); res.send(fs.readFileSync(path.join(__dirname, 'inject.js'), 'utf-8')) } catch (e) { res.send('// inject.js not found') } })
 app.get('/', auth, (req, res) => { try { const html = fs.readFileSync(path.join(__dirname, 'poc.html'), 'utf-8'); const tag = '<script src="/inject.js"></script>'; const idx = html.lastIndexOf('</script>'); const patched = html.slice(0, idx + 9) + tag + html.slice(idx + 9); res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.send(patched) } catch (e) { res.status(500).send('Error: ' + e.message) } })
 app.post('/api/generate', auth, async (req, res) => { try { const { channels = ['instagram'], brief = '', brand = null } = req.body; const apiKey = process.env.GEMINI_API_KEY; if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY saknas' }); const chList = Array.isArray(channels) ? channels : [channels]; let brandBlock = ''; if (brand) { brandBlock = ' Varumarkesprofil - foljs strikt: Tonalitet: ' + (brand.tone||'') + '. Visuell stil: ' + (brand.visualStyle||'') + '. Tjanster: ' + (brand.services||'') + '.'; if (brand.dos && brand.dos.length) brandBlock += ' Gor: ' + brand.dos.join('; ') + '.'; if (brand.donts && brand.donts.length) brandBlock += ' Undvik: ' + brand.donts.join('; ') + '.'; if (brand.forbidden) brandBlock += ' Forbjudna ord/fraser: ' + brand.forbidden + '.'; } const brandName = (brand && brand.name) ? (brand.name + (brand.location ? (', ' + brand.location) : '')) : 'spot. creative studio Halmstad'; const prompt = 'Du ar copywriter for ' + brandName + '.' + brandBlock + ' Brief: ' + (brief || ('Generellt om ' + brandName)) + '. Kanaler: ' + chList.join(', ') + '. Generera EXAKT 3 korta forslag max 100 ord. Svara ENDAST med JSON-array: [{"title":"...","content":"...","hashtags":["..."],"cta":"..."},{"title":"...","content":"...","hashtags":["..."],"cta":"..."},{"title":"...","content":"...","hashtags":["..."],"cta":"..."}]'; const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=' + apiKey, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.9, maxOutputTokens: 8192 } }) }); const data = await r.json(); if (data.error) throw new Error('Gemini: ' + data.error.message); let s = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').replace(/```json/g, '').replace(/```/g, '').trim(); s = s.replace(/,(\s*[}\]])/g, '$1'); const start = s.indexOf('['), end = s.lastIndexOf(']'); if (start < 0 || end < 0) throw new Error('Ingen array i svar'); const flat = JSON.parse(s.slice(start, end + 1));
@@ -620,7 +621,7 @@ app.post('/api/admin/create-workspace', auth, async (req, res) => {
     if ((s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin kan skapa nya arbetsytor' })
     const { companyName, adminUsername, adminPassword, adminFirstName, adminLastName } = req.body || {}
     if (!companyName || !adminUsername || !adminPassword) return res.status(400).json({ error: 'Företagsnamn, användarnamn och lösenord krävs' })
-    if (String(adminPassword).length < 4) return res.status(400).json({ error: 'Lösenordet måste vara minst 4 tecken' })
+    if (passwordError(adminPassword)) return res.status(400).json({ error: passwordError(adminPassword) })
     await ensureUsersTable()
     const workspaceId = String(companyName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'workspace' + Date.now()
     const username = String(adminUsername).toLowerCase().replace(/[^a-z0-9]/g, '')
