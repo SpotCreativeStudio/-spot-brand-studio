@@ -999,6 +999,7 @@ const S = {
   _aiImageBrief: '',       // briefen som bilden genererades för
   pubTab: 'active',        // 'active' | 'archive' i Publicerade-vyn
 };
+function passwordInvalid(p){p=String(p||'');return p.length<6||!/[A-ZÅÄÖ]/.test(p)||!/[^A-Za-z0-9ÅÄÖåäö]/.test(p);}
 var CURRENT_WORKSPACE = null;
 var CURRENT_USER_NAME = null;
 var AI_GENERATE_ENABLED = (function(){ try{ var v=localStorage.getItem('spotAiGenEnabled'); return v===null?true:v==='1'; }catch(e){ return true; } })();
@@ -4245,7 +4246,7 @@ function addMember() {
   const password = document.getElementById('newMemberPassword').value;
   const role  = document.getElementById('newMemberRole').value;
   if (!name || !email || !password) { showToast('Fyll i namn, e-post och lösenord','err'); return; }
-  if (password.length < 4) { showToast('Lösenordet måste vara minst 4 tecken','err'); return; }
+  if (passwordInvalid(password)) { showToast('Lösenordet måste vara minst 6 tecken och innehålla minst en versal och ett specialtecken','err'); return; }
   const username = (document.getElementById('newMemberUsername')||{}).value || '';
   fetch('/api/team/invite', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name,email,password,role,username}) })
     .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
@@ -4519,7 +4520,7 @@ function closeChangePwModal(){ document.getElementById('changePwModal').style.di
 function submitChangePw(){
   var cur=document.getElementById('cpwCurrent').value, nw=document.getElementById('cpwNew').value;
   var m=document.getElementById('cpwMsg');
-  if(!nw||nw.length<4){ m.textContent='Nytt lösenord måste vara minst 4 tecken.'; m.style.color='#b31e59'; m.style.display='block'; return; }
+  if(passwordInvalid(nw)){ m.textContent='Lösenordet måste vara minst 6 tecken och innehålla minst en versal och ett specialtecken.'; m.style.color='#b31e59'; m.style.display='block'; return; }
   fetch('/api/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentPassword:cur,newPassword:nw})})
     .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
     .then(function(res){
