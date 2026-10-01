@@ -16,7 +16,7 @@ const app = express()
 app.set('trust proxy', 1)
 const PORT = process.env.PORT || 3000
 const UNAME = process.env.APP_USERNAME || 'Spot'
-const UPASS = process.env.APP_PASSWORD || 'Spot1234'
+const UPASS = process.env.APP_PASSWORD || 'SpotSpot1234!'
 const sessions = {}
 const { Pool } = require('pg')
 let _authPool = null
