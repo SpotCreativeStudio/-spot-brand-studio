@@ -51,9 +51,9 @@ async function ensureUsersTable() {
   const r = await getAuthPool().query("SELECT COUNT(*) FROM app_users")
   if (parseInt(r.rows[0].count, 10) === 0) {
     await getAuthPool().query("INSERT INTO app_users (username,password,role,first_name,last_name,workspace) VALUES ($1,$2,$3,$4,$5,'spot'),($6,$7,$8,$9,$10,'spot'),($11,$12,$13,$14,$15,'spot')", [
-      'admin', '1234', 'admin', 'Anna', 'Andersson',
-      'redaktor', '1234', 'redaktor', 'Erik', 'Eriksson',
-      'granskare', '1234', 'granskare', 'Gustav', 'Granberg'
+      'admin', 'Spot1234!', 'admin', 'Anna', 'Andersson',
+      'redaktor', 'Spot1234!', 'redaktor', 'Erik', 'Eriksson',
+      'granskare', 'Spot1234!', 'granskare', 'Gustav', 'Granberg'
     ])
   }
 }
