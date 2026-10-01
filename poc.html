@@ -4114,15 +4114,21 @@ function removeMember(id) {
   const idx = TEAM_MEMBERS.findIndex(m => m.id === id);
   if (idx === -1) return;
   const member = TEAM_MEMBERS[idx];
-  if (!confirm('Är du säker på att du vill ta bort ' + member.name + '?')) return;
-  const finish = function(){ TEAM_MEMBERS.splice(idx,1); renderTeam(); showToast(`Tog bort ${member.name}`,'ok'); };
-  if (member.username) {
-    fetch('/api/team/remove', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username: member.username}) })
-      .then(function(){ finish(); })
-      .catch(function(){ finish(); });
-  } else {
-    finish();
+  // Bekräftelse i sidan i stället för confirm() (som webbläsaren kan blockera): klicka två gånger
+  if (S._confirmRemove !== id) {
+    S._confirmRemove = id;
+    showToast('Klicka på Ta bort igen för att ta bort ' + member.name);
+    setTimeout(function(){ if (S._confirmRemove === id) S._confirmRemove = null; }, 4000);
+    return;
   }
+  S._confirmRemove = null;
+  fetch('/api/team/remove', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username: member.username || member.id}) })
+    .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return {ok:r.ok, data:d}; }); })
+    .then(function(res){
+      if (!res.ok) { showToast('⚠️ ' + (res.data.error || 'Kunde inte ta bort medlemmen')); return; }
+      TEAM_MEMBERS.splice(idx,1); renderTeam(); showToast('Tog bort ' + member.name,'ok');
+    })
+    .catch(function(){ showToast('⚠️ Kunde inte ta bort medlemmen'); });
 }
 
 function openAddMember() {
