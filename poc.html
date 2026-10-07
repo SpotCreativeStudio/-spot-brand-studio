@@ -4847,8 +4847,9 @@ renderDashboard();
 
 <!-- FEEDBACK -->
 <style>
-#sidebar{overflow-y:auto}
-#fbDropdown{position:static;width:auto;margin:2px 0 8px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;display:none;color:#111;flex-shrink:0}
+#fbDropdown{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:400px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow-y:auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.25);z-index:1000;display:none;color:#111}
+#fbBackdrop{position:fixed;inset:0;background:rgba(17,17,17,.45);z-index:999;display:none}
+#fbBackdrop.open{display:block}
 #fbDropdown.open{display:block}
 #fbDropdown .fb-top{padding:10px 10px;border-bottom:1px solid #f3f4f6}
 #fbDropdown .pd-header{padding:8px 10px}
@@ -4899,9 +4900,9 @@ renderDashboard();
   window._fbClearShot=function(){ fbShot=null; document.getElementById('fbShotPrev').innerHTML=''; document.getElementById('fbFile').value='' };
   document.getElementById('fbFile').addEventListener('change',function(e){ setShot(e.target.files[0]) });
   document.getElementById('fbMsg').addEventListener('paste',function(e){ var it=(e.clipboardData||{}).items||[]; for(var i=0;i<it.length;i++){ if(it[i].type.indexOf('image/')===0){ setShot(it[i].getAsFile()); e.preventDefault(); break } } });
-  document.getElementById('feedbackNav').after(dd); function place(){ dd.scrollIntoView({block:'nearest'}) }
+  var bd=document.createElement('div'); bd.id='fbBackdrop'; document.body.appendChild(bd); function place(){ bd.classList.add('open') }
   window.openFeedback=function(){ if(dd.classList.contains('open')){ closeFeedback(); return } document.getElementById('fbForm').style.display=''; document.getElementById('fbDone').style.display='none'; document.getElementById('fbErr').textContent=''; dd.classList.add('open'); place(); setTimeout(function(){document.getElementById('fbMsg').focus()},30) };
-  window.closeFeedback=function(){ dd.classList.remove('open') };
+  window.closeFeedback=function(){ dd.classList.remove('open'); bd.classList.remove('open') };
   document.addEventListener('mousedown',function(e){ if(dd.classList.contains('open') && !dd.contains(e.target) && !document.getElementById('feedbackNav').contains(e.target)) closeFeedback() });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeFeedback() });
   window.addEventListener('resize',function(){ if(dd.classList.contains('open')) place() });
