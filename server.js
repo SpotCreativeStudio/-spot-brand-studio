@@ -119,6 +119,22 @@ const FAVICON_PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAE2ElEQVR
 const FAVICON_PNG_BUF = Buffer.from(FAVICON_PNG_B64, 'base64');
 // ---- Feedback: skickas till hello@spotstudio.se med kunden som avsändarnamn och svara-adress ----
 async function ensureFeedbackTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS feedback (id SERIAL PRIMARY KEY, username TEXT, email TEXT, workspace TEXT, type TEXT, message TEXT, view TEXT, user_agent TEXT, emailed BOOLEAN, created_at BIGINT)") }
+function browserName(ua) {
+  ua = String(ua || '')
+  let b = 'Okänd webbläsare', m
+  if ((m = ua.match(/Edg\/(\d+)/))) b = 'Edge ' + m[1]
+  else if ((m = ua.match(/OPR\/(\d+)/))) b = 'Opera ' + m[1]
+  else if ((m = ua.match(/Firefox\/(\d+)/))) b = 'Firefox ' + m[1]
+  else if ((m = ua.match(/Chrome\/(\d+)/))) b = 'Chrome ' + m[1]
+  else if ((m = ua.match(/Version\/(\d+).*Safari/))) b = 'Safari ' + m[1]
+  let os = ''
+  if (/iPhone|iPad/.test(ua)) os = 'iOS'
+  else if (/Android/.test(ua)) os = 'Android'
+  else if (/Windows/.test(ua)) os = 'Windows'
+  else if (/Mac OS X/.test(ua)) os = 'Mac'
+  else if (/Linux/.test(ua)) os = 'Linux'
+  return os ? b + ' · ' + os : b
+}
 function escHtml(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) }
 app.post('/api/feedback', auth, async (req, res) => {
   try {
@@ -135,7 +151,7 @@ app.post('/api/feedback', auth, async (req, res) => {
     const ua = String(req.headers['user-agent'] || '')
     const when = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' })
     const subject = '[Feedback · ' + kind + '] ' + name + ' (' + ws + ')'
-    const rows = [['Från', name + (email ? ' <' + email + '>' : '')], ['Workspace', ws], ['Roll', s.role || ''], ['Typ', kind], ['Vy', view], ['Tid', when], ['Webbläsare', ua]]
+    const rows = [['Från', name + (email ? ' <' + email + '>' : '')], ['Workspace', ws], ['Roll', s.role || ''], ['Typ', kind], ['Vy', view], ['Tid', when], ['Webbläsare', browserName(ua)]]
     const text = msg + '\n\n---\n' + rows.map(r => r[0] + ': ' + r[1]).join('\n')
     const html = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#111">' +
       '<div style="font-size:11px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px">Meddelande</div>' +
