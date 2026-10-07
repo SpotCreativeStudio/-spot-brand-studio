@@ -4847,66 +4847,62 @@ renderDashboard();
 
 <!-- FEEDBACK -->
 <style>
-#fbOverlay{position:fixed;inset:0;background:rgba(17,17,17,.45);display:none;align-items:center;justify-content:center;z-index:9999;padding:16px}
-#fbOverlay.open{display:flex}
-#fbBox{background:#fff;border-radius:16px;width:100%;max-width:460px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25);font-family:inherit;color:#111}
-#fbBox h3{margin:0 0 4px;font-size:18px}
-#fbBox .fb-sub{margin:0 0 16px;font-size:13px;color:#6b7280}
-.fb-types{display:flex;gap:8px;margin-bottom:12px}
-.fb-type{flex:1;padding:8px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;font-size:13px;cursor:pointer}
-.fb-type.on{border-color:#B3005E;background:#fdf0f6;color:#B3005E;font-weight:600}
-#fbMsg{width:100%;min-height:120px;border:1px solid #e5e7eb;border-radius:10px;padding:10px;font:inherit;font-size:14px;resize:vertical;box-sizing:border-box}
-#fbMsg:focus{outline:none;border-color:#B3005E}
-.fb-shot{display:flex;align-items:center;gap:8px;margin:10px 0 0;font-size:12px;color:#6b7280}
-.fb-shot img{max-height:48px;border-radius:6px;border:1px solid #e5e7eb}
-.fb-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
-.fb-btn{padding:9px 16px;border-radius:10px;border:0;font-size:13px;font-weight:600;cursor:pointer}
-.fb-cancel{background:#f3f4f6;color:#374151}
-.fb-send{background:#B3005E;color:#fff}
+#fbDropdown{position:fixed;width:300px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.12);z-index:1000;overflow:hidden;display:none;color:#111}
+#fbDropdown.open{display:block}
+#fbDropdown .fb-top{padding:12px 14px;border-bottom:1px solid #f3f4f6}
+#fbDropdown .fb-title{font-size:14px;font-weight:700}
+#fbDropdown .fb-sub{font-size:11px;color:#9ca3af;margin-top:2px}
+#fbDropdown .fb-sec{padding:10px 14px;border-bottom:1px solid #f0f0f0}
+.fb-types{display:flex;gap:6px}
+.fb-type{flex:1;padding:6px 4px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;font-size:12px;cursor:pointer;color:#374151}
+.fb-type.on{border-color:var(--m);background:#fdf0f6;color:var(--m);font-weight:600}
+#fbMsg{width:100%;min-height:90px;border:1px solid #e5e7eb;border-radius:6px;padding:7px 8px;font:inherit;font-size:12px;resize:vertical;box-sizing:border-box}
+#fbMsg:focus{outline:none;border-color:var(--m)}
+.fb-shot{display:flex;align-items:center;gap:8px;font-size:12px;color:#6b7280}
+.fb-shot img{max-height:32px;border-radius:4px;border:1px solid #e5e7eb}
+#fbErr{color:#b91c1c;font-size:11px}
+#fbErr:empty{display:none}
+.fb-send{width:100%;font-size:13px;font-weight:600;padding:8px;border-radius:6px;border:none;background:var(--m);color:#fff;cursor:pointer}
 .fb-send:disabled{opacity:.6;cursor:default}
-#fbErr{color:#b91c1c;font-size:12px;margin-top:8px;min-height:1em}
 </style>
-<div id="fbOverlay" onclick="if(event.target===this)closeFeedback()">
-  <div id="fbBox" role="dialog" aria-modal="true" aria-labelledby="fbTitle">
-    <div id="fbForm">
-      <h3 id="fbTitle">Tyck till om spot.</h3>
-      <p class="fb-sub">Hittat en bugg eller har en idé? Det går direkt till oss.</p>
-      <div class="fb-types">
-        <button type="button" class="fb-type" data-t="Bugg">🐞 Bugg</button>
-        <button type="button" class="fb-type on" data-t="Idé">💡 Idé</button>
-        <button type="button" class="fb-type" data-t="Övrigt">💬 Övrigt</button>
-      </div>
+<div id="fbDropdown" role="dialog" aria-label="Feedback">
+  <div id="fbForm">
+    <div class="fb-top"><div class="fb-title">Tyck till om spot.</div><div class="fb-sub">Går direkt till oss på spot.</div></div>
+    <div class="pd-header">Typ</div>
+    <div class="fb-sec"><div class="fb-types">
+      <button type="button" class="fb-type" data-t="Bugg">🐞 Bugg</button>
+      <button type="button" class="fb-type on" data-t="Idé">💡 Idé</button>
+      <button type="button" class="fb-type" data-t="Övrigt">💬 Övrigt</button>
+    </div></div>
+    <div class="pd-header">Meddelande</div>
+    <div class="fb-sec">
       <textarea id="fbMsg" placeholder="Beskriv vad du tänker…" maxlength="5000"></textarea>
-      <div class="fb-shot">
-        <label style="cursor:pointer;text-decoration:underline">📎 Bifoga skärmdump (valfritt)<input type="file" id="fbFile" accept="image/*" style="display:none"></label>
+      <div class="fb-shot" style="margin-top:6px">
+        <label style="cursor:pointer;color:var(--m)">📎 Bifoga skärmdump<input type="file" id="fbFile" accept="image/*" style="display:none"></label>
         <span id="fbShotPrev"></span>
       </div>
-      <div style="font-size:11px;color:#9ca3af;margin-top:6px">Tips: du kan också klistra in en skärmdump direkt i textrutan.</div>
-      <div id="fbErr"></div>
-      <div class="fb-actions">
-        <button type="button" class="fb-btn fb-cancel" onclick="closeFeedback()">Avbryt</button>
-        <button type="button" class="fb-btn fb-send" id="fbSend" onclick="sendFeedback()">Skicka</button>
-      </div>
+      <div id="fbErr" style="margin-top:6px"></div>
     </div>
-    <div id="fbDone" style="display:none;text-align:center;padding:16px 0">
-      <div style="font-size:36px">🙌</div>
-      <h3>Tack!</h3>
-      <p class="fb-sub">Vi har fått din feedback och återkommer om det behövs.</p>
-      <div class="fb-actions" style="justify-content:center"><button type="button" class="fb-btn fb-send" onclick="closeFeedback()">Stäng</button></div>
-    </div>
+    <div style="padding:10px 14px"><button type="button" class="fb-send" id="fbSend" onclick="sendFeedback()">Skicka</button></div>
+  </div>
+  <div id="fbDone" style="display:none">
+    <div class="pd-empty" style="color:#374151"><div style="font-size:28px">🙌</div><div style="font-weight:700;margin-top:4px">Tack!</div><div style="font-size:12px;color:#9ca3af;margin-top:2px">Vi har fått din feedback.</div></div>
   </div>
 </div>
 <script>
 (function(){
-  var fbType='Idé', fbShot=null;
+  var fbType='Idé', fbShot=null, dd=document.getElementById('fbDropdown');
   document.querySelectorAll('.fb-type').forEach(function(b){ b.addEventListener('click',function(){ document.querySelectorAll('.fb-type').forEach(function(x){x.classList.remove('on')}); b.classList.add('on'); fbType=b.getAttribute('data-t') }) });
-  function setShot(file){ if(!file||!/^image\//.test(file.type)) return; if(file.size>7*1024*1024){ document.getElementById('fbErr').textContent='Bilden är för stor (max 7 MB).'; return } var r=new FileReader(); r.onload=function(){ fbShot=r.result; document.getElementById('fbShotPrev').innerHTML='<img src="'+fbShot+'" alt=""> <a href="#" onclick="event.preventDefault();window._fbClearShot()">ta bort</a>' }; r.readAsDataURL(file) }
+  function setShot(file){ if(!file||!/^image\//.test(file.type)) return; if(file.size>7*1024*1024){ document.getElementById('fbErr').textContent='Bilden är för stor (max 7 MB).'; return } var r=new FileReader(); r.onload=function(){ fbShot=r.result; document.getElementById('fbShotPrev').innerHTML='<img src="'+fbShot+'" alt=""> <a href="#" style="color:#9ca3af" onclick="event.preventDefault();window._fbClearShot()">ta bort</a>' }; r.readAsDataURL(file) }
   window._fbClearShot=function(){ fbShot=null; document.getElementById('fbShotPrev').innerHTML=''; document.getElementById('fbFile').value='' };
   document.getElementById('fbFile').addEventListener('change',function(e){ setShot(e.target.files[0]) });
   document.getElementById('fbMsg').addEventListener('paste',function(e){ var it=(e.clipboardData||{}).items||[]; for(var i=0;i<it.length;i++){ if(it[i].type.indexOf('image/')===0){ setShot(it[i].getAsFile()); e.preventDefault(); break } } });
-  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&document.getElementById('fbOverlay').classList.contains('open')) closeFeedback() });
-  window.openFeedback=function(){ document.getElementById('fbForm').style.display=''; document.getElementById('fbDone').style.display='none'; document.getElementById('fbErr').textContent=''; document.getElementById('fbOverlay').classList.add('open'); setTimeout(function(){document.getElementById('fbMsg').focus()},50) };
-  window.closeFeedback=function(){ document.getElementById('fbOverlay').classList.remove('open') };
+  function place(){ var b=document.getElementById('feedbackNav').getBoundingClientRect(); var left=b.right+8, top=b.top; if(left+300>window.innerWidth-8){ left=Math.max(8,b.left); top=b.bottom+8 } var h=dd.offsetHeight||420; if(top+h>window.innerHeight-8) top=Math.max(8,window.innerHeight-8-h); dd.style.left=left+'px'; dd.style.top=top+'px' }
+  window.openFeedback=function(){ if(dd.classList.contains('open')){ closeFeedback(); return } document.getElementById('fbForm').style.display=''; document.getElementById('fbDone').style.display='none'; document.getElementById('fbErr').textContent=''; dd.classList.add('open'); place(); setTimeout(function(){document.getElementById('fbMsg').focus()},30) };
+  window.closeFeedback=function(){ dd.classList.remove('open') };
+  document.addEventListener('mousedown',function(e){ if(dd.classList.contains('open') && !dd.contains(e.target) && !document.getElementById('feedbackNav').contains(e.target)) closeFeedback() });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeFeedback() });
+  window.addEventListener('resize',function(){ if(dd.classList.contains('open')) place() });
   window.sendFeedback=function(){
     var msg=document.getElementById('fbMsg').value.trim(), err=document.getElementById('fbErr'), btn=document.getElementById('fbSend');
     if(!msg){ err.textContent='Skriv något först.'; return }
@@ -4914,7 +4910,7 @@ renderDashboard();
     btn.disabled=true; btn.textContent='Skickar…'; err.textContent='';
     fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({type:fbType,message:msg,view:view,screenshot:fbShot})})
       .then(function(r){ return r.json().then(function(d){ if(!r.ok) throw new Error(d.error||'Något gick fel'); return d }) })
-      .then(function(){ document.getElementById('fbMsg').value=''; window._fbClearShot(); document.getElementById('fbForm').style.display='none'; document.getElementById('fbDone').style.display='' })
+      .then(function(){ document.getElementById('fbMsg').value=''; window._fbClearShot(); document.getElementById('fbForm').style.display='none'; document.getElementById('fbDone').style.display=''; place(); setTimeout(closeFeedback,2500) })
       .catch(function(e){ err.textContent=e.message||'Något gick fel, försök igen.' })
       .then(function(){ btn.disabled=false; btn.textContent='Skicka' });
   };
