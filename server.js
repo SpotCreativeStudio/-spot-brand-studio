@@ -98,14 +98,14 @@ const resetTokens = {}
 function makeResetToken(username) { const t = crypto.randomBytes(24).toString('hex'); resetTokens[t] = { exp: Date.now() + 30 * 60 * 1000, username: username || null }; return t }
 function validResetToken(t) { const e = resetTokens[t]; return !!e && e.exp > Date.now() }
 function getMailer() { if (!nodemailer) return null; if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) return null; return nodemailer.createTransport({ host: process.env.SMTP_HOST, port: +(process.env.SMTP_PORT || 587), secure: process.env.SMTP_PORT === '465', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }, connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 10000 }) }
-async function sendAppMail({ to, subject, text, html }) {
+async function sendAppMail({ to, subject, text, html, fromName, replyTo, attachments }) {
   const key = process.env.RESEND_API_KEY
   if (!key) return false
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: 'spot. Brand Studio <noreply@platform.spotstudio.se>', to: [to], subject, text, html })
+      body: JSON.stringify(Object.assign({ from: (fromName ? String(fromName).replace(/[<>"\r\n]/g, '') : 'spot. Brand Studio') + ' <noreply@platform.spotstudio.se>', to: [to], subject, text, html }, replyTo ? { reply_to: replyTo } : {}, attachments && attachments.length ? { attachments } : {}))
     })
     const data = await r.json().catch(() => ({}))
     if (!r.ok) { console.error('[resend] error:', JSON.stringify(data)); return false }
@@ -117,6 +117,44 @@ app.use(express.urlencoded({ extended: true }))
 const _TPL = { 'tpl-studio.png': '4.png', 'tpl-case-hallanning.png': '5.png', 'tpl-case-gardsstyling.png': '7.png', 'tpl-louisiana.png': '6.png' }
 const FAVICON_PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAE2ElEQVR42u1Wa2xURRQ+Z2bu3bu3u9tdyrYFti1gbStStFYggS5RCVGIwUhREiPRBEMiRoMgPv6YQIgx8Y8kakyqJmpiDCEQENFglPoAhGqgppIW2qbPbWnZbXfv7t3d+5jjj8UCDSRG4ZecZCaZmfN9X3LOmZmDh6qegltpDG6x3Ra4LfC/FECG1wggInIGiICInCFj01yRMeQMOQfEaUQFLPIrEJLkmPmrPfmTaq2byQEi2a6dNMl2mCIAGRDInI2cO4bpmpZjZJEzJjhIQsbIla5pkZROKuuaea6pyBAAyXHnb1rNGEt3x7hHAQJRXD8v1HgnSBI+Tfi8iVOdibbz0rKRs2BDdbKjb9ajS8MrFjHBuz84ZPaP8SLNNXPCr8+M1hdVlRUvqJxs7x3c+6Nr2mo4MP+5NbVb13Xs/Jx5ROrcoDVhsNrt6yfP9owcOT249yfjwvCidzarM/xF1bOjh3fX73627OFGktT36VF/bcXyAztFQHeMrDcSnrfpEbP/YuzgiaEDx6u3rI0e3u0pD5oD44nTnUCUaOsaa2130lnkjCXaukaOnsqNxPPjycEvW08077Qn05numBLQvXNKJtq6Rr8+PXm25/cte/TZJXMeW2ZNGAt3PZM41Zls73XM/MXvz7Suek2vLF3csk3aDhEVEkCSLid54Zsbm/btKl+zRK8q5UWacX6YCOx01ozFs0PxTO+oWuJXQ34rkbbTWb0iHGy4I9hQPdneq5YEAEgrDeXHk3+88XHJkroZ99e46dy0ohI9Hx2JPL68ojkKAMaF4fN79g/t/4VxjogoGKqCXEmSmMpQcNvIFs0tV4M+FExaNnIubUcJ6GOt7dKyixfOTfeOXFuzyNpfbTl635ZjD+04s+3DfDzV+N6LM5fdXQgfEAARIJLjaqUhoampjj57Ii00NXBXlZu1kDEgQsGclJmPG46Zh6n6RABEshzGOCcpU50DfZ9990PT1uGvTpatbHDsHDAkSYDIFGFPpstXL3bM3KVfzxldg/kJo277etfMk5QoONmuCOh2KhM//qfi00lKICJHypzlKQ2yutc3AIC0HBRcKS6Sjpv4rYsLlRypFOvgytxoIrCgsubl5rM7Whwj6+bsMy+9H47W37vneSedtZMZJ5OLrGvq/eTbTP9FIkLGuK5xjzKnuWnl8Xf5Kxs3hx+8RwsH/bWRiieiqY7+oX0/M0WJrFvur4kYPTE9Eq5+YW1vy5GBL46pxUVMFcmOvnhbZ+WGB8pXNXKP4q+tyMbisYMn1JA/N5IoWVoXjtZnBsYRYfbqJbjPv1avCGvlIQDIjSRyowkl5LfiqRXfvMU9ysmn3/bOKsn0jVoJQw35yJUAgJzZKRMZ+msiTFWysUtW3BA+jQjIdlDhWtmMbCwubUcrDwnPzICdzOTHk4DAFKEEfUAEAIXZHBizJ9JM4VPsAECuVAI6SUp3x4iIqUL4tELhoyKAyBwYY6rgmmqNJwW5EjnjuqdAWlgCAKoCFcFVhXs95LpT7FMaAMA09TLq72sFRIDAPAoQAREqQlw5uAos/F6mClS48HvJcaa9o1fp0PU2L4+CA16n8SJAzpSADgh2yiRHAv7770Fc78sAcmX+UhIAkPP/wn4DAQBAQEXcMAg3QeBmUN/uKv6h/QVNLGWbh4CtIwAAAABJRU5ErkJggg==';
 const FAVICON_PNG_BUF = Buffer.from(FAVICON_PNG_B64, 'base64');
+// ---- Feedback: skickas till hello@spotstudio.se med kunden som avsändarnamn och svara-adress ----
+async function ensureFeedbackTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS feedback (id SERIAL PRIMARY KEY, username TEXT, email TEXT, workspace TEXT, type TEXT, message TEXT, view TEXT, user_agent TEXT, emailed BOOLEAN, created_at BIGINT)") }
+function escHtml(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) }
+app.post('/api/feedback', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    const { type = 'Övrigt', message = '', view = '', screenshot = null } = req.body || {}
+    const msg = String(message).trim().slice(0, 5000)
+    if (!msg) return res.status(400).json({ error: 'Skriv något först' })
+    const kind = ['Bugg', 'Idé', 'Övrigt'].includes(type) ? type : 'Övrigt'
+    let email = null
+    try { const u = await getUserByUsername(s.u); email = (u && u.email) || null } catch (e) {}
+    if (!email && s.u && String(s.u).includes('@')) email = s.u
+    const name = ((s.firstName || '') + ' ' + (s.lastName || '')).trim() || s.u || 'Okänd användare'
+    const ws = s.workspace || 'spot'
+    const ua = String(req.headers['user-agent'] || '')
+    const when = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' })
+    const firstLine = msg.split('\n')[0].slice(0, 60)
+    const subject = '[Feedback · ' + kind + '] ' + name + ' (' + ws + ') – ' + firstLine
+    const rows = [['Från', name + (email ? ' <' + email + '>' : '')], ['Workspace', ws], ['Roll', s.role || ''], ['Typ', kind], ['Vy', view], ['Tid', when], ['Webbläsare', ua]]
+    const text = msg + '\n\n---\n' + rows.map(r => r[0] + ': ' + r[1]).join('\n')
+    const html = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#111">' +
+      '<p style="white-space:pre-wrap;margin:0 0 16px">' + escHtml(msg) + '</p>' +
+      '<table style="font-size:12px;color:#555;border-top:1px solid #eee;padding-top:8px">' +
+      rows.map(r => '<tr><td style="padding:2px 12px 2px 0;font-weight:bold">' + escHtml(r[0]) + '</td><td>' + escHtml(r[1]) + '</td></tr>').join('') +
+      '</table></div>'
+    const attachments = []
+    if (screenshot && typeof screenshot === 'string') {
+      const m = screenshot.match(/^data:(image\/(png|jpeg|jpg|webp|gif));base64,(.+)$/)
+      if (m && m[3].length < 10 * 1024 * 1024) attachments.push({ filename: 'skarmdump.' + (m[2] === 'jpeg' ? 'jpg' : m[2]), content: m[3] })
+    }
+    const to = process.env.FEEDBACK_EMAIL || 'hello@spotstudio.se'
+    const emailed = await sendAppMail({ to, subject, text, html, fromName: name + ' (via spot.)', replyTo: email || undefined, attachments })
+    try { await ensureFeedbackTable(); await getAuthPool().query('INSERT INTO feedback (username,email,workspace,type,message,view,user_agent,emailed,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [s.u || '', email, ws, kind, msg, String(view).slice(0, 100), ua.slice(0, 300), emailed, Date.now()]) } catch (e) { console.error('[feedback] db:', e.message) }
+    if (!emailed) console.error('[feedback] mejlet kunde inte skickas (saknas RESEND_API_KEY?) – sparat i databasen')
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 app.get('/favicon.ico', (req, res) => {
   res.set('Content-Type', 'image/png');
   res.send(FAVICON_PNG_BUF);
