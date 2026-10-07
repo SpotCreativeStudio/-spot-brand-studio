@@ -4847,14 +4847,16 @@ renderDashboard();
 
 <!-- FEEDBACK -->
 <style>
-#fbDropdown{position:fixed;width:300px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.12);z-index:1000;overflow:hidden;display:none;color:#111}
+#sidebar{overflow-y:auto}
+#fbDropdown{position:static;width:auto;margin:2px 0 8px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;display:none;color:#111;flex-shrink:0}
 #fbDropdown.open{display:block}
-#fbDropdown .fb-top{padding:12px 14px;border-bottom:1px solid #f3f4f6}
+#fbDropdown .fb-top{padding:10px 10px;border-bottom:1px solid #f3f4f6}
+#fbDropdown .pd-header{padding:8px 10px}
 #fbDropdown .fb-title{font-size:14px;font-weight:700}
 #fbDropdown .fb-sub{font-size:11px;color:#9ca3af;margin-top:2px}
-#fbDropdown .fb-sec{padding:10px 14px;border-bottom:1px solid #f0f0f0}
-.fb-types{display:flex;gap:6px}
-.fb-type{flex:1;padding:6px 4px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;font-size:12px;cursor:pointer;color:#374151}
+#fbDropdown .fb-sec{padding:8px 10px;border-bottom:1px solid #f0f0f0}
+.fb-types{display:flex;gap:4px}
+.fb-type{flex:1;padding:6px 2px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;font-size:11px;cursor:pointer;color:#374151;white-space:nowrap}
 .fb-type.on{border-color:var(--m);background:#fdf0f6;color:var(--m);font-weight:600}
 #fbMsg{width:100%;min-height:90px;border:1px solid #e5e7eb;border-radius:6px;padding:7px 8px;font:inherit;font-size:12px;resize:vertical;box-sizing:border-box}
 #fbMsg:focus{outline:none;border-color:var(--m)}
@@ -4883,7 +4885,7 @@ renderDashboard();
       </div>
       <div id="fbErr" style="margin-top:6px"></div>
     </div>
-    <div style="padding:10px 14px"><button type="button" class="fb-send" id="fbSend" onclick="sendFeedback()">Skicka</button></div>
+    <div style="padding:8px 10px"><button type="button" class="fb-send" id="fbSend" onclick="sendFeedback()">Skicka</button></div>
   </div>
   <div id="fbDone" style="display:none">
     <div class="pd-empty" style="color:#374151"><div style="font-size:28px">🙌</div><div style="font-weight:700;margin-top:4px">Tack!</div><div style="font-size:12px;color:#9ca3af;margin-top:2px">Vi har fått din feedback.</div></div>
@@ -4897,7 +4899,7 @@ renderDashboard();
   window._fbClearShot=function(){ fbShot=null; document.getElementById('fbShotPrev').innerHTML=''; document.getElementById('fbFile').value='' };
   document.getElementById('fbFile').addEventListener('change',function(e){ setShot(e.target.files[0]) });
   document.getElementById('fbMsg').addEventListener('paste',function(e){ var it=(e.clipboardData||{}).items||[]; for(var i=0;i<it.length;i++){ if(it[i].type.indexOf('image/')===0){ setShot(it[i].getAsFile()); e.preventDefault(); break } } });
-  function place(){ var b=document.getElementById('feedbackNav').getBoundingClientRect(); var left=Math.min(b.left, window.innerWidth-308), top=b.bottom+6; dd.style.left=Math.max(8,left)+'px'; dd.style.top=top+'px'; dd.style.maxHeight=Math.max(200,window.innerHeight-top-8)+'px'; dd.style.overflowY='auto' }
+  document.getElementById('feedbackNav').after(dd); function place(){ dd.scrollIntoView({block:'nearest'}) }
   window.openFeedback=function(){ if(dd.classList.contains('open')){ closeFeedback(); return } document.getElementById('fbForm').style.display=''; document.getElementById('fbDone').style.display='none'; document.getElementById('fbErr').textContent=''; dd.classList.add('open'); place(); setTimeout(function(){document.getElementById('fbMsg').focus()},30) };
   window.closeFeedback=function(){ dd.classList.remove('open') };
   document.addEventListener('mousedown',function(e){ if(dd.classList.contains('open') && !dd.contains(e.target) && !document.getElementById('feedbackNav').contains(e.target)) closeFeedback() });
