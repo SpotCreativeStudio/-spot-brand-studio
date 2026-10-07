@@ -1,4 +1,4 @@
-'use strict'
+'use strict' 
 
 function capitalizeAfterSentences(text) {
   if (!text || typeof text !== 'string') return text;
