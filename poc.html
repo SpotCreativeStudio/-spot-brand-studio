@@ -1,4 +1,4 @@
-?<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="sv"> 
 <head>
 <meta charset="UTF-8"/>
@@ -4897,7 +4897,7 @@ renderDashboard();
   window._fbClearShot=function(){ fbShot=null; document.getElementById('fbShotPrev').innerHTML=''; document.getElementById('fbFile').value='' };
   document.getElementById('fbFile').addEventListener('change',function(e){ setShot(e.target.files[0]) });
   document.getElementById('fbMsg').addEventListener('paste',function(e){ var it=(e.clipboardData||{}).items||[]; for(var i=0;i<it.length;i++){ if(it[i].type.indexOf('image/')===0){ setShot(it[i].getAsFile()); e.preventDefault(); break } } });
-  function place(){ var b=document.getElementById('feedbackNav').getBoundingClientRect(); var left=b.right+8, top=b.top; if(left+300>window.innerWidth-8){ left=Math.max(8,b.left); top=b.bottom+8 } var h=dd.offsetHeight||420; if(top+h>window.innerHeight-8) top=Math.max(8,window.innerHeight-8-h); dd.style.left=left+'px'; dd.style.top=top+'px' }
+  function place(){ var b=document.getElementById('feedbackNav').getBoundingClientRect(); var left=Math.min(b.left, window.innerWidth-308), top=b.bottom+6; dd.style.left=Math.max(8,left)+'px'; dd.style.top=top+'px'; dd.style.maxHeight=Math.max(200,window.innerHeight-top-8)+'px'; dd.style.overflowY='auto' }
   window.openFeedback=function(){ if(dd.classList.contains('open')){ closeFeedback(); return } document.getElementById('fbForm').style.display=''; document.getElementById('fbDone').style.display='none'; document.getElementById('fbErr').textContent=''; dd.classList.add('open'); place(); setTimeout(function(){document.getElementById('fbMsg').focus()},30) };
   window.closeFeedback=function(){ dd.classList.remove('open') };
   document.addEventListener('mousedown',function(e){ if(dd.classList.contains('open') && !dd.contains(e.target) && !document.getElementById('feedbackNav').contains(e.target)) closeFeedback() });
