@@ -134,12 +134,12 @@ app.post('/api/feedback', auth, async (req, res) => {
     const ws = s.workspace || 'spot'
     const ua = String(req.headers['user-agent'] || '')
     const when = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' })
-    const firstLine = msg.split('\n')[0].slice(0, 60)
-    const subject = '[Feedback · ' + kind + '] ' + name + ' (' + ws + ') – ' + firstLine
+    const subject = '[Feedback · ' + kind + '] ' + name + ' (' + ws + ')'
     const rows = [['Från', name + (email ? ' <' + email + '>' : '')], ['Workspace', ws], ['Roll', s.role || ''], ['Typ', kind], ['Vy', view], ['Tid', when], ['Webbläsare', ua]]
     const text = msg + '\n\n---\n' + rows.map(r => r[0] + ': ' + r[1]).join('\n')
     const html = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#111">' +
-      '<p style="white-space:pre-wrap;margin:0 0 16px">' + escHtml(msg) + '</p>' +
+      '<div style="font-size:11px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px">Meddelande</div>' +
+      '<p style="white-space:pre-wrap;margin:0 0 16px;padding:12px 14px;background:#f6f6f6;border-radius:8px">' + escHtml(msg) + '</p>' +
       '<table style="font-size:12px;color:#555;border-top:1px solid #eee;padding-top:8px">' +
       rows.map(r => '<tr><td style="padding:2px 12px 2px 0;font-weight:bold">' + escHtml(r[0]) + '</td><td>' + escHtml(r[1]) + '</td></tr>').join('') +
       '</table></div>'
