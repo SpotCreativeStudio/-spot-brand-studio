@@ -543,7 +543,7 @@ app.post('/api/linkedin/company/publish', auth, async (req, res) => {
         Authorization: 'Bearer ' + access_token,
         'Content-Type': 'application/json',
         'X-Restli-Protocol-Version': '2.0.0',
-        'Linkedin-Version': '202409'
+        'Linkedin-Version': '202605'
       },
       body: JSON.stringify({
         author: org_urn,
