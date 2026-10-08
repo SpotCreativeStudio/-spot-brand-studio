@@ -135,6 +135,7 @@ function browserName(ua) {
   else if (/Linux/.test(ua)) os = 'Linux'
   return os ? b + ' · ' + os : b
 }
+function asciiFold(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/æ/g, 'ae').replace(/ø/g, 'o') }
 function escHtml(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) }
 app.post('/api/feedback', auth, async (req, res) => {
   try {
@@ -246,8 +247,8 @@ app.post('/api/team/invite', auth, async (req, res) => {
     const parts = String(name).trim().split(/\s+/)
     const firstName = parts[0] || name
     const lastName = parts.slice(1).join(' ') || ''
-    let username = String(wantedUsername || String(email).split('@')[0]).toLowerCase().replace(/[^a-z0-9]/g, '')
-    if (!username) username = String(email).split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '')
+    let username = asciiFold(wantedUsername || String(email).split('@')[0]).replace(/[^a-z0-9]/g, '')
+    if (!username) username = asciiFold(String(email).split('@')[0]).replace(/[^a-z0-9]/g, '')
     if (wantedUsername) {
       const taken = await getAuthPool().query('SELECT 1 FROM app_users WHERE username=$1', [username])
       if (taken.rows.length) return res.status(400).json({ error: 'Användarnamnet är upptaget' })
@@ -681,8 +682,8 @@ app.post('/api/admin/create-workspace', auth, async (req, res) => {
     if (!companyName || !adminUsername || !adminPassword) return res.status(400).json({ error: 'Företagsnamn, användarnamn och lösenord krävs' })
     if (passwordError(adminPassword)) return res.status(400).json({ error: passwordError(adminPassword) })
     await ensureUsersTable()
-    const workspaceId = String(companyName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'workspace' + Date.now()
-    const username = String(adminUsername).toLowerCase().replace(/[^a-z0-9]/g, '')
+    const workspaceId = asciiFold(companyName).replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'workspace' + Date.now()
+    const username = asciiFold(adminUsername).replace(/[^a-z0-9]/g, '')
     const existing = await getAuthPool().query('SELECT 1 FROM app_users WHERE username=$1', [username])
     if (existing.rows.length) return res.status(400).json({ error: 'Användarnamnet är upptaget' })
     await getAuthPool().query(
