@@ -4161,7 +4161,7 @@ function loadWorkspaceList(){
     var wss = (data.workspaces||[]).filter(function(w){ return w.workspace !== 'spot'; });
     if (!wss.length) { list.innerHTML = '<div style="font-size:12px;color:#9ca3af">Inga andra arbetsytor ännu.</div>'; return; }
     list.innerHTML = wss.map(function(w){
-      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f9fafb;border-radius:8px"><div style="font-size:13px"><b>' + w.workspace + '</b> <span style="color:#9ca3af">(' + w.members + ' medlem(mar))</span></div><button onclick="deleteWorkspace(\'' + w.workspace + '\')" style="font-size:12px;color:#b31e59;background:none;border:1px solid #fecaca;border-radius:6px;padding:4px 10px;cursor:pointer">Radera</button></div>';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f9fafb;border-radius:8px"><div style="font-size:13px"><b>' + w.workspace + '</b> <span style="color:#9ca3af">(' + w.members + ' medlem(mar))</span></div><div style="display:flex;gap:6px"><button onclick="viewWorkspace(\'' + w.workspace + '\')" style="font-size:12px;color:#fff;background:#b31e59;border:none;border-radius:6px;padding:4px 10px;cursor:pointer">Visa</button><button onclick="deleteWorkspace(\'' + w.workspace + '\')" style="font-size:12px;color:#b31e59;background:none;border:1px solid #fecaca;border-radius:6px;padding:4px 10px;cursor:pointer">Radera</button></div></div>';
     }).join('');
   }).catch(function(){});
 }
@@ -4919,6 +4919,21 @@ renderDashboard();
   };
 })();
 </script>
+<!-- SPOT-ADMIN: VISA KUND -->
+<div id="viewAsBanner" style="display:none;position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:2000;background:#111;color:#fff;border-radius:999px;padding:8px 8px 8px 16px;font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.25);align-items:center;gap:12px;white-space:nowrap">
+  <span>Du tittar på <b id="viewAsName"></b> som Spot-admin</span>
+  <button type="button" onclick="viewWorkspace('spot')" style="background:#b31e59;color:#fff;border:none;border-radius:999px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">Tillbaka till spot.</button>
+</div>
+<script>
+window.viewWorkspace=function(ws){
+  fetch('/api/admin/view-workspace',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({workspace:ws})})
+    .then(function(r){ return r.json().then(function(d){ if(!r.ok) throw new Error(d.error||'Något gick fel'); return d }) })
+    .then(function(){ location.href='/' })
+    .catch(function(e){ if(typeof showToast==='function') showToast('⚠️ '+e.message); });
+};
+fetch('/api/me',{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(u){
+  if(u && u.viewingAs){ document.getElementById('viewAsName').textContent=u.viewingAs; document.getElementById('viewAsBanner').style.display='flex'; }
+}).catch(function(){});
+</script>
 </body>
 </html>
-bb
