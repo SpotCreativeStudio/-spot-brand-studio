@@ -2854,6 +2854,8 @@ function openEditorModal(post) {
   emAttachDnd(post);
 }
 
+// Text i en widget utan kontrollerna (✕ och storlekshandtaget)
+function _emTxt(n){ var c = n.cloneNode(true); c.querySelectorAll('.em-wx,.em-wr').forEach(function(e){ e.remove(); }); return (c.innerText || c.textContent || '').replace(/\s+$/, ''); }
 function emRenderPreview() {
   const post = S._editPost;
   if (!post) return;
@@ -2875,7 +2877,7 @@ function emRenderPreview() {
     card.querySelectorAll('div,h1,h2,h3,p,span').forEach(function(el){
       if (el.children.length) return;
       var got = (el.innerText||'').replace(/\s+/g,' ').trim();
-      if (got && got === want) best = el;
+      if (!got) return; if (got === want) { best = el; return; } if (!best && got.length > 4 && got.slice(-1) === '…' && want.indexOf(got.slice(0, -1).trim()) === 0) best = el;
     });
     return best;
   }
@@ -2898,13 +2900,13 @@ function emRenderPreview() {
     node.style.transformOrigin = 'left top';
     if (key !== 'brand') node.style.fontSize = (scale === 1) ? '' : (scale * 100) + '%'; if (key !== 'brand') { var _bs = post.textBoxSize && post.textBoxSize[key]; if (_bs) { node.style.display = 'inline-block'; node.style.width = _bs.w + 'px'; node.style.height = _bs.h + 'px'; node.style.overflow = 'visible'; node.style.marginBottom = '0px'; var _extra = Math.max(0, node.scrollHeight - _bs.h); node.style.marginBottom = _extra + 'px'; } }
     node.style.outlineOffset = '3px';
-    node.style.cursor = 'move';
+    node.style.cursor = 'move'; node.addEventListener('dragstart', function(ev){ ev.preventDefault(); }); node.addEventListener('drop', function(ev){ ev.preventDefault(); });
     if (key !== 'hashtags') {
       node.contentEditable = 'true';
       node.addEventListener('focus', function(){ if (typeof emSnapshotText==='function') emSnapshotText(); });
       node.addEventListener('input', function(){
-        if (key === 'title') { post.imgTitle = node.innerText; var f1=document.getElementById('em-img-title'); if(f1) f1.value = node.innerText; }
-        else { post.imgContent = node.innerText; var f2=document.getElementById('em-img-content'); if(f2) f2.value = node.innerText; }
+        if (key === 'title') { post.imgTitle = _emTxt(node); var f1=document.getElementById('em-img-title'); if(f1) f1.value = post.imgTitle; }
+        else { post.imgContent = _emTxt(node); var f2=document.getElementById('em-img-content'); if(f2) f2.value = post.imgContent; }
       });
     }
     node.addEventListener('mouseenter', function(){ if (_emActiveWidget !== key) node.style.outline = '1px dashed rgba(255,255,255,.6)'; });
