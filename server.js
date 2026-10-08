@@ -172,6 +172,39 @@ app.post('/api/feedback', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+// ---- Bildlagring (förberedelse för bildkarusell) ----
+// Bilder sparas som egna rader i stället för base64 inuti inlägget.
+// POST /api/images  { dataUrl }  ->  { id, url: '/img/<id>' }
+// GET  /img/:id                    ->  själva bilden (bara för samma arbetsyta)
+async function ensureImagesTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS stored_images (id TEXT PRIMARY KEY, workspace TEXT, username TEXT, mime TEXT, data BYTEA, bytes INTEGER, created_at BIGINT)") }
+app.post('/api/images', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    const m = String((req.body || {}).dataUrl || '').match(/^data:(image\/(png|jpeg|jpg|webp|gif));base64,(.+)$/)
+    if (!m) return res.status(400).json({ error: 'Ogiltig bild' })
+    const buf = Buffer.from(m[3], 'base64')
+    if (buf.length > 8 * 1024 * 1024) return res.status(400).json({ error: 'Bilden är för stor (max 8 MB)' })
+    await ensureImagesTable()
+    const id = crypto.randomBytes(12).toString('hex')
+    await getAuthPool().query('INSERT INTO stored_images (id,workspace,username,mime,data,bytes,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)', [id, s.workspace || 'spot', s.u || '', m[1], buf, buf.length, Date.now()])
+    res.json({ id, url: '/img/' + id })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+app.get('/img/:id', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    if (!/^[a-f0-9]{24}$/.test(req.params.id)) return res.status(400).end()
+    await ensureImagesTable()
+    const r = await getAuthPool().query('SELECT mime, data, workspace FROM stored_images WHERE id=$1', [req.params.id])
+    if (!r.rows.length) return res.status(404).end()
+    const row = r.rows[0]
+    const home = s.realWorkspace || s.workspace || 'spot'
+    if (row.workspace !== (s.workspace || 'spot') && !(home === 'spot' && s.role === 'admin')) return res.status(404).end()
+    res.setHeader('Content-Type', row.mime)
+    res.setHeader('Cache-Control', 'private, max-age=31536000, immutable')
+    res.send(row.data)
+  } catch (e) { res.status(500).end() }
+})
 app.get('/favicon.ico', (req, res) => {
   res.set('Content-Type', 'image/png');
   res.send(FAVICON_PNG_BUF);
