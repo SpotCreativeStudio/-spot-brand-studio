@@ -205,7 +205,7 @@ app.post('/login', async (req, res) => {
   res.redirect('/login?err=1')
 })
 app.post('/logout', (req, res) => { const _t = getToken(req); delete sessions[_t]; dropSession(_t); res.setHeader('Set-Cookie', 'spot_session=; Path=/; Max-Age=0'); res.json({ ok: true }) })
-app.get('/api/me', auth, (req, res) => { const s = sessions[getToken(req)] || {}; const firstName = s.firstName || 'Spot'; const lastName = s.lastName || 'Admin'; const role = s.role || 'admin'; const initials = (firstName[0]||'') + (lastName[0]||''); res.json({ firstName, lastName, role, workspace: s.workspace || 'spot', initials: initials.toUpperCase() }) })
+app.get('/api/me', auth, (req, res) => { const s = sessions[getToken(req)] || {}; const firstName = s.firstName || 'Spot'; const lastName = s.lastName || 'Admin'; const role = s.role || 'admin'; const initials = (firstName[0]||'') + (lastName[0]||''); res.json({ firstName, lastName, role, workspace: s.workspace || 'spot', viewingAs: s.realWorkspace ? s.workspace : null, initials: initials.toUpperCase() }) })
 async function ensureChannelsTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS user_channels (username TEXT, platform TEXT, handle TEXT, PRIMARY KEY (username, platform))") }
 app.get('/api/channels', auth, async (req, res) => {
   try {
@@ -676,7 +676,7 @@ app.post('/api/brand/fetch-website', auth, async (req, res) => {
 app.post('/api/admin/create-workspace', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
-    if ((s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin kan skapa nya arbetsytor' })
+    if ((s.realWorkspace || s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin kan skapa nya arbetsytor' })
     const { companyName, adminUsername, adminPassword, adminFirstName, adminLastName } = req.body || {}
     if (!companyName || !adminUsername || !adminPassword) return res.status(400).json({ error: 'Företagsnamn, användarnamn och lösenord krävs' })
     if (passwordError(adminPassword)) return res.status(400).json({ error: passwordError(adminPassword) })
@@ -722,16 +722,37 @@ app.get('/api/export-workspace', auth, async (req, res) => {
 app.get('/api/admin/workspaces', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
-    if ((s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
+    if ((s.realWorkspace || s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
     await ensureUsersTable()
     const r = await getAuthPool().query('SELECT workspace, COUNT(*) as members FROM app_users GROUP BY workspace ORDER BY workspace')
     res.json({ workspaces: r.rows })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+app.post('/api/admin/view-workspace', auth, async (req, res) => {
+  try {
+    const t = getToken(req)
+    const s = sessions[t] || {}
+    if ((s.realWorkspace || s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
+    const target = String((req.body || {}).workspace || 'spot')
+    if (target === 'spot') {
+      s.workspace = 'spot'
+      delete s.realWorkspace
+    } else {
+      await ensureUsersTable()
+      const r = await getAuthPool().query('SELECT 1 FROM app_users WHERE workspace=$1 LIMIT 1', [target])
+      if (!r.rows.length) return res.status(404).json({ error: 'Arbetsytan finns inte' })
+      s.realWorkspace = 'spot'
+      s.workspace = target
+    }
+    sessions[t] = s
+    persistSession(t, s)
+    res.json({ ok: true, workspace: s.workspace })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 app.post('/api/admin/delete-workspace', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
-    if ((s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
+    if ((s.realWorkspace || s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
     const { workspaceId } = req.body || {}
     if (!workspaceId || workspaceId === 'spot') return res.status(400).json({ error: 'Ogiltig eller skyddad arbetsyta' })
     await ensureUsersTable(); await ensureBrandTable(); await ensureBrandImagesTable(); await ensureDraftsTable()
@@ -801,7 +822,7 @@ const DEFAULT_BASE_FEE = 0
 app.get('/api/admin/billing-summary', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
-    if ((s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
+    if ((s.realWorkspace || s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
     await ensureUsersTable(); await ensurePricingTable()
     const counts = await getAuthPool().query("SELECT workspace, COUNT(*) AS members FROM app_users GROUP BY workspace ORDER BY workspace")
     const pricing = await getAuthPool().query('SELECT workspace, price_per_user, base_fee, currency FROM billing_pricing')
@@ -823,7 +844,7 @@ app.get('/api/admin/billing-summary', auth, async (req, res) => {
 app.post('/api/admin/billing-pricing', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
-    if ((s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
+    if ((s.realWorkspace || s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
     const { workspace, pricePerUser, baseFee } = req.body || {}
     const target = workspace || '__default__'
     await ensurePricingTable()
@@ -843,7 +864,7 @@ function logBillingEvent(workspace, eventType, details) {
 app.get('/api/admin/billing-events', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
-    if ((s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
+    if ((s.realWorkspace || s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
     await ensureBillingTable()
     const r = await getAuthPool().query('SELECT id, workspace, event_type, details, ts, seen FROM billing_events ORDER BY ts DESC LIMIT 100')
     const counts = await getAuthPool().query("SELECT workspace, COUNT(*) FILTER (WHERE role IS NOT NULL) AS members FROM app_users GROUP BY workspace")
@@ -853,7 +874,7 @@ app.get('/api/admin/billing-events', auth, async (req, res) => {
 app.post('/api/admin/billing-events/seen', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
-    if ((s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
+    if ((s.realWorkspace || s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
     await ensureBillingTable()
     await getAuthPool().query('UPDATE billing_events SET seen=TRUE WHERE seen=FALSE')
     res.json({ ok: true })
