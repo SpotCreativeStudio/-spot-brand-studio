@@ -4382,7 +4382,7 @@ let _sharePost = null;
 function _dataUrlToBlob(dataUrl){ var parts=dataUrl.split(','); var mimeMatch=/data:(.*?);base64/.exec(parts[0]); var mime=mimeMatch?mimeMatch[1]:'image/png'; var bstr=atob(parts[1]); var n=bstr.length; var u8=new Uint8Array(n); while(n--){ u8[n]=bstr.charCodeAt(n); } return new Blob([u8], {type:mime}); }
 async function _copyTextAndImage(text, imageUrl){
   try {
-    if (navigator.clipboard && window.ClipboardItem && imageUrl && (imageUrl.indexOf('data:') === 0 || imageUrl.indexOf('/img/') === 0)) {
+    if (navigator.clipboard && window.ClipboardItem && imageUrl && (imageUrl.indexOf('data:') === 0 || imageUrl.indexOf('/img/') !== -1)) {
       var blob = imageUrl.indexOf('data:') === 0 ? _dataUrlToBlob(imageUrl) : await (await fetch(imageUrl, { credentials: 'same-origin' })).blob();
       var textBlob = new Blob([text], {type:'text/plain'});
       await navigator.clipboard.write([ new ClipboardItem({ 'text/plain': textBlob, [blob.type]: blob }) ]);
