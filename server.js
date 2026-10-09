@@ -51,9 +51,9 @@ async function ensureUsersTable() {
   const r = await getAuthPool().query("SELECT COUNT(*) FROM app_users")
   if (parseInt(r.rows[0].count, 10) === 0) {
     await getAuthPool().query("INSERT INTO app_users (username,password,role,first_name,last_name,workspace) VALUES ($1,$2,$3,$4,$5,'spot'),($6,$7,$8,$9,$10,'spot'),($11,$12,$13,$14,$15,'spot')", [
-      'admin', 'Spot1234!', 'admin', 'Anna', 'Andersson',
-      'redaktor', 'Spot1234!', 'redaktor', 'Erik', 'Eriksson',
-      'granskare', 'Spot1234!', 'granskare', 'Gustav', 'Granberg'
+      'admin', hashPassword('Spot1234!'), 'admin', 'Anna', 'Andersson',
+      'redaktor', hashPassword('Spot1234!'), 'redaktor', 'Erik', 'Eriksson',
+      'granskare', hashPassword('Spot1234!'), 'granskare', 'Gustav', 'Granberg'
     ])
   }
 }
@@ -92,8 +92,19 @@ async function getUserByUsername(username) {
 async function getUserByEmail(email) {
   try { await ensureUsersTable(); const r = await getAuthPool().query("SELECT * FROM app_users WHERE lower(email)=$1", [String(email || '').trim().toLowerCase()]); return r.rows[0] || null } catch (e) { console.error('[auth] getUserByEmail error:', e.message); return null }
 }
+// ---- Lösenord: sparas som scrypt-hash (salt + hash), aldrig i klartext ----
+// Gamla lösenord i klartext fungerar fortfarande och uppgraderas till hash vid nästa inloggning.
+function hashPassword(pw) { const salt = crypto.randomBytes(16).toString('hex'); return 'scrypt$' + salt + '$' + crypto.scryptSync(String(pw), salt, 64).toString('hex') }
+function isHashedPassword(stored) { return typeof stored === 'string' && stored.indexOf('scrypt$') === 0 }
+function verifyPassword(pw, stored) {
+  if (stored == null || pw == null) return false
+  if (!isHashedPassword(stored)) return String(pw) === String(stored)
+  const parts = stored.split('$'); if (parts.length !== 3) return false
+  const want = Buffer.from(parts[2], 'hex'), got = crypto.scryptSync(String(pw), parts[1], 64)
+  return want.length === got.length && crypto.timingSafeEqual(want, got)
+}
 async function getPassword() { try { await ensureAuthTable(); const r = await getAuthPool().query("SELECT value FROM app_settings WHERE key='password'"); return (r.rows[0] && r.rows[0].value) || UPASS } catch (e) { console.error('[auth] getPassword error:', e.message); return UPASS } }
-async function setPassword(pw) { try { await ensureAuthTable(); const r = await getAuthPool().query("INSERT INTO app_settings (key,value) VALUES ('password',$1) ON CONFLICT (key) DO UPDATE SET value=$1", [pw]); console.log('[auth] setPassword ok, rowCount:', r.rowCount) } catch (e) { console.error('[auth] setPassword error:', e.message) } }
+async function setPassword(pw) { try { await ensureAuthTable(); const r = await getAuthPool().query("INSERT INTO app_settings (key,value) VALUES ('password',$1) ON CONFLICT (key) DO UPDATE SET value=$1", [hashPassword(pw)]); console.log('[auth] setPassword ok, rowCount:', r.rowCount) } catch (e) { console.error('[auth] setPassword error:', e.message) } }
 const resetTokens = {}
 function makeResetToken(username) { const t = crypto.randomBytes(24).toString('hex'); resetTokens[t] = { exp: Date.now() + 30 * 60 * 1000, username: username || null }; return t }
 function validResetToken(t) { const e = resetTokens[t]; return !!e && e.exp > Date.now() }
@@ -280,7 +291,8 @@ app.post('/login', async (req, res) => {
   const { username, password } = req.body
   const identifier = String(username || '')
   const u = (await getUserByUsername(identifier)) || (identifier.includes('@') ? await getUserByEmail(identifier) : null)
-  if (u && password === u.password) {
+  if (u && verifyPassword(password, u.password)) {
+    if (!isHashedPassword(u.password)) { try { await getAuthPool().query('UPDATE app_users SET password=$1 WHERE username=$2', [hashPassword(password), u.username]) } catch (e) {} }
     const t = makeToken()
     sessions[t] = { u: u.username, role: u.role, firstName: u.first_name, lastName: u.last_name, workspace: u.workspace || 'spot' }
     persistSession(t, sessions[t])
@@ -289,7 +301,9 @@ app.post('/login', async (req, res) => {
   }
   const recoveryEmail = process.env.APP_RECOVERY_EMAIL
   const isMainAdmin = identifier === UNAME || (recoveryEmail && identifier.trim().toLowerCase() === recoveryEmail.trim().toLowerCase())
-  if (isMainAdmin && password === await getPassword()) {
+  const _mainPw = isMainAdmin ? await getPassword() : null
+  if (isMainAdmin && verifyPassword(password, _mainPw)) {
+    if (!isHashedPassword(_mainPw)) await setPassword(password)
     const t = makeToken()
     sessions[t] = { u: UNAME, role: 'admin', firstName: process.env.APP_USER_FIRSTNAME || 'Spot', lastName: process.env.APP_USER_LASTNAME || 'Admin', workspace: 'spot' }
     persistSession(t, sessions[t])
@@ -352,7 +366,7 @@ app.post('/api/team/invite', auth, async (req, res) => {
       candidate = username + n; n++
     }
     username = candidate
-    await getAuthPool().query('INSERT INTO app_users (username,password,role,first_name,last_name,email,workspace) VALUES ($1,$2,$3,$4,$5,$6,$7)', [username, password, dbRole, firstName, lastName, email, s.workspace || 'spot'])
+    await getAuthPool().query('INSERT INTO app_users (username,password,role,first_name,last_name,email,workspace) VALUES ($1,$2,$3,$4,$5,$6,$7)', [username, hashPassword(password), dbRole, firstName, lastName, email, s.workspace || 'spot'])
     logBillingEvent(s.workspace || 'spot', 'member_added', { username, name: (firstName + ' ' + lastName).trim(), role: dbRole, addedBy: s.u })
     const loginLink = 'https://' + req.get('host') + '/login'
     const mailSent = await sendAppMail({
@@ -400,7 +414,7 @@ app.post('/api/team/remove', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
-app.post('/api/change-password', auth, async (req, res) => { const { currentPassword, newPassword } = req.body || {}; if (passwordError(newPassword)) return res.status(400).json({ error: passwordError(newPassword) }); if (currentPassword !== await getPassword()) return res.status(401).json({ error: 'Fel nuvarande lösenord' }); await setPassword(String(newPassword)); res.json({ ok: true }) })
+app.post('/api/change-password', auth, async (req, res) => { const { currentPassword, newPassword } = req.body || {}; if (passwordError(newPassword)) return res.status(400).json({ error: passwordError(newPassword) }); if (!verifyPassword(currentPassword, await getPassword())) return res.status(401).json({ error: 'Fel nuvarande lösenord' }); await setPassword(String(newPassword)); res.json({ ok: true }) })
 app.get('/forgot', (_req, res) => res.send(FORGOT_HTML))
 app.post('/forgot', async (req, res) => {
   try {
@@ -433,7 +447,7 @@ app.post('/forgot', async (req, res) => {
   } catch (e) { console.error('[forgot] error:', e.message); res.redirect('/forgot?err=1') }
 })
 app.get('/reset', (req, res) => { const t = req.query.token || ''; if (!validResetToken(t)) return res.send(RESET_INVALID_HTML); res.send(RESET_HTML.split('__TOKEN__').join(t)) })
-app.post('/reset', async (req, res) => { const { token, newPassword } = req.body || {}; if (!validResetToken(token)) return res.redirect('/forgot?err=1'); if (passwordError(newPassword)) return res.redirect('/reset?token=' + token + '&err=1'); const rt = resetTokens[token]; if (rt && rt.username) { await getAuthPool().query('UPDATE app_users SET password=$1 WHERE username=$2', [String(newPassword), rt.username]) } else { await setPassword(String(newPassword)) } delete resetTokens[token]; res.redirect('/login?reset=1') })
+app.post('/reset', async (req, res) => { const { token, newPassword } = req.body || {}; if (!validResetToken(token)) return res.redirect('/forgot?err=1'); if (passwordError(newPassword)) return res.redirect('/reset?token=' + token + '&err=1'); const rt = resetTokens[token]; if (rt && rt.username) { await getAuthPool().query('UPDATE app_users SET password=$1 WHERE username=$2', [hashPassword(newPassword), rt.username]) } else { await setPassword(String(newPassword)) } delete resetTokens[token]; res.redirect('/login?reset=1') })
 app.get('/inject.js', (_req, res) => { try { res.setHeader('Content-Type', 'application/javascript'); res.send(fs.readFileSync(path.join(__dirname, 'inject.js'), 'utf-8')) } catch (e) { res.send('// inject.js not found') } })
 app.get('/', auth, (req, res) => { try { const html = fs.readFileSync(path.join(__dirname, 'poc.html'), 'utf-8'); const tag = '<script src="/inject.js"></script>'; const idx = html.lastIndexOf('</script>'); const patched = html.slice(0, idx + 9) + tag + html.slice(idx + 9); res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.send(patched) } catch (e) { res.status(500).send('Error: ' + e.message) } })
 app.post('/api/generate', auth, async (req, res) => { try { const { channels = ['instagram'], brief = '', brand = null } = req.body; const apiKey = process.env.GEMINI_API_KEY; if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY saknas' }); const chList = Array.isArray(channels) ? channels : [channels]; let brandBlock = ''; if (brand) { brandBlock = ' Varumarkesprofil - foljs strikt: Tonalitet: ' + (brand.tone||'') + '. Visuell stil: ' + (brand.visualStyle||'') + '. Tjanster: ' + (brand.services||'') + '.'; if (brand.dos && brand.dos.length) brandBlock += ' Gor: ' + brand.dos.join('; ') + '.'; if (brand.donts && brand.donts.length) brandBlock += ' Undvik: ' + brand.donts.join('; ') + '.'; if (brand.forbidden) brandBlock += ' Forbjudna ord/fraser: ' + brand.forbidden + '.'; } const brandName = (brand && brand.name) ? (brand.name + (brand.location ? (', ' + brand.location) : '')) : 'spot. creative studio Halmstad'; const prompt = 'Du ar copywriter for ' + brandName + '.' + brandBlock + ' Brief: ' + (brief || ('Generellt om ' + brandName)) + '. Kanaler: ' + chList.join(', ') + '. Generera EXAKT 3 korta forslag max 100 ord. Svara ENDAST med JSON-array: [{"title":"...","content":"...","hashtags":["..."],"cta":"..."},{"title":"...","content":"...","hashtags":["..."],"cta":"..."},{"title":"...","content":"...","hashtags":["..."],"cta":"..."}]'; const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=' + apiKey, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.9, maxOutputTokens: 8192 } }) }); const data = await r.json(); if (data.error) throw new Error('Gemini: ' + data.error.message); let s = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').replace(/```json/g, '').replace(/```/g, '').trim(); s = s.replace(/,(\s*[}\]])/g, '$1'); const start = s.indexOf('['), end = s.lastIndexOf(']'); if (start < 0 || end < 0) throw new Error('Ingen array i svar'); const flat = JSON.parse(s.slice(start, end + 1));
@@ -787,7 +801,7 @@ app.post('/api/admin/create-workspace', auth, async (req, res) => {
     if (existing.rows.length) return res.status(400).json({ error: 'Användarnamnet är upptaget' })
     await getAuthPool().query(
       'INSERT INTO app_users (username,password,role,first_name,last_name,workspace) VALUES ($1,$2,$3,$4,$5,$6)',
-      [username, adminPassword, 'admin', adminFirstName || companyName, adminLastName || '', workspaceId]
+      [username, hashPassword(adminPassword), 'admin', adminFirstName || companyName, adminLastName || '', workspaceId]
     )
     res.json({ ok: true, workspaceId, username })
   } catch (e) { res.status(500).json({ error: e.message }) }
