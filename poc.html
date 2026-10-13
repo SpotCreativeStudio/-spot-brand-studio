@@ -1445,7 +1445,7 @@ function _getPostImageHTMLRaw(post, size='card') {
     var _ctSrc = String(_ct.cleanSrc).split('"').join('&quot;');
     var _ctPhoto = hasImg ? `<div style="position:absolute;left:8%;right:8%;top:8%;height:46%;border-radius:8px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.25)">${_imgOrGray(post)}</div>` : '';
     return `<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">
-      <img src="${_ctSrc}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block">
+      <div class="tpl-bg" style="position:absolute;inset:0;background-image:url('${_ctSrc.split("'").join("%27")}');background-size:cover;background-position:center"></div>
       ${_ctPhoto}
       <div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.65) 100%)"></div>
       <div style="position:absolute;left:13px;right:13px;bottom:13px">
