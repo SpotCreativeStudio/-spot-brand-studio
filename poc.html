@@ -285,6 +285,11 @@ textarea.field-input{resize:vertical;line-height:1.5}
 .cal-date.today-badge{width:22px;height:22px;background:var(--m);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px}
 .cal-day.cal-drop{background:#fdf0f6;box-shadow:inset 0 0 0 2px var(--m)}
 .cal-chip[draggable="true"]{cursor:grab}
+#brandRoNote{display:none}
+body.brand-ro #brandRoNote{display:block}
+body.brand-ro #v-brand [id^="secBtn-"]{display:none!important}
+body.brand-ro #v-brand :is(button,input,select,textarea,label,[onclick],[contenteditable]):not([onclick*="ownload"]){pointer-events:none!important}
+body.brand-ro #v-brand :is(input,select,textarea){background:#f9fafb!important}
 .cal-chip{font-size:10px;font-weight:600;padding:3px 7px;border-radius:6px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;display:flex;align-items:center;gap:4px}
 .cal-chip:hover{opacity:.8}
 .cal-add-btn{opacity:0;font-size:16px;color:#9ca3af;line-height:1;padding:0 2px;cursor:pointer;border-radius:4px;transition:all .15s}
@@ -1061,6 +1066,10 @@ var CURRENT_ROLE = 'admin';
 function _loadUserInfo(){ fetch('/api/me').then(function(r){ return r.json(); }).then(function(u){ var el=document.getElementById('avatarInitials'); if(el && u.initials) el.textContent=u.initials; var el2=document.getElementById('avatarInitials2'); if(el2 && u.initials) el2.textContent=u.initials; var _ca=document.getElementById('createAuthorAvatar'); if(_ca) _ca.textContent=u.initials||''; var _cn=document.getElementById('createAuthorName'); if(_cn) _cn.textContent=((u.firstName||'')+' '+(u.lastName||'')).trim(); var btn=document.getElementById('avatarBtn'); if(btn && u.firstName) btn.title=u.firstName+' '+u.lastName; var nameEl=document.getElementById('userFullName'); if(nameEl) nameEl.textContent=(u.firstName||'')+' '+(u.lastName||''); CURRENT_ROLE = u.role || 'admin'; CURRENT_WORKSPACE = u.workspace || 'spot'; CURRENT_USER_NAME = ((u.firstName||'') + ' ' + (u.lastName||'')).trim() || 'Okänd'; _restoreAppStateIfSameWorkspace(); _hydrateFromServer(); if (typeof renderDashboard === 'function') renderDashboard(); applyRolePermissions(); if (typeof _loadMyChannels === 'function') _loadMyChannels(); if (typeof _loadLinkedInStatus === 'function') _loadLinkedInStatus(); if (typeof _loadLinkedInCompanyStatus === 'function') _loadLinkedInCompanyStatus(); if (typeof _loadImgLibrary === 'function') _loadImgLibrary(); if (typeof _loadDrafts === 'function') _loadDrafts(); if (typeof _loadTeamPosts === 'function') _loadTeamPosts(); }).catch(function(){}); }
 function applyRolePermissions(){
   var isAdmin = CURRENT_ROLE === 'admin';
+  // Varumärke: bara admin får ändra. Övriga ser profilen och kan ladda ner, men inget går att redigera.
+  document.body.classList.toggle('brand-ro', !isAdmin);
+  var _vb = document.getElementById('v-brand');
+  if (_vb && !document.getElementById('brandRoNote')) { var _n = document.createElement('div'); _n.id = 'brandRoNote'; _n.textContent = 'Endast admin kan ändra varumärket. Du kan se profilen och ladda ner material.'; _n.style.cssText = 'padding:10px 14px;border-radius:10px;background:#fdf0f6;color:#82093e;font-size:13px;font-weight:600'; _vb.insertBefore(_n, _vb.firstChild); }
   var isGranskare = CURRENT_ROLE === 'granskare';
   var createNav = document.querySelector('.nav-btn[onclick*="navigate(\'create\')"]');
   if (createNav) createNav.style.display = isGranskare ? 'none' : '';
@@ -3488,8 +3497,7 @@ function _cleanTemplate(ct){
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (!d || !d.url) throw new Error((d && d.error) || 'clean');
-      ct.cleanSrc = d.url; ct.cleanFor = src;
-      if (typeof saveBrandSettings === 'function') saveBrandSettings();
+      ct.cleanSrc = d.url; ct.cleanFor = src; // servern sparar den i varumärket
       try { if (window._aiProposals && window._allChannelProposals && typeof renderProposalCards === 'function') renderProposalCards(window._activeProposalTab || S.manualChannel); } catch(e) {}
       try { if (typeof renderReview === 'function') renderReview(); } catch(e) {}
     })
@@ -3804,6 +3812,7 @@ function renderImgStyleGrid() {
   }).join('');
 }
 function setImgStyle(id) {
+  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE !== 'admin') { showToast('Endast admin kan ändra varumärket'); return; }
   S.imageStyle = id;
   if (typeof saveBrandSettings === 'function') saveBrandSettings();
   renderImgStyleGrid();
