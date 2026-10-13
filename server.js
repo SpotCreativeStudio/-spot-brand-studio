@@ -1110,6 +1110,20 @@ app.get('/api/admin/reminders-preview', auth, async (req, res) => {
     res.json({ reminders: await buildReminders() })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+// Testutskick för Spot-admin: skickar ett påminnelsemejl bara till den inloggade adminens egen mejladress
+app.post('/api/admin/reminders-test', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    if ((s.realWorkspace || s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
+    const u = await getUserByUsername(s.u)
+    if (!u || !u.email) return res.status(400).json({ error: 'Ditt konto saknar mejladress' })
+    const ws = s.workspace || 'spot'
+    const mine = (await buildReminders()).find(r => r.ws === ws && r.to === u.email) || (await buildReminders()).find(r => r.ws === ws)
+    const msgs = mine ? mine.msgs : ['3 inlägg väntar på granskning', 'Inget publicerat på 2 veckor']
+    const ok = await sendReminderMail({ to: u.email, name: u.first_name || u.username, msgs: msgs.map(m => m) })
+    res.json({ sent: ok, to: u.email, msgs, example: !mine })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 restoreSessions().finally(function(){ app.listen(PORT, () => console.log('spot. running on ' + PORT)) })
 const LOGIN_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot.</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:32px}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">content studio</div><form method="POST" action="/login"><div class="f"><label>Användarnamn eller e-post</label><input type="text" name="username" autofocus/></div><div class="f"><label>Lösenord</label><input type="password" name="password"/></div><div class="err" id="err">Fel.</div><button type="submit">Logga in</button><div style="text-align:center;margin-top:14px"><a href="/forgot" style="font-size:12px;color:#9ca3af;text-decoration:none">Glömt lösenord?</a></div><div class="ok" id="ok" style="display:none;color:#16a34a;font-size:13px;margin-top:8px;text-align:center">Lösenordet är återställt. Logga in med det nya lösenordet.</div></form></div><script>var q=new URLSearchParams(location.search);if(q.get("err"))document.getElementById("err").classList.add("show");if(q.get("reset"))document.getElementById("ok").style.display="block"<\/script></body></html>'
  
