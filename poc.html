@@ -1436,6 +1436,23 @@ function _getPostImageHTMLRaw(post, size='card') {
   const dateStr = post.date || new Date().toISOString().slice(0,10);
   const authorStr = post.author || '';
 
+  // ── KUNDENS EGEN MALL (uppladdad mallbild som bakgrund) ─────────────
+  if (String(layout).indexOf('tpl:') === 0) {
+    var _ct = _customTemplates()[+String(layout).slice(4)];
+    if (!_ct) return _getPostImageHTMLRaw(Object.assign({}, post, { layout: 'gradient' }), size);
+    var _ctSrc = String(_ct.src).split('"').join('&quot;');
+    var _ctPhoto = hasImg ? `<div style="position:absolute;left:8%;right:8%;top:8%;height:46%;border-radius:8px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.25)">${_imgOrGray(post)}</div>` : '';
+    return `<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">
+      <img src="${_ctSrc}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block">
+      ${_ctPhoto}
+      <div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.65) 100%)"></div>
+      <div style="position:absolute;left:13px;right:13px;bottom:13px">
+        <div style="font-family:${_getSERIF()};font-size:${_autoFit(t,26,18,14)}px;color:#fff;line-height:1;text-shadow:0 2px 10px rgba(0,0,0,.35)">${t}</div>
+        ${c?`<div style="font-size:9px;color:rgba(255,255,255,.88);margin-top:6px;line-height:1.45;max-height:70px;overflow:hidden">${_truncateCaption(c,160)}</div>`:''}
+      </div>
+    </div>`;
+  }
+
   // ── SPOT-MALL: studio. (helbild + Higuen-serif nedtill) ──────────────
   if (layout === 'studio') {
     return `<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">
@@ -1658,7 +1675,7 @@ function getPostImageLargeHTML(post) { return _applyBrandColors(_getPostImageLar
 function _getPostImageLargeHTMLRaw(post) {
   const layout = post.layout || 'gradient';
   // SPOT-mallarna är responsiva – använd samma renderare som korten
-  if (layout === 'studio' || layout === 'case' || layout === 'louisiana') {
+  if (layout === 'studio' || layout === 'case' || layout === 'louisiana' || String(layout).indexOf('tpl:') === 0) {
     return getPostImageHTML(post, 'large');
   }
   const _blocksL = post.blocks || ['content','hashtags'];
@@ -2507,7 +2524,7 @@ function renderProposalCards(ch) {
   const selectedIdx = window._selectedProposalPerChannel[ch] ?? 0;
   body.innerHTML = `<div class="ai-proposals" style="width:100%">` +
     proposals.slice(0,3).map((p, i) => {
-      const cardLayouts = ['studio','case','louisiana'];
+      const cardLayouts = _cardLayoutsForWs();
       const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos };
       const dim = i!==selectedIdx;
       return `<div class="ai-prop-card ${i===selectedIdx?'selected':''}" onclick="openProposalEditor('${ch}',${i})" style="${dim ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
@@ -2603,7 +2620,7 @@ function addManualToReview() {
   // If AI proposals mode: use each channel's selected proposal
   if (window._aiProposals && window._allChannelProposals && window._selectedProposalPerChannel) {
     let added = 0;
-    const cardLayouts = ['studio','case','louisiana'];
+    const cardLayouts = _cardLayoutsForWs();
     channels.forEach(ch => {
       const idx = window._selectedProposalPerChannel[ch] ?? 0;
       const p = (window._allChannelProposals[ch]||[])[idx];
@@ -3415,13 +3432,34 @@ function saveEditorModal() {
   }
 }
 var CARD_LAYOUTS = ['studio','case','louisiana'];
+// Spot använder sina egna mallar. Kunder använder sina uppladdade mallar,
+// och de neutrala mallarna (i kundens färger) fyller på när det finns färre än tre.
+function _isSpotWs(){ return typeof CURRENT_WORKSPACE === 'undefined' || !CURRENT_WORKSPACE || CURRENT_WORKSPACE === 'spot'; }
+function _customTemplates(){
+  if (_isSpotWs()) return [];
+  return (TEMPLATES || []).filter(function(t){ return t && t.src && String(t.src).indexOf('/assets/tpl-') !== 0; });
+}
+function _cardLayoutsForWs(){
+  if (_isSpotWs()) return CARD_LAYOUTS.slice();
+  var n = _customTemplates().length, neutral = ['gradient','minimal','editorial'], out = [];
+  for (var i = 0; i < 3; i++) out.push(i < n ? 'tpl:' + i : neutral[i - n]);
+  return out;
+}
+function _pickerLayouts(){
+  if (_isSpotWs()) return LAYOUTS.slice();
+  return _customTemplates().map(function(_, i){ return 'tpl:' + i; }).concat(LAYOUTS.filter(function(l){ return CARD_LAYOUTS.indexOf(l) < 0; }));
+}
+function _layoutLabel(l){
+  if (String(l).indexOf('tpl:') === 0) { var ct = _customTemplates()[+String(l).slice(4)]; return (ct && ct.label) || 'Egen mall'; }
+  return LAYOUT_LABELS[l] || l;
+}
 function _currentCreateLayout(){
   try {
     var ch = S.manualChannel || (S.manualChannels && S.manualChannels[0]) || 'linkedin';
     var selIdx = (window._selectedProposalPerChannel || {})[ch];
     if (selIdx === undefined || selIdx === null) selIdx = 0;
     var props = (window._allChannelProposals || {})[ch];
-    if (props && props.length) return CARD_LAYOUTS[selIdx] || 'gradient';
+    if (props && props.length) return _cardLayoutsForWs()[selIdx] || 'gradient';
     if (S.manualLayout) return S.manualLayout;
   } catch(e) {}
   return 'gradient';
@@ -3524,10 +3562,10 @@ function openLayoutPicker(postId) {
   const post = S.reviewQueue.find(p => p.id === postId);
   if (!post) return;
   const currentLayout = post.layout || 'gradient';
-  document.getElementById('lpGrid').innerHTML = LAYOUTS.map(layout => `
+  document.getElementById('lpGrid').innerHTML = _pickerLayouts().map(layout => `
     <div class="lp-opt ${layout === currentLayout ? 'active' : ''}" onclick="setLayout('${postId}','${layout}')">
       <div class="lp-opt-img" style="height:80px">${getPostImageHTML({...post, layout})}</div>
-      <div class="lp-opt-label">${LAYOUT_LABELS[layout]}</div>
+      <div class="lp-opt-label">${_layoutLabel(layout)}</div>
     </div>`).join('');
   document.getElementById('layoutPicker').classList.add('open');
 }
