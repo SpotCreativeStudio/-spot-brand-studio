@@ -1443,11 +1443,12 @@ function _getPostImageHTMLRaw(post, size='card') {
     // Mallbilden har egen text inbakad. Använd en tvättad version utan text; tills den finns visas Gradient.
     if (!(_ct.cleanSrc && _ct.cleanFor === _ct.src)) { _cleanTemplate(_ct); return _getPostImageHTMLRaw(Object.assign({}, post, { layout: 'gradient' }), size); }
     var _ctSrc = String(_ct.cleanSrc).split('"').join('&quot;');
-    var _ctPhoto = hasImg ? `<div style="position:absolute;left:8%;right:8%;top:8%;height:46%;border-radius:8px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.25)">${_imgOrGray(post)}</div>` : '';
+    var _pb = post.photoBox || { x:8, y:8, w:84, h:46 };
+    var _ctPhoto = hasImg ? `<div class="tpl-photo" style="position:absolute;left:${_pb.x}%;top:${_pb.y}%;width:${_pb.w}%;height:${_pb.h}%;border-radius:8px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.25)">${_imgOrGray(post)}</div>` : '';
     return `<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">
       <div class="tpl-bg" style="position:absolute;inset:0;background-image:url('${_ctSrc.split("'").join("%27")}');background-size:cover;background-position:center"></div>
       ${_ctPhoto}
-      <div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.65) 100%)"></div>
+      <div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.65) 100%)"></div>
       <div style="position:absolute;left:13px;right:13px;bottom:13px">
         <div style="font-family:${_getSERIF()};font-size:${_autoFit(t,26,18,14)}px;color:#fff;line-height:1;text-shadow:0 2px 10px rgba(0,0,0,.35)">${t}</div>
         ${c?`<div style="font-size:9px;color:rgba(255,255,255,.88);margin-top:6px;line-height:1.45;max-height:70px;overflow:hidden">${_truncateCaption(c,160)}</div>`:''}
@@ -2527,7 +2528,7 @@ function renderProposalCards(ch) {
   body.innerHTML = `<div class="ai-proposals" style="width:100%">` +
     proposals.slice(0,3).map((p, i) => {
       const cardLayouts = _cardLayoutsForWs();
-      const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos };
+      const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null };
       const dim = i!==selectedIdx;
       return `<div class="ai-prop-card ${i===selectedIdx?'selected':''}" onclick="openProposalEditor('${ch}',${i})" style="${dim ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
         <div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(ch)}">
@@ -2638,6 +2639,7 @@ function addManualToReview() {
         status: 'review', createdAt: new Date().toISOString(),
         scheduledAt, imageUrl: activeImageUrl(),
         imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
+        photoBox: S._photoBox ? {...S._photoBox} : null,
         aspectRatio: S.aspectRatio || null,
       }); saveToServer(S.reviewQueue[S.reviewQueue.length-1]); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
       added++;
@@ -2659,6 +2661,7 @@ function addManualToReview() {
         status: 'review', createdAt: new Date().toISOString(),
         scheduledAt, imageUrl: activeImageUrl(),
         imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
+        photoBox: S._photoBox ? {...S._photoBox} : null,
         aspectRatio: S.aspectRatio || null,
       }); saveToServer(S.reviewQueue[S.reviewQueue.length-1]); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
     });
@@ -2916,6 +2919,33 @@ function openEditorModal(post) {
   emAttachDnd(post);
 }
 
+// Bildrutan i kundmallar: flytta med handtaget uppe till vänster, ändra storlek nere till höger.
+// Att dra i själva bilden panorerar fortfarande bilden. Mått sparas i procent av kortet (post.photoBox).
+function _emWirePhotoBox(post, card, box){
+  post.photoBox = post.photoBox || { x:8, y:8, w:84, h:46 };
+  function mk(css, title, txt){ var h = document.createElement('div'); h.title = title; h.textContent = txt || ''; h.style.cssText = 'position:absolute;z-index:40;display:none;' + css; box.appendChild(h); return h; }
+  var mv = mk('top:4px;left:4px;width:22px;height:22px;border-radius:6px;background:#b31e59;color:#fff;font-size:13px;line-height:22px;text-align:center;cursor:move', 'Dra för att flytta bildrutan', '✥');
+  var rs = mk('bottom:4px;right:4px;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid #b31e59;cursor:nwse-resize', 'Dra för att ändra storlek');
+  box.addEventListener('mouseenter', function(){ mv.style.display = 'block'; rs.style.display = 'block'; box.style.outline = '1px dashed rgba(255,255,255,.7)'; });
+  box.addEventListener('mouseleave', function(){ mv.style.display = 'none'; rs.style.display = 'none'; box.style.outline = 'none'; });
+  function drag(handle, apply){
+    handle.addEventListener('mousedown', function(ev){
+      ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation();
+      var r = card.getBoundingClientRect(), sx = ev.clientX, sy = ev.clientY, b0 = Object.assign({}, post.photoBox);
+      function onMove(e2){
+        var dx = (e2.clientX - sx) / r.width * 100, dy = (e2.clientY - sy) / r.height * 100;
+        var b = apply(b0, dx, dy);
+        post.photoBox = b;
+        box.style.left = b.x + '%'; box.style.top = b.y + '%'; box.style.width = b.w + '%'; box.style.height = b.h + '%';
+      }
+      function onUp(){ window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); }
+      window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+    });
+  }
+  function cl(v, a, b){ return Math.round(Math.max(a, Math.min(b, v)) * 10) / 10; }
+  drag(mv, function(b, dx, dy){ return { x: cl(b.x + dx, 0, 100 - b.w), y: cl(b.y + dy, 0, 100 - b.h), w: b.w, h: b.h }; });
+  drag(rs, function(b, dx, dy){ return { x: b.x, y: b.y, w: cl(b.w + dx, 15, 100 - b.x), h: cl(b.h + dy, 10, 100 - b.y) }; });
+}
 // Text i en widget utan kontrollerna (✕ och storlekshandtaget)
 function _emTxt(n){ var c = n.cloneNode(true); c.querySelectorAll('.em-wx,.em-wr').forEach(function(e){ e.remove(); }); return (c.innerText || c.textContent || '').replace(/\s+$/, ''); }
 function emRenderPreview() {
@@ -3061,6 +3091,8 @@ function emRenderPreview() {
     if (_emActiveWidget === key) { node.style.outline = '2px solid #b31e59'; x.style.display = 'flex'; rh.style.display = 'block'; if (key !== 'hashtags' && node.isContentEditable) { setTimeout(function(){ node.focus(); try { var _rng = document.createRange(); if (node.firstChild && node.firstChild.nodeType === 3) { _rng.setStart(node.firstChild, node.firstChild.textContent.length); } else { _rng.setStart(node, 0); } _rng.collapse(true); var _sel = window.getSelection(); _sel.removeAllRanges(); _sel.addRange(_rng); } catch(_e){} }, 0); } }
   });
   card.addEventListener('click', function(ev){ if (ev.target === card || ev.target.tagName === 'IMG') emSelectWidget(null); });
+  var _pbEl = card.querySelector('.tpl-photo');
+  if (_pbEl) _emWirePhotoBox(post, card, _pbEl);
   // Canvas: drag image to pan, wheel to zoom
   var imgEl = card.querySelector('img');
   if (imgEl) {
@@ -3422,6 +3454,7 @@ function saveEditorModal() {
     if (typeof fillFormFromProposal === 'function') fillFormFromProposal(post);
     S._uploadedImageUrl = post.imageUrl || post.aiImageUrl || S._uploadedImageUrl;
     S._aiImageUrl = post.imageUrl || post.aiImageUrl || S._aiImageUrl;
+    S._photoBox = post.photoBox || S._photoBox || null;
     S._imgPos = post.imgPos || S._imgPos; // synka positionering tillbaka så förslagskorten matchar redigeringen
     if (typeof updateManualPreview === 'function') updateManualPreview();
     if (typeof renderProposalCards === 'function') renderProposalCards(window._activeProposalTab || S.manualChannel);
@@ -3495,6 +3528,7 @@ function openCreateEditor() {
     hashtags: [...(S.manualTags||[])],
     imageUrl: (typeof activeImageUrl === 'function') ? activeImageUrl() : null,
     imgPos: S._imgPos || null,
+    photoBox: S._photoBox ? Object.assign({}, S._photoBox) : null,
     layout: _currentCreateLayout(),
     blocks: _defaultBlocks,
   };
