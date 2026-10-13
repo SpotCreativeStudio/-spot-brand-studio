@@ -1440,7 +1440,9 @@ function _getPostImageHTMLRaw(post, size='card') {
   if (String(layout).indexOf('tpl:') === 0) {
     var _ct = _customTemplates()[+String(layout).slice(4)];
     if (!_ct) return _getPostImageHTMLRaw(Object.assign({}, post, { layout: 'gradient' }), size);
-    var _ctSrc = String(_ct.src).split('"').join('&quot;');
+    // Mallbilden har egen text inbakad. Använd en tvättad version utan text; tills den finns visas Gradient.
+    if (!(_ct.cleanSrc && _ct.cleanFor === _ct.src)) { _cleanTemplate(_ct); return _getPostImageHTMLRaw(Object.assign({}, post, { layout: 'gradient' }), size); }
+    var _ctSrc = String(_ct.cleanSrc).split('"').join('&quot;');
     var _ctPhoto = hasImg ? `<div style="position:absolute;left:8%;right:8%;top:8%;height:46%;border-radius:8px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.25)">${_imgOrGray(post)}</div>` : '';
     return `<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">
       <img src="${_ctSrc}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block">
@@ -3444,6 +3446,22 @@ function _cardLayoutsForWs(){
   var n = _customTemplates().length, neutral = ['gradient','minimal','editorial'], out = [];
   for (var i = 0; i < 3; i++) out.push(i < n ? 'tpl:' + i : neutral[i - n]);
   return out;
+}
+var _tplCleaning = {};
+function _cleanTemplate(ct){
+  if (!ct || !ct.src || _tplCleaning[ct.src] || ct.cleanFailed === ct.src) return;
+  var src = ct.src; _tplCleaning[src] = true;
+  fetch('/api/clean-template', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ src: src }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d || !d.url) throw new Error((d && d.error) || 'clean');
+      ct.cleanSrc = d.url; ct.cleanFor = src;
+      if (typeof saveBrandSettings === 'function') saveBrandSettings();
+      try { if (window._aiProposals && window._allChannelProposals && typeof renderProposalCards === 'function') renderProposalCards(window._activeProposalTab || S.manualChannel); } catch(e) {}
+      try { if (typeof renderReview === 'function') renderReview(); } catch(e) {}
+    })
+    .catch(function(){ ct.cleanFailed = src; })
+    .finally(function(){ delete _tplCleaning[src]; });
 }
 function _pickerLayouts(){
   if (_isSpotWs()) return LAYOUTS.slice();
