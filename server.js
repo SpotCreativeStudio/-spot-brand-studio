@@ -1039,6 +1039,77 @@ app.post('/api/admin/billing-events/seen', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+// ---- Påminnelser via mejl (måndagar kl. 08 svensk tid, en gång per vecka och arbetsyta) ----
+// "X inlägg väntar på granskning" -> admin och granskare
+// "Inget publicerat på 2 veckor"  -> admin och redaktör
+const APP_LINK = process.env.APP_URL || 'https://spot-brand-studio-production.up.railway.app'
+function _stockholmNow() {
+  const p = {}; new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Stockholm', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', weekday: 'short' }).formatToParts(new Date()).forEach(x => { p[x.type] = x.value })
+  return { date: p.year + '-' + p.month + '-' + p.day, hour: parseInt(p.hour, 10), monday: /^mån/i.test(p.weekday || '') }
+}
+async function buildReminders() {
+  const pool = getAuthPool()
+  await ensureUsersTable()
+  await pool.query('CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, data JSONB, created_at TIMESTAMPTZ DEFAULT NOW())')
+  const notDeleted = "(data->>'deleted' IS NULL OR data->>'deleted' <> 'true')"
+  const rev = await pool.query("SELECT data->>'workspace' AS ws, COUNT(*)::int AS n FROM posts WHERE data->>'status' = 'review' AND " + notDeleted + " GROUP BY 1")
+  const pub = await pool.query("SELECT data->>'workspace' AS ws, MAX(created_at) AS last, COUNT(*)::int AS n FROM posts WHERE data->>'status' IN ('published','archived') AND " + notDeleted + " GROUP BY 1")
+  const any = await pool.query("SELECT DISTINCT data->>'workspace' AS ws FROM posts WHERE " + notDeleted)
+  const users = await pool.query("SELECT username, email, role, first_name, COALESCE(workspace,'spot') AS ws FROM app_users WHERE email IS NOT NULL AND email <> ''")
+  const out = []
+  const twoWeeks = Date.now() - 14 * 24 * 3600 * 1000
+  const lastPub = {}; pub.rows.forEach(r => { lastPub[r.ws || 'spot'] = r.last })
+  const waiting = {}; rev.rows.forEach(r => { waiting[r.ws || 'spot'] = r.n })
+  any.rows.forEach(r => {
+    const ws = r.ws || 'spot'
+    const lines = { review: null, quiet: null }
+    if (waiting[ws] > 0) lines.review = waiting[ws] + (waiting[ws] === 1 ? ' inlägg väntar' : ' inlägg väntar') + ' på granskning'
+    const lp = lastPub[ws] ? new Date(lastPub[ws]).getTime() : 0
+    if (lp < twoWeeks) lines.quiet = lp ? 'Inget publicerat på ' + Math.floor((Date.now() - lp) / (7 * 24 * 3600 * 1000)) + ' veckor' : 'Inget har publicerats än'
+    users.rows.filter(u => u.ws === ws).forEach(u => {
+      const role = u.role || 'admin', msgs = []
+      if (lines.review && (role === 'admin' || role === 'granskare')) msgs.push(lines.review)
+      if (lines.quiet && (role === 'admin' || role === 'redaktor')) msgs.push(lines.quiet)
+      if (msgs.length) out.push({ ws, to: u.email, name: u.first_name || u.username, msgs })
+    })
+  })
+  return out
+}
+async function sendReminderMail(r) {
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+  return sendAppMail({
+    to: r.to,
+    subject: r.msgs[0],
+    text: 'Hej ' + r.name + '!\n\n' + r.msgs.map(m => '- ' + m).join('\n') + '\n\nLogga in: ' + APP_LINK + '\n\nDu får det här mejlet varje måndag när något behöver göras.',
+    html: '<p>Hej ' + esc(r.name) + '!</p><ul>' + r.msgs.map(m => '<li><strong>' + esc(m) + '</strong></li>').join('') + '</ul><p><a href="' + APP_LINK + '">Öppna spot. Brand Studio</a></p><p style="color:#888;font-size:12px">Du får det här mejlet varje måndag när något behöver göras.</p>'
+  })
+}
+async function runWeeklyReminders() {
+  try {
+    const now = _stockholmNow()
+    if (!now.monday || now.hour < 8) return
+    const pool = getAuthPool()
+    await pool.query('CREATE TABLE IF NOT EXISTS reminder_log (week TEXT PRIMARY KEY, sent_at BIGINT, count INTEGER)')
+    // Lås veckan först, så att bara en körning skickar (även vid omstart eller flera instanser)
+    const lock = await pool.query('INSERT INTO reminder_log (week, sent_at, count) VALUES ($1,$2,0) ON CONFLICT (week) DO NOTHING RETURNING week', [now.date, Date.now()])
+    if (!lock.rows.length) return
+    const list = await buildReminders()
+    let n = 0
+    for (const r of list) { if (await sendReminderMail(r)) n++ }
+    await pool.query('UPDATE reminder_log SET count=$2 WHERE week=$1', [now.date, n])
+    console.log('[reminders] skickade ' + n + ' av ' + list.length)
+  } catch (e) { console.error('[reminders]', e.message) }
+}
+setInterval(runWeeklyReminders, 15 * 60 * 1000)
+setTimeout(runWeeklyReminders, 60 * 1000)
+// Förhandsvisning för Spot-admin: visar vilka mejl som skulle gå ut, utan att skicka något
+app.get('/api/admin/reminders-preview', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    if ((s.realWorkspace || s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
+    res.json({ reminders: await buildReminders() })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 restoreSessions().finally(function(){ app.listen(PORT, () => console.log('spot. running on ' + PORT)) })
 const LOGIN_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot.</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:32px}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">content studio</div><form method="POST" action="/login"><div class="f"><label>Användarnamn eller e-post</label><input type="text" name="username" autofocus/></div><div class="f"><label>Lösenord</label><input type="password" name="password"/></div><div class="err" id="err">Fel.</div><button type="submit">Logga in</button><div style="text-align:center;margin-top:14px"><a href="/forgot" style="font-size:12px;color:#9ca3af;text-decoration:none">Glömt lösenord?</a></div><div class="ok" id="ok" style="display:none;color:#16a34a;font-size:13px;margin-top:8px;text-align:center">Lösenordet är återställt. Logga in med det nya lösenordet.</div></form></div><script>var q=new URLSearchParams(location.search);if(q.get("err"))document.getElementById("err").classList.add("show");if(q.get("reset"))document.getElementById("ok").style.display="block"<\/script></body></html>'
  
