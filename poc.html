@@ -286,6 +286,8 @@ textarea.field-input{resize:vertical;line-height:1.5}
 .cal-day.cal-drop{background:#fdf0f6;box-shadow:inset 0 0 0 2px var(--m)}
 .cal-chip[draggable="true"]{cursor:grab}
 body.ws-customer .brand-strip{display:none!important}
+/* Inläggsbilder utan rundade hörn: kortet runt bilden blir också rakt */
+:has(> .post-img-root),:has(> * > .post-img-root){border-radius:0!important}
 #brandRoNote{display:none}
 body.brand-ro #brandRoNote{display:block}
 body.brand-ro #v-brand [id^="secBtn-"]{display:none!important}
@@ -1681,12 +1683,12 @@ function getPostImageHTML(post, size='card') {
   }
   if (_showBrand) html = _swapBrandMark(html);
   html = _applyBrandColors(html);
-  return html;
+  return '<div class="post-img-root" style="width:100%;height:100%;border-radius:0">' + html + '</div>';
 }
 
 
 // Full-size version for lightbox
-function getPostImageLargeHTML(post) { return _applyBrandColors(_getPostImageLargeHTMLRaw(post)); }
+function getPostImageLargeHTML(post) { return '<div class="post-img-root" style="width:100%;height:100%;border-radius:0">' + _applyBrandColors(_getPostImageLargeHTMLRaw(post)) + '</div>'; }
 function _getPostImageLargeHTMLRaw(post) {
   const layout = post.layout || 'gradient';
   // SPOT-mallarna är responsiva – använd samma renderare som korten
