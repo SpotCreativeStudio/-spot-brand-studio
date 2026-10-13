@@ -1116,12 +1116,13 @@ app.post('/api/admin/reminders-test', auth, async (req, res) => {
     const s = sessions[getToken(req)] || {}
     if ((s.realWorkspace || s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin' })
     const u = await getUserByUsername(s.u)
-    if (!u || !u.email) return res.status(400).json({ error: 'Ditt konto saknar mejladress' })
+    // Spot-admin är ett fast konto utan mejladress i användartabellen, så då går testet till Spots egen adress
+    const testTo = (u && u.email) || process.env.FEEDBACK_EMAIL || 'hello@spotstudio.se'
     const ws = s.workspace || 'spot'
-    const mine = (await buildReminders()).find(r => r.ws === ws && r.to === u.email) || (await buildReminders()).find(r => r.ws === ws)
+    const mine = (await buildReminders()).find(r => r.ws === ws && r.to === testTo) || (await buildReminders()).find(r => r.ws === ws)
     const msgs = mine ? mine.msgs : ['3 inlägg väntar på granskning', 'Inget publicerat på 2 veckor']
-    const ok = await sendReminderMail({ to: u.email, name: u.first_name || u.username, msgs: msgs.map(m => m) })
-    res.json({ sent: ok, to: u.email, msgs, example: !mine })
+    const ok = await sendReminderMail({ to: testTo, name: (u && (u.first_name || u.username)) || 'Spot', msgs: msgs.map(m => m) })
+    res.json({ sent: ok, to: testTo, msgs, example: !mine })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 restoreSessions().finally(function(){ app.listen(PORT, () => console.log('spot. running on ' + PORT)) })
