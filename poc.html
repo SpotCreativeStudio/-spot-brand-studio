@@ -1382,11 +1382,23 @@ function _imgStyleProps(post) {
 
 // Renders uploaded image as full-cover background inside a position:relative wrapper.
 // The callback `inner` receives the content to render on top.
+// Flyttbar bildruta i alla mallar. Måtten är i procent av bildens yta i mallen och sparas per mall (post.photoBox.layout).
+// Standardläget är mallens vanliga placering, så utseendet ändras först när någon flyttar rutan.
+function _pbFor(post, def){
+  var lay = post.layout || 'gradient', b = post.photoBox;
+  if (b && (b.layout === lay || (!b.layout && String(lay).indexOf('tpl:') === 0))) return b;
+  return def;
+}
+function _pbWrap(post, inner, def, extra){
+  def = def || { x:0, y:0, w:100, h:100 };
+  var b = _pbFor(post, def);
+  return '<div class="tpl-photo" data-layout="' + (post.layout || 'gradient') + '" data-pbdef="' + [def.x, def.y, def.w, def.h].join(',') + '" style="position:absolute;left:' + b.x + '%;top:' + b.y + '%;width:' + b.w + '%;height:' + b.h + '%;overflow:hidden;' + (extra || '') + '">' + inner + '</div>';
+}
 function _withImgBg(post, inner) {
   const { f, ov } = _imgStyleProps(post);
   const op = _imgObjPos(post);
   return `<div style="width:100%;height:100%;position:relative;overflow:hidden">
-    <img src="${post.imageUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:${op};display:block;filter:${f}">
+    ${_pbWrap(post, `<img src="${post.imageUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:${op};display:block;filter:${f}">`)}
     <div style="position:absolute;inset:0;background:${ov}"></div>
     <div style="position:absolute;inset:0;display:flex;flex-direction:column;width:100%;height:100%">${inner}</div>
   </div>`;
@@ -1457,8 +1469,7 @@ function _getPostImageHTMLRaw(post, size='card') {
     // Mallbilden har egen text inbakad. Använd en tvättad version utan text; tills den finns visas Gradient.
     if (!(_ct.cleanSrc && _ct.cleanFor === _ct.src)) { _cleanTemplate(_ct); return _getPostImageHTMLRaw(Object.assign({}, post, { layout: 'gradient' }), size); }
     var _ctSrc = String(_ct.cleanSrc).split('"').join('&quot;');
-    var _pb = post.photoBox || { x:8, y:8, w:84, h:46 };
-    var _ctPhoto = hasImg ? `<div class="tpl-photo" style="position:absolute;left:${_pb.x}%;top:${_pb.y}%;width:${_pb.w}%;height:${_pb.h}%;border-radius:8px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.25)">${_imgOrGray(post)}</div>` : '';
+    var _ctPhoto = hasImg ? _pbWrap(post, _imgOrGray(post), { x:8, y:8, w:84, h:46 }, 'box-shadow:0 4px 18px rgba(0,0,0,.25)') : '';
     return `<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">
       <div class="tpl-bg" style="position:absolute;inset:0;background-image:url('${_ctSrc.split("'").join("%27")}');background-size:cover;background-position:center"></div>
       ${_ctPhoto}
@@ -1473,8 +1484,8 @@ function _getPostImageHTMLRaw(post, size='card') {
   // ── SPOT-MALL: studio. (helbild + Higuen-serif nedtill) ──────────────
   if (layout === 'studio') {
     return `<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">
-      ${_imgOrGray(post)}
-      <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.28) 0%,transparent 28%,transparent 50%,rgba(0,0,0,.6) 100%)"></div>
+      ${_pbWrap(post, _imgOrGray(post))}
+      <div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.28) 0%,transparent 28%,transparent 50%,rgba(0,0,0,.6) 100%)"></div>
       <div style="position:absolute;top:9px;left:11px;font-size:9px;font-weight:700;color:rgba(255,255,255,.92);font-family:${_getSANS()}">spot.</div>
       
       <div style="position:absolute;left:13px;right:13px;bottom:13px">
@@ -1490,7 +1501,7 @@ function _getPostImageHTMLRaw(post, size='card') {
     return `<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#b31e59;display:flex;flex-direction:column">
       <div style="text-align:center;padding:8px 0 2px;font-size:10px;color:rgba(255,255,255,.85);font-style:italic;font-family:${_getSERIF()}">case</div>
       <div style="position:relative;flex:1;overflow:hidden">
-        <div style="position:absolute;left:0;right:0;top:0;height:72%;overflow:hidden">${_imgOrGray(post)}</div>
+        ${_pbWrap(post, _imgOrGray(post), { x:0, y:0, w:100, h:72 })}
         <div style="position:absolute;left:11px;right:11px;top:30%;font-family:${_getSERIF()};font-size:${_autoFit(t,29,16,14)}px;line-height:.95;color:#fff;text-shadow:0 2px 14px rgba(0,0,0,.4);max-height:62%;overflow:hidden">${t}</div>
         ${c?`<div style="position:absolute;left:11px;right:11px;bottom:6px;font-size:8px;color:rgba(255,255,255,.9);line-height:1.4;max-height:120px;overflow:hidden">${_truncateCaption(c,260)}</div>`:''}
       </div>
@@ -1507,7 +1518,7 @@ function _getPostImageHTMLRaw(post, size='card') {
           <div style="font-family:${_getSERIF()};font-size:${_autoFit(t,32,10,15)}px;color:#fff;writing-mode:vertical-rl;transform:rotate(180deg);line-height:1;letter-spacing:-.01em;white-space:nowrap;max-height:100%;overflow:hidden">${t}</div>
         </div>
       </div>
-      <div style="flex:1;position:relative;overflow:hidden;margin:8px 8px 8px 0">${_imgOrGray(post)}</div>
+      <div style="flex:1;position:relative;margin:8px 8px 8px 0">${_pbWrap(post, _imgOrGray(post))}</div>
     </div>`;
   }
 
@@ -1558,7 +1569,7 @@ function _getPostImageHTMLRaw(post, size='card') {
       </div>`;
     return hasImg
       ? `<div style="width:100%;height:100%;position:relative;overflow:hidden">
-          <img src="${post.imageUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:${_imgObjPos(post)};filter:${_imgStyleProps(post).f}">
+          ${_pbWrap(post, `<img src="${post.imageUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:${_imgObjPos(post)};filter:${_imgStyleProps(post).f}">`)}
           <div style="position:absolute;inset:0;background:rgba(0,0,0,.72)"></div>
           <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--m)"></div>
           <div style="position:relative;width:100%;height:100%;display:flex;flex-direction:column">${inner.replace('<div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--m)"></div>','')}</div>
@@ -1576,7 +1587,7 @@ function _getPostImageHTMLRaw(post, size='card') {
           <div style="font-size:8px;font-weight:700;color:rgba(255,255,255,.85);text-align:center">spot.</div>
         </div>
         <div style="flex:1;position:relative;overflow:hidden">
-          <img src="${post.imageUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:${_imgObjPos(post)};filter:${_imgStyleProps(post).f}">
+          ${_pbWrap(post, `<img src="${post.imageUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:${_imgObjPos(post)};filter:${_imgStyleProps(post).f}">`)}
           <div style="position:absolute;inset:0;background:rgba(0,0,0,.5)"></div>
           <div style="position:relative;padding:12px;display:flex;flex-direction:column;justify-content:center;height:100%">
             <div style="font-size:${_autoFit(t,10,35,8)}px;font-weight:700;color:#fff;line-height:1.3;margin-bottom:5px">${t}</div>
@@ -1609,7 +1620,7 @@ function _getPostImageHTMLRaw(post, size='card') {
       </div>`;
     return hasImg
       ? `<div style="width:100%;height:100%;position:relative;overflow:hidden">
-          <img src="${post.imageUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:${_imgObjPos(post)};filter:${_imgStyleProps(post).f}">
+          ${_pbWrap(post, `<img src="${post.imageUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:${_imgObjPos(post)};filter:${_imgStyleProps(post).f}">`)}
           <div style="position:absolute;inset:0;background:rgba(0,0,0,.65)"></div>
           <div style="position:relative;width:100%;height:100%;display:flex;flex-direction:column">${inner}</div>
          </div>`
@@ -2936,19 +2947,24 @@ function openEditorModal(post) {
 // Bildrutan i kundmallar: flytta med handtaget uppe till vänster, ändra storlek nere till höger.
 // Att dra i själva bilden panorerar fortfarande bilden. Mått sparas i procent av kortet (post.photoBox).
 function _emWirePhotoBox(post, card, box){
-  post.photoBox = post.photoBox || { x:8, y:8, w:84, h:46 };
+  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE === 'granskare') return;
+  var _lay = box.dataset.layout || post.layout || 'gradient';
+  var _d = String(box.dataset.pbdef || '0,0,100,100').split(',').map(Number);
+  var _cur = _pbFor(post, { x:_d[0], y:_d[1], w:_d[2], h:_d[3] });
+  post.photoBox = { layout:_lay, x:_cur.x, y:_cur.y, w:_cur.w, h:_cur.h };
   function mk(css, title, txt){ var h = document.createElement('div'); h.title = title; h.textContent = txt || ''; h.style.cssText = 'position:absolute;z-index:40;display:none;' + css; box.appendChild(h); return h; }
   var mv = mk('top:4px;left:4px;width:22px;height:22px;border-radius:6px;background:#b31e59;color:#fff;font-size:13px;line-height:22px;text-align:center;cursor:move', 'Dra för att flytta bildrutan', '✥');
   var rs = mk('bottom:4px;right:4px;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid #b31e59;cursor:nwse-resize', 'Dra för att ändra storlek');
-  box.addEventListener('mouseenter', function(){ mv.style.display = 'block'; rs.style.display = 'block'; box.style.outline = '1px dashed rgba(255,255,255,.7)'; });
-  box.addEventListener('mouseleave', function(){ mv.style.display = 'none'; rs.style.display = 'none'; box.style.outline = 'none'; });
+  // Handtagen syns alltid i editorn (i vissa mallar ligger text eller toning ovanpå bilden)
+  mv.style.display = 'block'; rs.style.display = 'block';
   function drag(handle, apply){
     handle.addEventListener('mousedown', function(ev){
       ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation();
-      var r = card.getBoundingClientRect(), sx = ev.clientX, sy = ev.clientY, b0 = Object.assign({}, post.photoBox);
+      var r = (box.parentElement || card).getBoundingClientRect(), sx = ev.clientX, sy = ev.clientY, b0 = Object.assign({}, post.photoBox);
       function onMove(e2){
         var dx = (e2.clientX - sx) / r.width * 100, dy = (e2.clientY - sy) / r.height * 100;
         var b = apply(b0, dx, dy);
+        b.layout = _lay;
         post.photoBox = b;
         box.style.left = b.x + '%'; box.style.top = b.y + '%'; box.style.width = b.w + '%'; box.style.height = b.h + '%';
       }
