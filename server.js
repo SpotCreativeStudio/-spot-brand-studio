@@ -480,6 +480,17 @@ app.post('/api/clean-template', auth, async (req, res) => {
     if (!part) return res.status(502).json({ error: 'Ingen bild från AI' })
     const url = await storeDataUrlImage('data:' + part.inlineData.mimeType + ';base64,' + part.inlineData.data, ws, s.u, '')
     if (!url) return res.status(500).json({ error: 'Kunde inte spara mallen' })
+    // Spara den tvättade mallen i varumärket direkt, så att den inte behöver tvättas igen (oavsett roll)
+    try {
+      await ensureBrandTable()
+      const br = await getAuthPool().query('SELECT data FROM workspace_brand WHERE workspace=$1', [ws])
+      const bd = (br.rows[0] && br.rows[0].data) || null
+      if (bd && Array.isArray(bd.templates)) {
+        let hit = false
+        bd.templates.forEach(t => { if (t && t.src === src) { t.cleanSrc = url; t.cleanFor = src; hit = true } })
+        if (hit) await getAuthPool().query('UPDATE workspace_brand SET data=$2 WHERE workspace=$1', [ws, JSON.stringify(bd)])
+      }
+    } catch (e2) {}
     res.json({ url })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -726,6 +737,7 @@ app.post('/api/brand-images', auth, async (req, res) => {
 app.post('/api/brand-images/delete', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
+    if ((s.role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan ändra varumärket' })
     const { id } = req.body || {}
     await ensureBrandImagesTable()
     await getAuthPool().query('DELETE FROM brand_images WHERE id=$1 AND workspace=$2', [id, s.workspace || 'spot'])
@@ -772,6 +784,7 @@ app.get('/api/brand', auth, async (req, res) => {
 app.post('/api/brand', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
+    if ((s.role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan ändra varumärket' })
     const incoming = req.body || {}
     const workspace = s.workspace || 'spot'
     await ensureBrandTable()
@@ -793,6 +806,7 @@ app.post('/api/brand', auth, async (req, res) => {
 })
 app.post('/api/brand/fetch-website', auth, async (req, res) => {
   try {
+    if (((sessions[getToken(req)] || {}).role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan ändra varumärket' })
     let { url } = req.body || {}
     if (!url || typeof url !== 'string') return res.status(400).json({ error: 'URL saknas' })
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url
