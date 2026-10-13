@@ -3805,6 +3805,7 @@ function renderImgStyleGrid() {
 }
 function setImgStyle(id) {
   S.imageStyle = id;
+  if (typeof saveBrandSettings === 'function') saveBrandSettings();
   renderImgStyleGrid();
   updateManualPreview();
   showToast(`Bildstil ändrad till ${IMG_STYLES.find(s=>s.id===id)?.label}`);
@@ -3819,7 +3820,7 @@ function typoFontFor(name){return CUSTOM_FONTS.find(function(x){return x.name===
 
 function _resetBrandForNewWorkspace(){
   COLORS = []; TYPOGRAPHY = []; DOS_RULES = []; DONTS_RULES = []; TEMPLATES = [];
-  CUSTOM_FONTS = []; BRAND_LOGO = "";
+  CUSTOM_FONTS = []; BRAND_LOGO = ""; S.imageStyle = 'grayscale';
   BRAND_NAME = ""; BRAND_TAGLINE = ""; BRAND_LOCATION = ""; BRAND_TONE = "";
   BRAND_WEBSITE = ""; BRAND_WEBSITE_INFO = { title:'', description:'' };
 }
@@ -3840,6 +3841,7 @@ function loadBrandSettings(){
     if (b.dos && b.dos.length) DOS_RULES = b.dos;
     if (b.donts && b.donts.length) DONTS_RULES = b.donts;
     if (b.templates && b.templates.length) TEMPLATES = b.templates;
+    if (b.imageStyle) { S.imageStyle = b.imageStyle; if (typeof renderImgStyleGrid === 'function') renderImgStyleGrid(); }
     if (b.name) BRAND_NAME = b.name;
     if (b.tagline) BRAND_TAGLINE = b.tagline;
     if (b.location) BRAND_LOCATION = b.location;
@@ -3852,7 +3854,7 @@ function loadBrandSettings(){
 }
 function saveBrandSettings(){
   var payload = {
-    colors:COLORS, typography:TYPOGRAPHY, customFonts:CUSTOM_FONTS, logo:BRAND_LOGO, dos:DOS_RULES, donts:DONTS_RULES, templates:TEMPLATES,
+    imageStyle: S.imageStyle, colors:COLORS, typography:TYPOGRAPHY, customFonts:CUSTOM_FONTS, logo:BRAND_LOGO, dos:DOS_RULES, donts:DONTS_RULES, templates:TEMPLATES,
     name: (typeof BRAND_NAME!=="undefined"?BRAND_NAME:"spot."),
     tagline: (typeof BRAND_TAGLINE!=="undefined"?BRAND_TAGLINE:"a creative studio"),
     location: (typeof BRAND_LOCATION!=="undefined"?BRAND_LOCATION:"Halmstad, Sverige"),
