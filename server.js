@@ -660,7 +660,7 @@ app.get('/auth/linkedin/company/callback', auth, async (req, res) => {
     const expiresAt = Date.now() + (tokenData.expires_in || 5000) * 1000
     await getAuthPool().query(
       'INSERT INTO linkedin_company_accounts (username,access_token,expires_at,org_urn,org_name) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (username) DO UPDATE SET access_token=$2, expires_at=$3, org_urn=$4, org_name=$5',
-      [s.u, tokenData.access_token, expiresAt, orgTargetUrn, orgInfo.localizedName || '']
+      ['ws:' + (s.workspace || 'spot'), tokenData.access_token, expiresAt, orgTargetUrn, orgInfo.localizedName || '']
     )
     res.redirect('/?linkedin_company=connected')
   } catch (e) {
@@ -671,7 +671,8 @@ app.get('/api/linkedin/company/status', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
     await ensureLinkedInCompanyTable()
-    const r = await getAuthPool().query('SELECT org_name, expires_at FROM linkedin_company_accounts WHERE username=$1', [s.u])
+    // Företagssidan hör till arbetsytan (nyckel ws:<arbetsyta>), inte till en enskild användare
+    const r = await getAuthPool().query('SELECT org_name, expires_at FROM linkedin_company_accounts WHERE username=$1', ['ws:' + (s.workspace || 'spot')])
     if (!r.rows.length) return res.json({ connected: false })
     res.json({ connected: true, name: r.rows[0].org_name })
   } catch (e) { res.status(500).json({ error: e.message }) }
@@ -680,7 +681,7 @@ app.post('/api/linkedin/company/disconnect', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
     await ensureLinkedInCompanyTable()
-    await getAuthPool().query('DELETE FROM linkedin_company_accounts WHERE username=$1', [s.u])
+    await getAuthPool().query('DELETE FROM linkedin_company_accounts WHERE username=$1', ['ws:' + (s.workspace || 'spot')])
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -690,7 +691,7 @@ app.post('/api/linkedin/company/publish', auth, async (req, res) => {
     const { text } = req.body || {}
     if (!text) return res.status(400).json({ error: 'Text saknas' })
     await ensureLinkedInCompanyTable()
-    const r = await getAuthPool().query('SELECT access_token, org_urn FROM linkedin_company_accounts WHERE username=$1', [s.u])
+    const r = await getAuthPool().query('SELECT access_token, org_urn FROM linkedin_company_accounts WHERE username=$1', ['ws:' + (s.workspace || 'spot')])
     if (!r.rows.length) return res.status(400).json({ error: 'LinkedIn-företagssida är inte ansluten. Anslut den först under Varumärke.' })
     const { access_token, org_urn } = r.rows[0]
     const postRes = await fetch('https://api.linkedin.com/rest/posts', {
@@ -744,12 +745,13 @@ app.post('/api/brand-images/delete', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
-async function ensureDraftsTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS user_drafts (id SERIAL PRIMARY KEY, username TEXT, data JSONB, ts BIGINT)") }
+async function ensureDraftsTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS user_drafts (id SERIAL PRIMARY KEY, username TEXT, data JSONB, ts BIGINT)"); await getAuthPool().query('ALTER TABLE user_drafts ADD COLUMN IF NOT EXISTS workspace TEXT') }
 app.get('/api/drafts', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
     await ensureDraftsTable()
-    const r = await getAuthPool().query('SELECT id, data, ts FROM user_drafts WHERE username=$1 ORDER BY ts DESC', [s.u])
+    // Utkast hör till arbetsytan: Spot-admin som visar en kund ser bara kundens utkast. Gamla utkast utan arbetsyta räknas till användarens egen.
+    const r = await getAuthPool().query('SELECT id, data, ts FROM user_drafts WHERE username=$1 AND COALESCE(workspace, $3)=$2 ORDER BY ts DESC', [s.u, s.workspace || 'spot', s.realWorkspace || s.workspace || 'spot'])
     res.json({ drafts: r.rows.map(row => Object.assign({}, row.data, { id: row.id, ts: row.ts })) })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -759,7 +761,7 @@ app.post('/api/drafts', auth, async (req, res) => {
     const draft = req.body || {}
     await ensureDraftsTable()
     const ts = Date.now()
-    const r = await getAuthPool().query('INSERT INTO user_drafts (username,data,ts) VALUES ($1,$2,$3) RETURNING id', [s.u, JSON.stringify(draft), ts])
+    const r = await getAuthPool().query('INSERT INTO user_drafts (username,data,ts,workspace) VALUES ($1,$2,$3,$4) RETURNING id', [s.u, JSON.stringify(draft), ts, s.workspace || 'spot'])
     res.json({ ok: true, id: r.rows[0].id, ts })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -917,7 +919,7 @@ app.post('/api/admin/delete-workspace', auth, async (req, res) => {
     await ensureUsersTable(); await ensureBrandTable(); await ensureBrandImagesTable(); await ensureDraftsTable()
     await getAuthPool().query('DELETE FROM user_channels WHERE username IN (SELECT username FROM app_users WHERE workspace=$1)', [workspaceId])
     await getAuthPool().query('DELETE FROM linkedin_accounts WHERE username IN (SELECT username FROM app_users WHERE workspace=$1)', [workspaceId])
-    await getAuthPool().query('DELETE FROM linkedin_company_accounts WHERE username IN (SELECT username FROM app_users WHERE workspace=$1)', [workspaceId]).catch(()=>{})
+    await getAuthPool().query('DELETE FROM linkedin_company_accounts WHERE username=$2 OR username IN (SELECT username FROM app_users WHERE workspace=$1)', [workspaceId, 'ws:' + workspaceId]).catch(()=>{})
     await getAuthPool().query('DELETE FROM user_drafts WHERE username IN (SELECT username FROM app_users WHERE workspace=$1)', [workspaceId])
     await getAuthPool().query('DELETE FROM brand_images WHERE workspace=$1', [workspaceId])
     await getAuthPool().query('DELETE FROM workspace_brand WHERE workspace=$1', [workspaceId])
