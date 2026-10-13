@@ -2472,7 +2472,7 @@ async function generateBrandImage(brief, force) {
     const res = await fetch('/api/generate-image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify((function(){ var _ib = document.getElementById('m-include-brand') ? document.getElementById('m-include-brand').checked : false; var _usePrev = _ib && !force && !S._uploadedImageUrl && S._aiImageBase64; return { brief, style: S.imageStyle, brand: (typeof getBrandProfile==='function'?getBrandProfile():undefined), includeBrand: _ib, previousImageBase64: _usePrev ? S._aiImageBase64 : undefined, previousImageMimeType: _usePrev ? S._aiImageMime : undefined }; })()),
+      body: JSON.stringify((function(){ var _ib = document.getElementById('m-include-brand') ? document.getElementById('m-include-brand').checked : false; var _usePrev = force && !S._uploadedImageUrl && S._aiImageBase64 && brief !== S._aiImageBrief; /* bara vid ändring av befintlig bild, aldrig vid ny prompt */ return { brief, style: S.imageStyle, brand: (typeof getBrandProfile==='function'?getBrandProfile():undefined), includeBrand: _ib, previousImageBase64: _usePrev ? S._aiImageBase64 : undefined, previousImageMimeType: _usePrev ? S._aiImageMime : undefined }; })()),
     });
     const data = await res.json();
     if (!res.ok || !data.imageUrl) throw new Error(data.error || 'Bild misslyckades');
