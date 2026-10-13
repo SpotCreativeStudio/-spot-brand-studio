@@ -584,7 +584,7 @@ body.brand-ro #v-brand :is(input,select,textarea){background:#f9fafb!important}
             </div>
           </div>
           <!-- Drag-to-reposition frame (shown after upload) -->
-          <div id="imgRepoFrame" style="display:none;position:relative;border-radius:12px;overflow:hidden;height:160px;border:2px solid var(--m);cursor:grab;user-select:none" title="Dra för att ändra bildposition">
+          <div id="imgRepoFrame" style="display:none;position:relative;border-radius:12px;overflow:hidden;width:100%;aspect-ratio:1/1;border:2px solid var(--m);cursor:grab;user-select:none" title="Dra för att ändra bildposition">
             <img id="imgPreview" src="" style="position:absolute;width:100%;height:100%;object-fit:cover;object-position:center;transform-origin:center;pointer-events:none;border-radius:0">
             <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
               <div id="imgDragHint" style="background:rgba(0,0,0,.5);color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;backdrop-filter:blur(4px)">✥ Dra för att justera</div>
@@ -1355,7 +1355,7 @@ const MOCK_PROPOSALS = {
 //  LAYOUT RENDERER
 // ════════════════════════════════════════════════════════
 // Returns object-position CSS value — reads from post if available, else global drag state
-function applyImgPreviewTransform(){var pv=document.getElementById("imgPreview");if(!pv)return;var p=S._imgPos||{x:0,y:0,zoom:1};var z0=(p.zoom||1);var z=z0<=1?z0*1.06:z0;var mx=(1-1/z)*50*z;var x=Math.max(-mx,Math.min(mx,p.x||0));var y=Math.max(-mx,Math.min(mx,p.y||0));pv.style.objectPosition="center";pv.style.transform="scale("+z.toFixed(3)+") translate("+(x/z).toFixed(2)+"%,"+(y/z).toFixed(2)+"%)";}
+function applyImgPreviewTransform(){var _fr=document.getElementById("imgRepoFrame");if(_fr&&typeof _arFor==="function"){try{_fr.style.aspectRatio=_arFor(S.manualChannel||(S.manualChannels&&S.manualChannels[0])||"linkedin");}catch(e){}}var pv=document.getElementById("imgPreview");if(!pv)return;var p=S._imgPos||{x:0,y:0,zoom:1};var z0=(p.zoom||1);var z=z0<=1?z0*1.06:z0;var mx=(1-1/z)*50*z;var x=Math.max(-mx,Math.min(mx,p.x||0));var y=Math.max(-mx,Math.min(mx,p.y||0));pv.style.objectPosition="center";pv.style.transform="scale("+z.toFixed(3)+") translate("+(x/z).toFixed(2)+"%,"+(y/z).toFixed(2)+"%)";}
 function setImgZoom(v){if(!S._imgPos)S._imgPos={x:0,y:0,zoom:1};S._imgPos.zoom=parseFloat(v)||1;applyImgPreviewTransform();if(window._aiProposals&&window._allChannelProposals){renderProposalCards(window._activeProposalTab||S.manualChannel);}else{updateManualPreview();}}
 function repromptImage(){var t=document.getElementById("imgReprompt");var extra=t?t.value.trim():"";var base=S._aiImageBrief||S._lastBrief||"";if(!base&&!extra){showToast("Skriv en beskrivning av ändringen.");return;}var brief=extra?(base?(base+". Ändring: "+extra):extra):base;S._uploadedImageUrl=null;generateBrandImage(brief,true);}
 function _imgObjPos(post) {
