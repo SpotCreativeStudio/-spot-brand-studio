@@ -544,7 +544,7 @@ body.brand-ro #v-brand :is(input,select,textarea){background:#f9fafb!important}
 
         <!-- INKLUDERA VARUMÄRKE I BILD -->
         <div class="section-card" style="display:flex;align-items:center;gap:8px">
-          <input type="checkbox" id="m-include-brand" style="width:16px;height:16px">
+          <input type="checkbox" id="m-include-brand" style="width:16px;height:16px" onchange="if(window._aiProposals&&window._allChannelProposals&&typeof renderProposalCards==='function'){renderProposalCards(window._activeProposalTab||S.manualChannel);}else{updateManualPreview();}">
           <label for="m-include-brand" class="field-label" style="margin:0">Inkludera varumärke i bilden</label>
         </div>
 
@@ -1476,6 +1476,7 @@ function _getPostImageHTMLRaw(post, size='card') {
     return `<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">
       <div class="tpl-bg" style="position:absolute;inset:0;background-image:url('${_ctSrc.split("'").join("%27")}');background-size:cover;background-position:center"></div>
       ${_ctPhoto}
+      <div style="position:absolute;top:10px;left:12px;font-size:11px;font-weight:700;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.35);font-family:${_getSANS()}">spot.</div>
       <div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.65) 100%)"></div>
       <div style="position:absolute;left:13px;right:13px;bottom:13px">
         <div style="font-family:${_getSERIF()};font-size:${_autoFit(t,26,18,14)}px;color:#fff;line-height:1;text-shadow:0 2px 10px rgba(0,0,0,.35)">${t}</div>
@@ -2621,7 +2622,7 @@ function updateManualPreview() {
   if (window._aiProposals) return;
   const title   = document.getElementById('m-title')?.value   || '';
   const content = document.getElementById('m-content')?.value || '';
-  const mockPost = { channel: S.manualChannel, layout: _manualLayout(), title, content, hashtags: S.manualTags, imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null };
+  const mockPost = { channel: S.manualChannel, layout: _manualLayout(), title, content, hashtags: S.manualTags, imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, blocks: ((document.getElementById('m-include-brand')||{}).checked ? ['brand','content','hashtags'] : ['content','hashtags']) };
   const body = document.getElementById('prevBody');
   if (!body) return;
   const panelTitle = document.getElementById('prevPanelTitle');
@@ -2684,6 +2685,7 @@ function addManualToReview() {
         brief: 'spot. content studio',
         channel: ch, title, content,
         hashtags: [...S.manualTags], layout: _manualLayout(),
+        blocks: ((document.getElementById('m-include-brand')||{}).checked ? ['brand','content','hashtags'] : ['content','hashtags']),
         author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
         channels: [...(S.manualChannels||[S.manualChannel])],
         status: 'review', createdAt: new Date().toISOString(),
