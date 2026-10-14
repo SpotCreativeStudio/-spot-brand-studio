@@ -728,6 +728,7 @@ app.post('/api/brand-images', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
     const { name, url } = req.body || {}
+    if ((s.role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan lägga till bilder i bildbanken' })
     if (!url) return res.status(400).json({ error: 'Ingen bild skickades' })
     await ensureBrandImagesTable()
     const ts = Date.now()
