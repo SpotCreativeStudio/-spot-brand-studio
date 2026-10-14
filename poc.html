@@ -593,7 +593,7 @@ body.brand-ro #v-brand :is(input,select,textarea){background:#f9fafb!important}
               <div id="imgDragHint" style="background:rgba(0,0,0,.5);color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;backdrop-filter:blur(4px)">✥ Dra för att justera</div>
             </div>
           </div>
-          <div id="imgEditControls" style="display:none;flex-direction:column;gap:6px;margin-top:8px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:#6b7280;font-weight:600">Zoom</span><input type="range" id="imgZoom" min="1" max="3" step="0.05" value="1" oninput="setImgZoom(this.value)" style="flex:1"></div><div id="imgRepromptRow" style="display:flex;flex-direction:column;gap:6px;margin-top:8px;width:100%"><input id="imgReprompt" placeholder="Beskriv en ändring av bilden (valfritt)..." style="width:100%;box-sizing:border-box;font-size:12px;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-family:inherit"><button onclick="repromptImage()" style="width:100%;box-sizing:border-box;font-size:12px;font-weight:600;padding:8px 12px;border-radius:8px;border:none;background:var(--m);color:#fff;cursor:pointer">🎨 Ny bild</button></div></div>
+          <div id="imgEditControls" style="display:none;flex-direction:column;gap:6px;margin-top:8px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:#6b7280;font-weight:600">Zoom</span><input type="range" id="imgZoom" min="0.3" max="4" step="0.05" value="1" oninput="setImgZoom(this.value)" style="flex:1"></div><div id="imgRepromptRow" style="display:flex;flex-direction:column;gap:6px;margin-top:8px;width:100%"><input id="imgReprompt" placeholder="Beskriv en ändring av bilden (valfritt)..." style="width:100%;box-sizing:border-box;font-size:12px;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-family:inherit"><button onclick="repromptImage()" style="width:100%;box-sizing:border-box;font-size:12px;font-weight:600;padding:8px 12px;border-radius:8px;border:none;background:var(--m);color:#fff;cursor:pointer">🎨 Ny bild</button></div></div>
           <input type="file" id="imgFileInput" accept="image/*" style="display:none" onchange="handleImgSelect(event)">
           <div style="display:flex;gap:8px;flex-wrap:wrap;width:100%"><button onclick="openLibraryPicker()" style="flex:1 1 auto;min-width:110px;font-size:12px;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer;white-space:nowrap;text-align:center">📚 Bibliotek</button><button id="imgSwapBtn" onclick="document.getElementById('imgFileInput').click()" style="display:none;flex:1 1 auto;min-width:110px;font-size:12px;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer;white-space:nowrap;text-align:center">🔄 Byt bild</button><button id="imgRemoveBtn" onclick="removeImg()" style="display:none;flex:1 1 auto;min-width:110px;font-size:12px;color:#ef4444;border:1.5px solid #fecaca;border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer;white-space:nowrap;text-align:center">✕ Ta bort</button></div>
         </div>
@@ -1363,13 +1363,13 @@ const MOCK_PROPOSALS = {
 //  LAYOUT RENDERER
 // ════════════════════════════════════════════════════════
 // Returns object-position CSS value — reads from post if available, else global drag state
-function applyImgPreviewTransform(){var _fr=document.getElementById("imgRepoFrame");if(_fr&&typeof _arFor==="function"){try{_fr.style.aspectRatio=_arFor(S.manualChannel||(S.manualChannels&&S.manualChannels[0])||"linkedin");}catch(e){}}var pv=document.getElementById("imgPreview");if(!pv)return;var p=S._imgPos||{x:0,y:0,zoom:1};var z0=(p.zoom||1);var z=z0<=1?z0*1.06:z0;var mx=(1-1/z)*50*z;var x=Math.max(-mx,Math.min(mx,p.x||0));var y=Math.max(-mx,Math.min(mx,p.y||0));pv.style.objectPosition="center";pv.style.transform="scale("+z.toFixed(3)+") translate("+(x/z).toFixed(2)+"%,"+(y/z).toFixed(2)+"%)";}
+function applyImgPreviewTransform(){var _fr=document.getElementById("imgRepoFrame");if(_fr&&typeof _arFor==="function"){try{_fr.style.aspectRatio=_arFor(S.manualChannel||(S.manualChannels&&S.manualChannels[0])||"linkedin");}catch(e){}}var pv=document.getElementById("imgPreview");if(!pv)return;var p=S._imgPos||{x:0,y:0,zoom:1};var z0=(p.zoom||1);var z=z0<=1?z0*1.06:z0;var mx=100;var x=Math.max(-mx,Math.min(mx,p.x||0));var y=Math.max(-mx,Math.min(mx,p.y||0));pv.style.objectPosition="center";pv.style.transform="scale("+z.toFixed(3)+") translate("+(x/z).toFixed(2)+"%,"+(y/z).toFixed(2)+"%)";}
 function setImgZoom(v){if(!S._imgPos)S._imgPos={x:0,y:0,zoom:1};S._imgPos.zoom=parseFloat(v)||1;applyImgPreviewTransform();if(window._aiProposals&&window._allChannelProposals){renderProposalCards(window._activeProposalTab||S.manualChannel);}else{updateManualPreview();}}
 function repromptImage(){var t=document.getElementById("imgReprompt");var extra=t?t.value.trim():"";var base=S._aiImageBrief||S._lastBrief||"";if(!base&&!extra){showToast("Skriv en beskrivning av ändringen.");return;}var brief=extra?(base?(base+". Ändring: "+extra):extra):base;S._uploadedImageUrl=null;generateBrandImage(brief,true);}
 function _imgObjPos(post) {
   const p = (post && post.imgPos) ? post.imgPos : (S._imgPos || { x: 0, y: 0, zoom: 1 });
   const z = (p.zoom || 1);
-  const mx = z>1 ? (1 - 1/z) * 50 : 0;
+  const mx = 100;
   const x = Math.max(-mx, Math.min(mx, p.x || 0));
   const y = Math.max(-mx, Math.min(mx, p.y || 0));
   return 'center;transform:scale(' + z.toFixed(3) + ') translate(' + x.toFixed(2) + '%,' + y.toFixed(2) + '%);transform-origin:center';
@@ -1424,11 +1424,9 @@ function _imgTransform(post){
   var p = (post && post.imgPos) ? post.imgPos : { x:0, y:0, zoom:1 };
   if (p.zoom === undefined || p.zoom === null) p.zoom = 1;
   var z = p.zoom || 1, x = p.x || 0, y = p.y || 0;
-  if (Math.abs(x) > 20) x = 0;
-  if (Math.abs(y) > 20) y = 0;
   if (z === 1 && !x && !y) return '';
   var ez = (z <= 1) ? z * 1.06 : z;
-  var m = (1 - 1/ez) * 50 * ez;
+  var m = 100;
   x = Math.max(-m, Math.min(m, x));
   y = Math.max(-m, Math.min(m, y));
   return 'scale(' + ez + ') translate(' + (x/ez) + '%,' + (y/ez) + '%)';
@@ -1698,12 +1696,12 @@ function getPostImageHTML(post, size='card') {
   }
   if (_showBrand) html = _swapBrandMark(html);
   html = _applyBrandColors(html);
-  return '<div class="post-img-root" style="width:100%;height:100%;border-radius:0">' + html + '</div>';
+  return '<div class="post-img-root" style="width:100%;height:100%;border-radius:0;position:relative">' + html + (typeof _cvElementsHTML === 'function' ? _cvElementsHTML(post) : '') + '</div>';
 }
 
 
 // Full-size version for lightbox
-function getPostImageLargeHTML(post) { return '<div class="post-img-root" style="width:100%;height:100%;border-radius:0">' + _applyBrandColors(_getPostImageLargeHTMLRaw(post)) + '</div>'; }
+function getPostImageLargeHTML(post) { var _r = _applyBrandColors(_getPostImageLargeHTMLRaw(post)); return '<div class="post-img-root" style="width:100%;height:100%;border-radius:0;position:relative">' + _r + (_r.indexOf('cv-layer') < 0 && typeof _cvElementsHTML === 'function' ? _cvElementsHTML(post) : '') + '</div>'; }
 function _getPostImageLargeHTMLRaw(post) {
   const layout = post.layout || 'gradient';
   // SPOT-mallarna är responsiva – använd samma renderare som korten
@@ -2171,7 +2169,7 @@ function loadImgFile(file) {
     if (!frame || !preview) return;
     const rect = frame.getBoundingClientRect();
     // Convert pixel drag to percentage shift (inverted — drag right = show more left)
-    const z0 = (S._imgPos&&S._imgPos.zoom)||1; const z = z0<=1?z0*1.06:z0; const mx=(1-1/z)*50*z; const dx = ((clientX - startX) / rect.width) * 100;
+    const z0 = (S._imgPos&&S._imgPos.zoom)||1; const z = z0<=1?z0*1.06:z0; const mx=100; const dx = ((clientX - startX) / rect.width) * 100;
     const dy = ((clientY - startY) / rect.height) * 100;
     const nx = Math.max(-mx, Math.min(mx, startPosX + dx));
     const ny = Math.max(-mx, Math.min(mx, startPosY + dy));
@@ -2557,7 +2555,7 @@ function renderProposalCards(ch) {
   body.innerHTML = `<div class="ai-proposals" style="width:100%">` +
     proposals.slice(0,3).map((p, i) => {
       const cardLayouts = _cardLayoutsForWs();
-      const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null };
+      const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [] };
       const dim = i!==selectedIdx;
       return `<div class="ai-prop-card ${i===selectedIdx?'selected':''}" onclick="openProposalEditor('${ch}',${i})" style="${dim ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
         <div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(ch)}">
@@ -2622,7 +2620,7 @@ function updateManualPreview() {
   if (window._aiProposals) return;
   const title   = document.getElementById('m-title')?.value   || '';
   const content = document.getElementById('m-content')?.value || '';
-  const mockPost = { channel: S.manualChannel, layout: _manualLayout(), title, content, hashtags: S.manualTags, imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, blocks: ((document.getElementById('m-include-brand')||{}).checked ? ['brand','content','hashtags'] : ['content','hashtags']) };
+  const mockPost = { channel: S.manualChannel, layout: _manualLayout(), title, content, hashtags: S.manualTags, imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [], blocks: ((document.getElementById('m-include-brand')||{}).checked ? ['brand','content','hashtags'] : ['content','hashtags']) };
   const body = document.getElementById('prevBody');
   if (!body) return;
   const panelTitle = document.getElementById('prevPanelTitle');
@@ -2669,6 +2667,7 @@ function addManualToReview() {
         scheduledAt, imageUrl: activeImageUrl(),
         imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
         photoBox: S._photoBox ? {...S._photoBox} : null,
+        elements: S._elements ? JSON.parse(JSON.stringify(S._elements)) : [],
         aspectRatio: S.aspectRatio || null,
       }); saveToServer(S.reviewQueue[S.reviewQueue.length-1]); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
       added++;
@@ -2692,6 +2691,7 @@ function addManualToReview() {
         scheduledAt, imageUrl: activeImageUrl(),
         imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
         photoBox: S._photoBox ? {...S._photoBox} : null,
+        elements: S._elements ? JSON.parse(JSON.stringify(S._elements)) : [],
         aspectRatio: S.aspectRatio || null,
       }); saveToServer(S.reviewQueue[S.reviewQueue.length-1]); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
     });
@@ -2907,7 +2907,7 @@ function openEditorModal(post) {
       <div class="em-field-label">🎨 Bild</div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <span style="font-size:11px;color:#6b7280;font-weight:600;white-space:nowrap">Bildzoom</span>
-        <input type="range" id="emZoomSlider" min="1" max="3" step="0.05" value="${(post.imgPos&&post.imgPos.zoom)||1}" oninput="emSetZoom(this.value)" style="flex:1">
+        <input type="range" id="emZoomSlider" min="0.3" max="4" step="0.05" value="${(post.imgPos&&post.imgPos.zoom)||1}" oninput="emSetZoom(this.value)" style="flex:1">
         <span id="emZoomLabel" style="font-size:11px;color:#6b7280;min-width:38px;text-align:right">${Math.round((((post.imgPos&&post.imgPos.zoom)||1))*100)}%</span>
       </div>
       <div style="font-size:11px;color:#9ca3af;margin-bottom:8px">Dra i bilden för att flytta motivet · scrolla för att zooma</div>
@@ -2978,8 +2978,8 @@ function _emWirePhotoBox(post, card, box){
     });
   }
   function cl(v, a, b){ return Math.round(Math.max(a, Math.min(b, v)) * 10) / 10; }
-  drag(mv, function(b, dx, dy){ return { x: cl(b.x + dx, 0, 100 - b.w), y: cl(b.y + dy, 0, 100 - b.h), w: b.w, h: b.h }; });
-  drag(rs, function(b, dx, dy){ return { x: b.x, y: b.y, w: cl(b.w + dx, 15, 100 - b.x), h: cl(b.h + dy, 10, 100 - b.y) }; });
+  drag(mv, function(b, dx, dy){ return { x: cl(b.x + dx, 10 - b.w, 90), y: cl(b.y + dy, 10 - b.h, 90), w: b.w, h: b.h }; });
+  drag(rs, function(b, dx, dy){ return { x: b.x, y: b.y, w: cl(b.w + dx, 10, 250), h: cl(b.h + dy, 10, 250) }; });
 }
 // Text i en widget utan kontrollerna (✕ och storlekshandtaget)
 function _emTxt(n){ var c = n.cloneNode(true); c.querySelectorAll('.em-wx,.em-wr').forEach(function(e){ e.remove(); }); return (c.innerText || c.textContent || '').replace(/\s+$/, ''); }
@@ -3128,6 +3128,7 @@ function emRenderPreview() {
   card.addEventListener('click', function(ev){ if (ev.target === card || ev.target.tagName === 'IMG') emSelectWidget(null); });
   var _pbEl = card.querySelector('.tpl-photo');
   if (_pbEl) _emWirePhotoBox(post, card, _pbEl);
+  if (typeof _cvWire === 'function') _cvWire(post, card);
   // Canvas: drag image to pan, wheel to zoom
   var imgEl = card.querySelector('img');
   if (imgEl) {
@@ -3166,7 +3167,7 @@ function emRenderPreview() {
         var dy = (((ev.clientY - isy) / _z2) / Math.max(1, card.clientHeight)) * 100;
         var _zz = sp.zoom || post.imgPos.zoom || 1;
         var _ez = _zz <= 1 ? _zz * 1.06 : _zz;
-        var _max = (1 - 1/_ez) * 50 * _ez;
+        var _max = 100;
         post.imgPos.x = Math.max(-_max, Math.min(_max, sp.x + dx));
         post.imgPos.y = Math.max(-_max, Math.min(_max, sp.y + dy));
         imgEl.style.transformOrigin = 'center center';
@@ -3177,7 +3178,7 @@ function emRenderPreview() {
     imgEl.addEventListener('wheel', function(ev){
       ev.preventDefault();
       post.imgPos = post.imgPos || { x:0, y:0, zoom:1 };
-      post.imgPos.zoom = Math.max(1, Math.min(3, (post.imgPos.zoom||1) + (ev.deltaY<0 ? 0.08 : -0.08)));
+      post.imgPos.zoom = Math.max(0.3, Math.min(4, (post.imgPos.zoom||1) + (ev.deltaY<0 ? 0.08 : -0.08)));
       var zs = document.getElementById('emZoomSlider'); if (zs) zs.value = post.imgPos.zoom;
       var zl = document.getElementById('emZoomLabel'); if (zl) zl.textContent = Math.round(post.imgPos.zoom*100)+'%';
       imgEl.style.transformOrigin = 'center center';
@@ -3222,7 +3223,8 @@ function _emFitPreview(){
   var host = card.parentElement;
   if (!host) return;
   var availW = host.clientWidth - 24;
-  var availH = host.clientHeight - 24;
+  // Dra av verktygsraden och tipsraderna så att kortet inte hamnar över dem
+  var availH = host.clientHeight - 24 - Array.prototype.reduce.call(host.children, function(sum, c){ return c === card ? sum : sum + c.offsetHeight + 12; }, 0);
   if (availW <= 0 || availH <= 0) return;
   var baseW = 280;
   var ratio = 1;
@@ -3234,6 +3236,7 @@ function _emFitPreview(){
   var scale = Math.min(availW / baseW, availH / baseH);
   scale = Math.max(0.6, Math.min(2.2, scale));
   card.style.transform = 'scale(' + scale.toFixed(3) + ')';
+  card.style.margin = ((baseH * scale - baseH) / 2).toFixed(1) + 'px ' + ((baseW * scale - baseW) / 2).toFixed(1) + 'px';
   card.dataset.previewScale = scale;
 }
 if (!window.__emFitBound) {
@@ -3490,6 +3493,7 @@ function saveEditorModal() {
     S._uploadedImageUrl = post.imageUrl || post.aiImageUrl || S._uploadedImageUrl;
     S._aiImageUrl = post.imageUrl || post.aiImageUrl || S._aiImageUrl;
     S._photoBox = post.photoBox || S._photoBox || null;
+    S._elements = Array.isArray(post.elements) ? post.elements : (S._elements || []);
     S._imgPos = post.imgPos || S._imgPos; // synka positionering tillbaka så förslagskorten matchar redigeringen
     if (typeof updateManualPreview === 'function') updateManualPreview();
     if (typeof renderProposalCards === 'function') renderProposalCards(window._activeProposalTab || S.manualChannel);
@@ -3565,6 +3569,7 @@ function openCreateEditor() {
     imageUrl: (typeof activeImageUrl === 'function') ? activeImageUrl() : null,
     imgPos: S._imgPos || null,
     photoBox: S._photoBox ? Object.assign({}, S._photoBox) : null,
+    elements: S._elements ? JSON.parse(JSON.stringify(S._elements)) : [],
     layout: _currentCreateLayout(),
     blocks: _defaultBlocks,
   };
@@ -4747,8 +4752,8 @@ function pzmSelect() {
 }
 function pzmEditField(field, el){var props=(window._allChannelProposals||{})[_pzmCh]||[];var p=props[_pzmIdx];if(!p)return;var v=el.textContent.trim();if(field==="title")p.title=v;else if(field==="content")p.content=v;else if(field==="tags"){p.hashtags=v.split(/\s+/).map(function(s){return s.replace(/^#/,"");}).filter(Boolean);}if((window._selectedProposalPerChannel||{})[_pzmCh]===_pzmIdx)fillFormFromProposal(p);renderPzmSlide();}
 function pzmReprompt(){var t=document.getElementById("pzmReprompt");var extra=t?t.value.trim():"";var base=S._aiImageBrief||S._lastBrief||"";if(!base&&!extra){showToast("Skriv en beskrivning av bilden.");return;}if(S._uploadedImageUrl){showToast("Ta bort uppladdad bild för att använda AI-bild.");return;}var brief=extra?(base?(base+". Ändring: "+extra):extra):base;showToast("🎨 Skapar bild...");generateBrandImage(brief,true);}
-function setupPzmDrag(){var thumb=document.getElementById("pzmThumb");if(!thumb||thumb._dragSet)return;thumb._dragSet=true;thumb.style.cursor="grab";thumb.style.touchAction="none";var dragging=false,sx=0,sy=0,spx=0,spy=0;function applyLive(){var p=S._imgPos||{x:0,y:0,zoom:1};var z0=(p.zoom||1);var z=z0<=1?z0*1.06:z0;var mx=(1-1/z)*50;var x=Math.max(-mx,Math.min(mx,p.x||0)),y=Math.max(-mx,Math.min(mx,p.y||0));thumb.querySelectorAll("img").forEach(function(im){im.style.objectPosition="center";im.style.transformOrigin="center";im.style.transform="scale("+z.toFixed(3)+") translate("+x.toFixed(2)+"%,"+y.toFixed(2)+"%)";});}thumb.addEventListener("pointerdown",function(e){dragging=true;thumb.style.cursor="grabbing";sx=e.clientX;sy=e.clientY;var p=S._imgPos||{x:0,y:0,zoom:1};spx=p.x||0;spy=p.y||0;try{thumb.setPointerCapture(e.pointerId);}catch(_){}e.preventDefault();});thumb.addEventListener("pointermove",function(e){if(!dragging)return;var r=thumb.getBoundingClientRect();var z0=(S._imgPos&&S._imgPos.zoom)||1;var z=z0<=1?z0*1.06:z0;var mx=(1-1/z)*50;var nx=spx+(e.clientX-sx)/r.width*100/z;var ny=spy+(e.clientY-sy)/r.height*100/z;nx=Math.max(-mx,Math.min(mx,nx));ny=Math.max(-mx,Math.min(mx,ny));S._imgPos={x:nx,y:ny,zoom:(S._imgPos&&S._imgPos.zoom)||1};applyLive();});thumb.addEventListener("pointerup",function(e){if(!dragging)return;dragging=false;thumb.style.cursor="grab";if(typeof refreshActiveProposalCards==="function")refreshActiveProposalCards();});}
-function pzmSetZoom(v){if(!S._imgPos)S._imgPos={x:0,y:0,zoom:1};S._imgPos.zoom=parseFloat(v)||1;var thumb=document.getElementById("pzmThumb");if(!thumb)return;var p=S._imgPos;var z0=(p.zoom||1);var z=z0<=1?z0*1.06:z0;var mx=(1-1/z)*50;var x=Math.max(-mx,Math.min(mx,p.x||0)),y=Math.max(-mx,Math.min(mx,p.y||0));thumb.querySelectorAll("img").forEach(function(im){im.style.objectPosition="center";im.style.transformOrigin="center";im.style.transform="scale("+z.toFixed(3)+") translate("+x.toFixed(2)+"%,"+y.toFixed(2)+"%)";});}
+function setupPzmDrag(){var thumb=document.getElementById("pzmThumb");if(!thumb||thumb._dragSet)return;thumb._dragSet=true;thumb.style.cursor="grab";thumb.style.touchAction="none";var dragging=false,sx=0,sy=0,spx=0,spy=0;function applyLive(){var p=S._imgPos||{x:0,y:0,zoom:1};var z0=(p.zoom||1);var z=z0<=1?z0*1.06:z0;var mx=100;var x=Math.max(-mx,Math.min(mx,p.x||0)),y=Math.max(-mx,Math.min(mx,p.y||0));thumb.querySelectorAll("img").forEach(function(im){im.style.objectPosition="center";im.style.transformOrigin="center";im.style.transform="scale("+z.toFixed(3)+") translate("+x.toFixed(2)+"%,"+y.toFixed(2)+"%)";});}thumb.addEventListener("pointerdown",function(e){dragging=true;thumb.style.cursor="grabbing";sx=e.clientX;sy=e.clientY;var p=S._imgPos||{x:0,y:0,zoom:1};spx=p.x||0;spy=p.y||0;try{thumb.setPointerCapture(e.pointerId);}catch(_){}e.preventDefault();});thumb.addEventListener("pointermove",function(e){if(!dragging)return;var r=thumb.getBoundingClientRect();var z0=(S._imgPos&&S._imgPos.zoom)||1;var z=z0<=1?z0*1.06:z0;var mx=100;var nx=spx+(e.clientX-sx)/r.width*100/z;var ny=spy+(e.clientY-sy)/r.height*100/z;nx=Math.max(-mx,Math.min(mx,nx));ny=Math.max(-mx,Math.min(mx,ny));S._imgPos={x:nx,y:ny,zoom:(S._imgPos&&S._imgPos.zoom)||1};applyLive();});thumb.addEventListener("pointerup",function(e){if(!dragging)return;dragging=false;thumb.style.cursor="grab";if(typeof refreshActiveProposalCards==="function")refreshActiveProposalCards();});}
+function pzmSetZoom(v){if(!S._imgPos)S._imgPos={x:0,y:0,zoom:1};S._imgPos.zoom=parseFloat(v)||1;var thumb=document.getElementById("pzmThumb");if(!thumb)return;var p=S._imgPos;var z0=(p.zoom||1);var z=z0<=1?z0*1.06:z0;var mx=100;var x=Math.max(-mx,Math.min(mx,p.x||0)),y=Math.max(-mx,Math.min(mx,p.y||0));thumb.querySelectorAll("img").forEach(function(im){im.style.objectPosition="center";im.style.transformOrigin="center";im.style.transform="scale("+z.toFixed(3)+") translate("+x.toFixed(2)+"%,"+y.toFixed(2)+"%)";});}
 function pzmSetTextColor(val){var f=window._pzmActiveField;if(!f){showToast("Klicka på en text först.");return;}var props=(window._allChannelProposals||{})[_pzmCh]||[];var p=props[_pzmIdx];if(!p)return;if(!p.color)p.color={};p.color[f]=val;renderPzmSlide();}
 function pzmSetTextSize(val){var f=window._pzmActiveField;if(!f){showToast("Klicka på en text först.");return;}var props=(window._allChannelProposals||{})[_pzmCh]||[];var p=props[_pzmIdx];if(!p)return;if(!p.size)p.size={};p.size[f]=parseFloat(val)||1;renderPzmSlide();}
 function pzmTextSize(delta){var f=window._pzmActiveField;if(!f){showToast("Klicka på en text först.");return;}var props=(window._allChannelProposals||{})[_pzmCh]||[];var p=props[_pzmIdx];if(!p)return;if(!p.size)p.size={};var cur=p.size[f]||1;cur=Math.max(0.5,Math.min(2.5,Math.round((cur+delta)*100)/100));p.size[f]=cur;renderPzmSlide();}
@@ -4784,15 +4789,15 @@ function wirePzmCanvas(){
       document.addEventListener("pointermove",mv); document.addEventListener("pointerup",up);
     });
   });
-  if(!thumb.dataset.wheelWired){ thumb.dataset.wheelWired="1"; thumb.addEventListener("wheel", function(ev){ ev.preventDefault(); if(!S._imgPos)S._imgPos={x:0,y:0,zoom:1}; var nz=(S._imgPos.zoom||1)+(ev.deltaY<0?0.1:-0.1); nz=Math.max(1,Math.min(3,Math.round(nz*100)/100)); S._imgPos.zoom=nz; var z=nz<=1?nz*1.06:nz; var mx=(1-1/z)*50; S._imgPos.x=Math.max(-mx,Math.min(mx,S._imgPos.x||0)); S._imgPos.y=Math.max(-mx,Math.min(mx,S._imgPos.y||0)); var im=thumb.querySelector("img"); if(im)im.style.transform="scale("+z.toFixed(3)+") translate("+(S._imgPos.x).toFixed(2)+"%,"+(S._imgPos.y).toFixed(2)+"%)"; if(typeof refreshActiveProposalCards==="function")refreshActiveProposalCards(); }, {passive:false}); }
+  if(!thumb.dataset.wheelWired){ thumb.dataset.wheelWired="1"; thumb.addEventListener("wheel", function(ev){ ev.preventDefault(); if(!S._imgPos)S._imgPos={x:0,y:0,zoom:1}; var nz=(S._imgPos.zoom||1)+(ev.deltaY<0?0.1:-0.1); nz=Math.max(0.3,Math.min(4,Math.round(nz*100)/100)); S._imgPos.zoom=nz; var z=nz<=1?nz*1.06:nz; var mx=100; S._imgPos.x=Math.max(-mx,Math.min(mx,S._imgPos.x||0)); S._imgPos.y=Math.max(-mx,Math.min(mx,S._imgPos.y||0)); var im=thumb.querySelector("img"); if(im)im.style.transform="scale("+z.toFixed(3)+") translate("+(S._imgPos.x).toFixed(2)+"%,"+(S._imgPos.y).toFixed(2)+"%)"; if(typeof refreshActiveProposalCards==="function")refreshActiveProposalCards(); }, {passive:false}); }
   if(!thumb.dataset.pinchWired){ thumb.dataset.pinchWired="1"; var _pd=0;
     thumb.addEventListener("touchstart", function(ev){ if(ev.touches.length===2){ var dx=ev.touches[0].clientX-ev.touches[1].clientX, dy=ev.touches[0].clientY-ev.touches[1].clientY; _pd=Math.sqrt(dx*dx+dy*dy); } }, {passive:false});
-    thumb.addEventListener("touchmove", function(ev){ if(ev.touches.length===2){ ev.preventDefault(); var dx=ev.touches[0].clientX-ev.touches[1].clientX, dy=ev.touches[0].clientY-ev.touches[1].clientY; var nd=Math.sqrt(dx*dx+dy*dy); if(_pd>0){ if(!S._imgPos)S._imgPos={x:0,y:0,zoom:1}; var nz=(S._imgPos.zoom||1)*(nd/_pd); nz=Math.max(1,Math.min(3,Math.round(nz*100)/100)); S._imgPos.zoom=nz; var z=nz<=1?nz*1.06:nz; var mx=(1-1/z)*50; S._imgPos.x=Math.max(-mx,Math.min(mx,S._imgPos.x||0)); S._imgPos.y=Math.max(-mx,Math.min(mx,S._imgPos.y||0)); var im=thumb.querySelector("img"); if(im)im.style.transform="scale("+z.toFixed(3)+") translate("+(S._imgPos.x).toFixed(2)+"%,"+(S._imgPos.y).toFixed(2)+"%)"; } _pd=nd; } }, {passive:false});
+    thumb.addEventListener("touchmove", function(ev){ if(ev.touches.length===2){ ev.preventDefault(); var dx=ev.touches[0].clientX-ev.touches[1].clientX, dy=ev.touches[0].clientY-ev.touches[1].clientY; var nd=Math.sqrt(dx*dx+dy*dy); if(_pd>0){ if(!S._imgPos)S._imgPos={x:0,y:0,zoom:1}; var nz=(S._imgPos.zoom||1)*(nd/_pd); nz=Math.max(0.3,Math.min(4,Math.round(nz*100)/100)); S._imgPos.zoom=nz; var z=nz<=1?nz*1.06:nz; var mx=100; S._imgPos.x=Math.max(-mx,Math.min(mx,S._imgPos.x||0)); S._imgPos.y=Math.max(-mx,Math.min(mx,S._imgPos.y||0)); var im=thumb.querySelector("img"); if(im)im.style.transform="scale("+z.toFixed(3)+") translate("+(S._imgPos.x).toFixed(2)+"%,"+(S._imgPos.y).toFixed(2)+"%)"; } _pd=nd; } }, {passive:false});
     thumb.addEventListener("touchend", function(ev){ if(ev.touches.length<2){ _pd=0; if(typeof refreshActiveProposalCards==="function")refreshActiveProposalCards(); } }, {passive:false});
   }
   var img=thumb.querySelector("img"); if(img){ img.style.cursor="grab"; }
   thumb.addEventListener("pointerdown", function(ev){ if(ev.target.closest && ev.target.closest("[data-ed]"))return; var idr=true; var ix=ev.clientX, iy=ev.clientY; var pp=S._imgPos||{x:0,y:0,zoom:1}; var bx=pp.x||0, by=pp.y||0;
-    function mv(e){ if(!idr)return; var r=thumb.getBoundingClientRect(); var z0=(S._imgPos&&S._imgPos.zoom)||1; var z=z0<=1?z0*1.06:z0; var mx=(1-1/z)*50; var nx=Math.max(-mx,Math.min(mx,bx+(e.clientX-ix)/r.width*100/z)); var ny=Math.max(-mx,Math.min(mx,by+(e.clientY-iy)/r.height*100/z)); S._imgPos={x:nx,y:ny,zoom:(S._imgPos&&S._imgPos.zoom)||1}; var im=thumb.querySelector("img"); if(im)im.style.transform="scale("+z.toFixed(3)+") translate("+nx.toFixed(2)+"%,"+ny.toFixed(2)+"%)"; }
+    function mv(e){ if(!idr)return; var r=thumb.getBoundingClientRect(); var z0=(S._imgPos&&S._imgPos.zoom)||1; var z=z0<=1?z0*1.06:z0; var mx=100; var nx=Math.max(-mx,Math.min(mx,bx+(e.clientX-ix)/r.width*100/z)); var ny=Math.max(-mx,Math.min(mx,by+(e.clientY-iy)/r.height*100/z)); S._imgPos={x:nx,y:ny,zoom:(S._imgPos&&S._imgPos.zoom)||1}; var im=thumb.querySelector("img"); if(im)im.style.transform="scale("+z.toFixed(3)+") translate("+nx.toFixed(2)+"%,"+ny.toFixed(2)+"%)"; }
     function up(){ idr=false; document.removeEventListener("pointermove",mv); document.removeEventListener("pointerup",up); if(typeof refreshActiveProposalCards==="function")refreshActiveProposalCards(); }
     document.addEventListener("pointermove",mv); document.addEventListener("pointerup",up); ev.preventDefault();
   });
@@ -5154,6 +5159,319 @@ window.viewWorkspace=function(ws){
 fetch('/api/me',{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(u){
   if(u && u.viewingAs){ document.getElementById('viewAsName').textContent=u.viewingAs; document.getElementById('viewAsBanner').style.display='flex'; }
 }).catch(function(){});
+</script>
+<script>
+// ════════════════════════════════════════════════════════
+//  CANVA-LIKNANDE EDITOR: fria element ovanpå mallen
+//  post.elements = [{id,type:'text'|'image'|'logo'|'rect'|'circle'|'line', x,y,w,h (% av kortet), rot, z, op, locked, ...}]
+//  Elementen ritas i alla vyer (kort, granskning, förstoring) via _cvElementsHTML.
+// ════════════════════════════════════════════════════════
+function _cvEsc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _cvAttr(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function _cvElementsHTML(post){
+  var els = (post && Array.isArray(post.elements)) ? post.elements : [];
+  if (!els.length) return '';
+  var h = els.slice().sort(function(a, b){ return (a.z || 0) - (b.z || 0); }).map(function(e){
+    var st = 'position:absolute;left:' + e.x + '%;top:' + e.y + '%;width:' + e.w + '%;height:' + e.h + '%;opacity:' + (e.op == null ? 1 : e.op) + ';transform:rotate(' + (e.rot || 0) + 'deg);box-sizing:border-box;';
+    var inner = '';
+    if (e.type === 'text') {
+      st += 'color:' + (e.color || '#ffffff') + ';font-size:' + (e.fs || 6) + 'cqw;font-weight:' + (e.bold ? 700 : 400) + ';font-style:' + (e.italic ? 'italic' : 'normal') + ';font-family:' + (e.font ? "'" + String(e.font).replace(/'/g, '') + "',sans-serif" : 'inherit') + ';text-align:' + (e.align || 'left') + ';line-height:1.15;white-space:pre-wrap;word-break:break-word;overflow:hidden;' + (e.bg ? 'background:' + e.bg + ';padding:1.5cqw;' : '');
+      inner = _cvEsc(e.text || '');
+    } else if (e.type === 'image' || e.type === 'logo') {
+      var src = e.type === 'logo' ? ((typeof BRAND_LOGO === 'string' && BRAND_LOGO) || e.src || '') : e.src;
+      inner = src ? '<img src="' + _cvAttr(src) + '" alt="" draggable="false" style="width:100%;height:100%;object-fit:' + (e.fit || 'contain') + ';display:block;pointer-events:none;border-radius:' + (e.radius || 0) + 'cqw">' : (e.type === 'logo' ? '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:5cqw">' + _cvEsc((typeof BRAND_NAME !== 'undefined' && BRAND_NAME) || 'Logga') + '</div>' : '');
+    } else if (e.type === 'rect') {
+      st += 'background:' + (e.fill || '#b31e59') + ';border-radius:' + (e.radius || 0) + 'cqw;';
+    } else if (e.type === 'circle') {
+      st += 'background:' + (e.fill || '#b31e59') + ';border-radius:50%;';
+    } else if (e.type === 'line') {
+      st += 'background:' + (e.fill || '#ffffff') + ';';
+    }
+    return '<div class="cv-el" data-cv="' + _cvAttr(e.id) + '" style="' + st + '">' + inner + '</div>';
+  }).join('');
+  return '<div class="cv-layer" style="position:absolute;inset:0;container-type:size;pointer-events:none;z-index:20;overflow:hidden">' + h + '</div>';
+}
+
+var _cvSel = null, _cvUndo = [], _cvClip = null;
+function _cvPost(){ return S._editPost || null; }
+function _cvFind(post, id){ return ((post && post.elements) || []).find(function(e){ return e.id === id; }) || null; }
+function _cvSnap(){ var p = _cvPost(); if (!p) return; _cvUndo.push(JSON.stringify({ el: p.elements || [], pb: p.photoBox || null, ip: p.imgPos || null })); if (_cvUndo.length > 60) _cvUndo.shift(); }
+function _cvUndoLast(){ var p = _cvPost(); if (!p || !_cvUndo.length) return false; var s = JSON.parse(_cvUndo.pop()); p.elements = s.el; p.photoBox = s.pb; p.imgPos = s.ip; _cvRerender(); return true; }
+function _cvRerender(){ if (typeof emRenderPreview === 'function') emRenderPreview(); }
+function _cvNewId(){ return 'el' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function _cvTopZ(post){ return ((post.elements || []).reduce(function(m, e){ return Math.max(m, e.z || 0); }, 0)) + 1; }
+function _cvBrandColor(){ try { var p = (typeof _brandPalette === 'function') ? _brandPalette() : null; return (p && p.main) || '#b31e59'; } catch (e) { return '#b31e59'; } }
+
+function cvAdd(type, extra){
+  var post = _cvPost(); if (!post) return;
+  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE === 'granskare') { showToast('Granskare kan inte ändra inlägget'); return; }
+  _cvSnap();
+  post.elements = post.elements || [];
+  var e = { id: _cvNewId(), type: type, x: 30, y: 40, w: 40, h: 14, rot: 0, z: _cvTopZ(post), op: 1 };
+  if (type === 'text') Object.assign(e, { text: 'Skriv din text', color: '#ffffff', fs: 7, bold: true, align: 'left', x: 10, y: 40, w: 80, h: 16 });
+  if (type === 'rect') Object.assign(e, { fill: _cvBrandColor(), radius: 0, x: 25, y: 35, w: 50, h: 30 });
+  if (type === 'circle') Object.assign(e, { fill: _cvBrandColor(), x: 35, y: 35, w: 30, h: 30 });
+  if (type === 'line') Object.assign(e, { fill: '#ffffff', x: 10, y: 50, w: 80, h: 0.8 });
+  if (type === 'logo') Object.assign(e, { x: 6, y: 6, w: 22, h: 12, fit: 'contain' });
+  if (type === 'image') Object.assign(e, { x: 25, y: 25, w: 50, h: 50, fit: 'cover' });
+  Object.assign(e, extra || {});
+  post.elements.push(e);
+  _cvSel = e.id;
+  _cvRerender();
+}
+function cvAddImageFile(input){
+  var f = input.files && input.files[0]; input.value = '';
+  if (!f) return;
+  if (f.size > 8 * 1024 * 1024) { showToast('Bilden är för stor (max 8 MB)'); return; }
+  var rd = new FileReader();
+  rd.onload = function(){
+    var dataUrl = rd.result;
+    var img = new Image();
+    img.onload = function(){
+      var ratio = img.naturalHeight / Math.max(1, img.naturalWidth);
+      fetch('/api/images', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ dataUrl: dataUrl }) })
+        .then(function(r){ return r.json(); })
+        .then(function(d){ var src = (d && d.url) || dataUrl; cvAdd('image', { src: src, w: 50, h: Math.min(90, 50 * ratio), fit: 'cover' }); _cvHidePop(); })
+        .catch(function(){ cvAdd('image', { src: dataUrl, w: 50, h: Math.min(90, 50 * ratio), fit: 'cover' }); _cvHidePop(); });
+    };
+    img.src = dataUrl;
+  };
+  rd.readAsDataURL(f);
+}
+function cvAddLibImage(i){ var lib = (typeof _getImgLib === 'function') ? _getImgLib() : []; var it = lib[i]; if (!it) return; cvAdd('image', { src: it.url, fit: 'cover' }); _cvHidePop(); }
+function _cvHidePop(){ var p = document.getElementById('cvImgPop'); if (p) p.style.display = 'none'; }
+function cvToggleImgPop(){
+  var p = document.getElementById('cvImgPop'); if (!p) return;
+  if (p.style.display === 'block') { p.style.display = 'none'; return; }
+  var lib = (typeof _getImgLib === 'function') ? _getImgLib() : [];
+  var grid = lib.slice(0, 24).map(function(it, i){ return '<img src="' + _cvAttr(it.url) + '" onclick="cvAddLibImage(' + i + ')" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;cursor:pointer;border:1px solid #eee">'; }).join('');
+  p.innerHTML = '<label style="display:block;text-align:center;padding:8px;border:1.5px dashed #d1d5db;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;color:#374151;margin-bottom:8px">Ladda upp bild<input type="file" accept="image/*" style="display:none" onchange="cvAddImageFile(this)"></label>' + (grid ? '<div style="font-size:11px;color:#6b7280;margin-bottom:6px">Från bildbanken</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-height:180px;overflow:auto">' + grid + '</div>' : '<div style="font-size:11px;color:#9ca3af">Bildbanken är tom.</div>');
+  p.style.display = 'block';
+}
+
+// Egenskaper för markerat element
+function cvSet(prop, val){ var p = _cvPost(), e = _cvFind(p, _cvSel); if (!e) return; _cvSnap(); e[prop] = val; _cvRerender(); }
+function cvBump(prop, d, lo, hi){ var p = _cvPost(), e = _cvFind(p, _cvSel); if (!e) return; _cvSnap(); e[prop] = Math.max(lo, Math.min(hi, Math.round(((e[prop] || 0) + d) * 10) / 10)); _cvRerender(); }
+function cvToggle(prop){ var p = _cvPost(), e = _cvFind(p, _cvSel); if (!e) return; _cvSnap(); e[prop] = !e[prop]; _cvRerender(); }
+function cvLayer(dir){
+  var p = _cvPost(), e = _cvFind(p, _cvSel); if (!e) return; _cvSnap();
+  var zs = (p.elements || []).map(function(x){ return x.z || 0; });
+  if (dir === 'front') e.z = Math.max.apply(null, zs) + 1;
+  else if (dir === 'back') e.z = Math.min.apply(null, zs) - 1;
+  else e.z = (e.z || 0) + (dir === 'up' ? 1.5 : -1.5);
+  _cvRerender();
+}
+function cvDuplicate(){ var p = _cvPost(), e = _cvFind(p, _cvSel); if (!e) return; _cvSnap(); var c = JSON.parse(JSON.stringify(e)); c.id = _cvNewId(); c.x = Math.min(95, e.x + 3); c.y = Math.min(95, e.y + 3); c.z = _cvTopZ(p); c.locked = false; p.elements.push(c); _cvSel = c.id; _cvRerender(); }
+function cvDelete(){ var p = _cvPost(), e = _cvFind(p, _cvSel); if (!e) return; _cvSnap(); p.elements = p.elements.filter(function(x){ return x.id !== e.id; }); _cvSel = null; _cvRerender(); }
+function cvAlign(where){
+  var p = _cvPost(), e = _cvFind(p, _cvSel); if (!e) return; _cvSnap();
+  if (where === 'left') e.x = 0; if (where === 'hcenter') e.x = (100 - e.w) / 2; if (where === 'right') e.x = 100 - e.w;
+  if (where === 'top') e.y = 0; if (where === 'vcenter') e.y = (100 - e.h) / 2; if (where === 'bottom') e.y = 100 - e.h;
+  _cvRerender();
+}
+function cvResetImage(){ var p = _cvPost(); if (!p) return; _cvSnap(); p.imgPos = { x:0, y:0, zoom:1 }; if (p.photoBox) delete p.photoBox; _cvRerender(); var zs = document.getElementById('emZoomSlider'); if (zs) zs.value = 1; }
+
+function _cvBtn(label, onclick, title, active){ return '<button type="button" title="' + _cvAttr(title || label) + '" onclick="' + onclick + '" style="font-size:12px;font-weight:600;padding:6px 9px;border-radius:8px;border:1.5px solid ' + (active ? '#b31e59' : '#e5e7eb') + ';background:' + (active ? '#fdf0f6' : '#fff') + ';color:#111;cursor:pointer;white-space:nowrap">' + label + '</button>'; }
+function _cvToolbarHTML(){
+  var p = _cvPost(), e = _cvFind(p, _cvSel);
+  var add = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;position:relative">' +
+    '<span style="font-size:11px;font-weight:700;color:#6b7280;margin-right:2px">Lägg till</span>' +
+    _cvBtn('T Text', "cvAdd('text')", 'Ny textruta') +
+    _cvBtn('🖼 Bild', 'cvToggleImgPop()', 'Bild från dator eller bildbank') +
+    _cvBtn('Logga', "cvAdd('logo')", 'Varumärkets logga') +
+    _cvBtn('▭ Form', "cvAdd('rect')", 'Rektangel') +
+    _cvBtn('◯ Cirkel', "cvAdd('circle')", 'Cirkel') +
+    _cvBtn('— Linje', "cvAdd('line')", 'Linje') +
+    _cvBtn('↺ Återställ bild', 'cvResetImage()', 'Återställ huvudbildens position och zoom') +
+    '<div id="cvImgPop" style="display:none;position:absolute;top:36px;left:60px;z-index:60;width:260px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px"></div>' +
+    '</div>';
+  if (!e) return add + '<div style="font-size:11px;color:#9ca3af;margin-top:6px">Tips: klicka på ett element för att markera det. Dubbelklicka på text för att skriva. Delete tar bort, Ctrl+D duplicerar, piltangenter flyttar, Ctrl+Z ångrar.</div>';
+  var row = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #f0f0f0">';
+  if (e.type === 'text') {
+    var fonts = (typeof TYPOGRAPHY !== 'undefined' && Array.isArray(TYPOGRAPHY)) ? TYPOGRAPHY.map(function(t){ return String(t.name || '').replace(/\s+(Bold|Regular|Light|Medium|Black|Thin)$/i, ''); }).filter(function(v, i, a){ return v && a.indexOf(v) === i; }) : [];
+    row += '<input type="color" value="' + _cvAttr(e.color || '#ffffff') + '" oninput="cvSet(\'color\', this.value)" title="Textfärg" style="width:32px;height:28px;border:none;background:none;cursor:pointer">' +
+      _cvBtn('A−', "cvBump('fs', -0.5, 2, 30)", 'Mindre text') + _cvBtn('A+', "cvBump('fs', 0.5, 2, 30)", 'Större text') +
+      _cvBtn('<b>B</b>', "cvToggle('bold')", 'Fetstil', e.bold) + _cvBtn('<i>I</i>', "cvToggle('italic')", 'Kursiv', e.italic) +
+      _cvBtn('⇤', "cvSet('align','left')", 'Vänsterjustera', e.align === 'left') + _cvBtn('↔', "cvSet('align','center')", 'Centrera', e.align === 'center') + _cvBtn('⇥', "cvSet('align','right')", 'Högerjustera', e.align === 'right') +
+      (fonts.length ? '<select onchange="cvSet(\'font\', this.value)" style="font-size:12px;padding:5px;border:1.5px solid #e5e7eb;border-radius:8px"><option value="">Typsnitt</option>' + fonts.map(function(f){ return '<option' + (e.font === f ? ' selected' : '') + '>' + _cvEsc(f) + '</option>'; }).join('') + '</select>' : '') +
+      '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Bakgrund<input type="checkbox"' + (e.bg ? ' checked' : '') + ' onchange="cvSet(\'bg\', this.checked ? \'rgba(0,0,0,.45)\' : \'\')"></label>';
+  }
+  if (e.type === 'rect' || e.type === 'circle' || e.type === 'line') {
+    row += '<input type="color" value="' + _cvAttr(/^#/.test(e.fill || '') ? e.fill : '#b31e59') + '" oninput="cvSet(\'fill\', this.value)" title="Färg" style="width:32px;height:28px;border:none;background:none;cursor:pointer">';
+    if (e.type === 'rect') row += _cvBtn('Rundade hörn', "cvBump('radius', 2, 0, 50)", 'Rundare hörn') + _cvBtn('Raka hörn', "cvSet('radius', 0)", 'Raka hörn');
+  }
+  if (e.type === 'image') row += _cvBtn(e.fit === 'contain' ? 'Fyll ruta' : 'Visa hela', "cvSet('fit', '" + (e.fit === 'contain' ? 'cover' : 'contain') + "')", 'Beskär eller visa hela bilden');
+  row += '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Opacitet<input type="range" min="0.1" max="1" step="0.05" value="' + (e.op == null ? 1 : e.op) + '" oninput="cvSet(\'op\', parseFloat(this.value))" style="width:70px"></label>' +
+    _cvBtn('⬆ Fram', "cvLayer('front')", 'Längst fram') + _cvBtn('⬇ Bak', "cvLayer('back')", 'Längst bak') +
+    _cvBtn('⧉ Duplicera', 'cvDuplicate()', 'Duplicera (Ctrl+D)') +
+    _cvBtn(e.locked ? '🔒 Låst' : '🔓 Lås', "cvToggle('locked')", 'Lås position', e.locked) +
+    _cvBtn('🗑 Ta bort', 'cvDelete()', 'Ta bort (Delete)') +
+    '</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"><span style="font-size:11px;color:#6b7280;align-self:center">Justera</span>' +
+    _cvBtn('⇤', "cvAlign('left')", 'Vänster kant') + _cvBtn('↔', "cvAlign('hcenter')", 'Mitten') + _cvBtn('⇥', "cvAlign('right')", 'Höger kant') +
+    _cvBtn('⤒', "cvAlign('top')", 'Överkant') + _cvBtn('↕', "cvAlign('vcenter')", 'Mitten') + _cvBtn('⤓', "cvAlign('bottom')", 'Nederkant') + '</div>';
+  return add + row;
+}
+function _cvRenderToolbar(card){
+  var tb = document.getElementById('cvToolbar');
+  if (!tb) {
+    tb = document.createElement('div'); tb.id = 'cvToolbar';
+    tb.style.cssText = 'background:#fff;border:1px solid #f0f0f0;border-radius:12px;padding:10px 12px;margin-bottom:12px;max-width:640px;align-self:stretch';
+    var host = card.parentNode; if (!host) return;
+    host.insertBefore(tb, card);
+  }
+  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE === 'granskare') { tb.style.display = 'none'; return; }
+  tb.style.display = '';
+  tb.innerHTML = _cvToolbarHTML();
+  if (typeof _emFitPreview === 'function') setTimeout(_emFitPreview, 0);
+}
+
+// Kopplar ihop elementen i editorns förhandsvisning: markera, flytta, ändra storlek, rotera, snäppa
+function _cvWire(post, card){
+  if (card.dataset.cvPost !== String(post.id || '')) { card.dataset.cvPost = String(post.id || ''); _cvUndo = []; _cvSel = null; }
+  _cvRenderToolbar(card);
+  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE === 'granskare') return;
+  var layer = card.querySelector('.cv-layer');
+  if (!layer) { if (_cvSel && !_cvFind(post, _cvSel)) _cvSel = null; return; }
+  var gV = document.createElement('div'), gH = document.createElement('div');
+  gV.style.cssText = 'position:absolute;top:0;bottom:0;width:0;border-left:1px dashed #ff2d87;display:none;z-index:50;pointer-events:none';
+  gH.style.cssText = 'position:absolute;left:0;right:0;height:0;border-top:1px dashed #ff2d87;display:none;z-index:50;pointer-events:none';
+  layer.appendChild(gV); layer.appendChild(gH);
+  function rectPct(){ var r = card.getBoundingClientRect(); return { r: r, w: Math.max(1, r.width), h: Math.max(1, r.height) }; }
+  function apply(node, e){ node.style.left = e.x + '%'; node.style.top = e.y + '%'; node.style.width = e.w + '%'; node.style.height = e.h + '%'; node.style.transform = 'rotate(' + (e.rot || 0) + 'deg)'; }
+  function snapMove(e){
+    var others = (post.elements || []).filter(function(o){ return o.id !== e.id; });
+    var xs = [0, 50, 100], ys = [0, 50, 100];
+    others.forEach(function(o){ xs.push(o.x, o.x + o.w / 2, o.x + o.w); ys.push(o.y, o.y + o.h / 2, o.y + o.h); });
+    var T = 1.2, gx = null, gy = null;
+    [[e.x, 0], [e.x + e.w / 2, e.w / 2], [e.x + e.w, e.w]].some(function(c){ return xs.some(function(t){ if (Math.abs(c[0] - t) < T) { e.x = t - c[1]; gx = t; return true; } return false; }); });
+    [[e.y, 0], [e.y + e.h / 2, e.h / 2], [e.y + e.h, e.h]].some(function(c){ return ys.some(function(t){ if (Math.abs(c[0] - t) < T) { e.y = t - c[1]; gy = t; return true; } return false; }); });
+    gV.style.display = gx == null ? 'none' : 'block'; if (gx != null) gV.style.left = gx + '%';
+    gH.style.display = gy == null ? 'none' : 'block'; if (gy != null) gH.style.top = gy + '%';
+  }
+  function hideGuides(){ gV.style.display = 'none'; gH.style.display = 'none'; }
+  function drag(onMove, onEnd){
+    function mv(ev){ ev.preventDefault(); onMove(ev); }
+    function up(){ window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); hideGuides(); if (onEnd) onEnd(); }
+    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+  }
+  layer.querySelectorAll('.cv-el').forEach(function(node){
+    var e = _cvFind(post, node.getAttribute('data-cv')); if (!e) return;
+    node.style.pointerEvents = 'auto'; node.style.cursor = e.locked ? 'default' : 'move';
+    node.addEventListener('click', function(ev){ ev.stopPropagation(); });
+    node.addEventListener('mousedown', function(ev){
+      if (node.isContentEditable) return;
+      ev.stopPropagation(); ev.stopImmediatePropagation(); ev.preventDefault();
+      if (_cvSel !== e.id) { _cvSel = e.id; _cvRenderToolbar(card); markSel(); }
+      if (e.locked) return;
+      var g = rectPct(), sx = ev.clientX, sy = ev.clientY, x0 = e.x, y0 = e.y, moved = false;
+      drag(function(m){
+        var dx = (m.clientX - sx) / g.w * 100, dy = (m.clientY - sy) / g.h * 100;
+        if (!moved && Math.abs(dx) + Math.abs(dy) < 0.4) return;
+        if (!moved) { _cvSnap(); moved = true; }
+        e.x = x0 + dx; e.y = y0 + dy;
+        if (!m.altKey) snapMove(e);
+        e.x = Math.round(e.x * 10) / 10; e.y = Math.round(e.y * 10) / 10;
+        apply(node, e); placeSel();
+      });
+    });
+    if (e.type === 'text') node.addEventListener('dblclick', function(ev){
+      ev.stopPropagation(); if (e.locked) return;
+      _cvSnap(); node.contentEditable = 'true'; node.style.cursor = 'text'; node.style.outline = '2px solid #b31e59'; node.focus();
+      try { var rg = document.createRange(); rg.selectNodeContents(node); var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rg); } catch (er) {}
+      node.addEventListener('input', function(){ e.text = node.innerText.replace(/\n$/, ''); });
+      node.addEventListener('blur', function(){ node.contentEditable = 'false'; node.style.outline = 'none'; e.text = node.innerText.replace(/\n$/, ''); }, { once: true });
+    });
+  });
+  // Markeringsram med handtag (fyra hörn + rotation)
+  var selBox = document.createElement('div');
+  selBox.style.cssText = 'position:absolute;border:1.5px solid #b31e59;display:none;z-index:45;pointer-events:none;box-sizing:border-box';
+  layer.appendChild(selBox);
+  var corners = ['nw', 'ne', 'sw', 'se'].map(function(k){
+    var h = document.createElement('div'); h.dataset.k = k;
+    h.style.cssText = 'position:absolute;width:12px;height:12px;background:#fff;border:2px solid #b31e59;border-radius:50%;pointer-events:auto;z-index:46;cursor:' + (k === 'nw' || k === 'se' ? 'nwse-resize' : 'nesw-resize') + ';' + (k[0] === 'n' ? 'top:-7px;' : 'bottom:-7px;') + (k[1] === 'w' ? 'left:-7px;' : 'right:-7px;');
+    selBox.appendChild(h); return h;
+  });
+  var rot = document.createElement('div');
+  rot.title = 'Dra för att rotera';
+  rot.style.cssText = 'position:absolute;left:50%;top:-26px;width:14px;height:14px;margin-left:-7px;background:#b31e59;border:2px solid #fff;border-radius:50%;pointer-events:auto;cursor:grab;z-index:46';
+  selBox.appendChild(rot);
+  function placeSel(){
+    var e = _cvFind(post, _cvSel);
+    if (!e) { selBox.style.display = 'none'; return; }
+    selBox.style.display = 'block'; selBox.style.left = e.x + '%'; selBox.style.top = e.y + '%'; selBox.style.width = e.w + '%'; selBox.style.height = e.h + '%'; selBox.style.transform = 'rotate(' + (e.rot || 0) + 'deg)';
+    var hide = e.locked ? 'none' : 'block'; corners.forEach(function(c){ c.style.display = hide; }); rot.style.display = hide;
+  }
+  function markSel(){ placeSel(); }
+  corners.forEach(function(h){
+    h.addEventListener('mousedown', function(ev){
+      ev.stopPropagation(); ev.stopImmediatePropagation(); ev.preventDefault();
+      var e = _cvFind(post, _cvSel); if (!e || e.locked) return;
+      _cvSnap();
+      var node = layer.querySelector('.cv-el[data-cv="' + e.id + '"]');
+      var g = rectPct(), sx = ev.clientX, sy = ev.clientY, b0 = { x: e.x, y: e.y, w: e.w, h: e.h }, k = h.dataset.k;
+      var keepRatio = (e.type === 'image' || e.type === 'logo' || e.type === 'circle');
+      var ratio = b0.h / Math.max(0.1, b0.w) * (g.h ? 1 : 1);
+      drag(function(m){
+        var dx = (m.clientX - sx) / g.w * 100, dy = (m.clientY - sy) / g.h * 100;
+        var nx = b0.x, ny = b0.y, nw = b0.w, nh = b0.h;
+        if (k[1] === 'e') nw = b0.w + dx; else { nw = b0.w - dx; nx = b0.x + dx; }
+        if (k[0] === 's') nh = b0.h + dy; else { nh = b0.h - dy; ny = b0.y + dy; }
+        if ((keepRatio && !m.shiftKey) || (!keepRatio && m.shiftKey)) { var nh2 = nw * ratio; if (k[0] === 'n') ny = b0.y + b0.h - nh2; nh = nh2; }
+        if (nw < 2) { if (k[1] === 'w') nx -= 2 - nw; nw = 2; }
+        if (nh < (e.type === 'line' ? 0.3 : 2)) nh = e.type === 'line' ? 0.3 : 2;
+        e.x = Math.round(nx * 10) / 10; e.y = Math.round(ny * 10) / 10; e.w = Math.round(nw * 10) / 10; e.h = Math.round(nh * 10) / 10;
+        if (node) apply(node, e); placeSel();
+      });
+    });
+  });
+  rot.addEventListener('mousedown', function(ev){
+    ev.stopPropagation(); ev.stopImmediatePropagation(); ev.preventDefault();
+    var e = _cvFind(post, _cvSel); if (!e || e.locked) return;
+    _cvSnap();
+    var node = layer.querySelector('.cv-el[data-cv="' + e.id + '"]');
+    var g = rectPct(), cx = g.r.left + (e.x + e.w / 2) / 100 * g.w, cy = g.r.top + (e.y + e.h / 2) / 100 * g.h;
+    drag(function(m){
+      var a = Math.atan2(m.clientY - cy, m.clientX - cx) * 180 / Math.PI + 90;
+      if (!m.shiftKey) { var s = Math.round(a / 15) * 15; if (Math.abs(a - s) < 4) a = s; }
+      e.rot = Math.round(((a % 360) + 360) % 360);
+      if (node) apply(node, e); placeSel();
+    });
+  });
+  if (_cvSel && !_cvFind(post, _cvSel)) _cvSel = null;
+  placeSel();
+  // Klick på tom yta avmarkerar (lyssnaren läggs bara en gång per kort)
+  window._cvPlaceSel = placeSel;
+  if (!card.dataset.cvBound) {
+    card.dataset.cvBound = '1';
+    card.addEventListener('mousedown', function(ev){
+      var hit = ev.target && ev.target.closest && (ev.target.closest('.cv-el') || ev.target.closest('[data-k]') || ev.target.title === 'Dra för att rotera');
+      if (!hit && _cvSel) { _cvSel = null; if (window._cvPlaceSel) window._cvPlaceSel(); _cvRenderToolbar(card); }
+    }, true);
+  }
+}
+
+// Tangentbord: Delete, Ctrl+D, Ctrl+C/V, pilar, Esc, Ctrl+Z
+document.addEventListener('keydown', function(ev){
+  var modal = document.getElementById('editorModal');
+  if (!modal || !modal.classList.contains('open')) return;
+  var t = ev.target; if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  var p = _cvPost(); if (!p) return;
+  var mod = ev.ctrlKey || ev.metaKey, k = ev.key;
+  if (mod && (k === 'z' || k === 'Z') && !ev.shiftKey) { if (_cvUndoLast()) ev.preventDefault(); return; }
+  var e = _cvFind(p, _cvSel);
+  if (mod && (k === 'v' || k === 'V') && _cvClip) { ev.preventDefault(); _cvSnap(); var c = JSON.parse(_cvClip); c.id = _cvNewId(); c.x = Math.min(95, c.x + 3); c.y = Math.min(95, c.y + 3); c.z = _cvTopZ(p); p.elements = p.elements || []; p.elements.push(c); _cvSel = c.id; _cvRerender(); return; }
+  if (!e) return;
+  if (k === 'Delete' || k === 'Backspace') { ev.preventDefault(); cvDelete(); return; }
+  if (mod && (k === 'd' || k === 'D')) { ev.preventDefault(); cvDuplicate(); return; }
+  if (mod && (k === 'c' || k === 'C')) { _cvClip = JSON.stringify(e); return; }
+  if (k === 'Escape') { _cvSel = null; _cvRerender(); return; }
+  var st = ev.shiftKey ? 5 : 0.5;
+  if (/^Arrow/.test(k) && !e.locked) {
+    ev.preventDefault(); _cvSnap();
+    if (k === 'ArrowLeft') e.x -= st; if (k === 'ArrowRight') e.x += st; if (k === 'ArrowUp') e.y -= st; if (k === 'ArrowDown') e.y += st;
+    e.x = Math.round(e.x * 10) / 10; e.y = Math.round(e.y * 10) / 10; _cvRerender();
+  }
+});
 </script>
 </body>
 </html>
