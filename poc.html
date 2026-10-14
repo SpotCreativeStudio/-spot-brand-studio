@@ -1096,6 +1096,8 @@ function openLibraryPicker(target){
   if (!modal || !grid) return;
   var lib = _getImgLib();
   var addTile = '<label style="cursor:pointer;aspect-ratio:1;border-radius:8px;border:2px dashed #d9d9d9;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#9ca3af;transition:border-color .15s,color .15s" onmouseover="this.style.borderColor=\'var(--m)\';this.style.color=\'var(--m)\'" onmouseout="this.style.borderColor=\'#d9d9d9\';this.style.color=\'#9ca3af\'"><div style="font-size:26px;line-height:1">+</div><div style="font-size:11px;margin-top:4px">Lägg till</div><input type="file" accept="image/*" multiple style="display:none" onchange="addToLibraryFromPicker(this)"></label>';
+  // Bara admin lägger till bilder i bildbanken. Övriga kan välja bilder men inte ladda upp nya hit.
+  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE !== 'admin') addTile = '';
   if (!lib.length) { grid.innerHTML = addTile + '<div style="grid-column:1/-1;text-align:center;padding:14px;font-size:12px;color:#9ca3af">Inga bilder i biblioteket ännu — tryck + för att lägga till.</div>'; }
   else {
     grid.innerHTML = lib.map(function(img, i){
@@ -1105,6 +1107,7 @@ function openLibraryPicker(target){
   modal.style.display = 'flex';
 }
 function addToLibraryFromPicker(input){
+  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE !== 'admin') { if (typeof showToast === 'function') showToast('Endast admin kan lägga till bilder i bildbanken'); input.value = ''; return; }
   var files = Array.prototype.slice.call(input.files || []);
   if (!files.length) return;
   var MAX = 5*1024*1024;
