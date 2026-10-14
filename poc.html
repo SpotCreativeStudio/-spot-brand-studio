@@ -2062,7 +2062,7 @@ function renderPreview() {
     body.innerHTML = `<div class="prev-empty"><div class="prev-empty-icon">✨</div><div class="prev-empty-text">Välj ett förslag för preview</div></div>`;
     return;
   }
-  const mockPost = { channel: ch, layout: 'gradient', ...p };
+  const mockPost = { channel: ch, layout: _manualLayout(), ...p };
   body.innerHTML = `
     <div style="width:220px">
       <div onclick="openCreateEditor()" style="cursor:pointer;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.15);aspect-ratio:${_arFor(mockPost.channel,mockPost)}">
@@ -2080,7 +2080,7 @@ function addToReview() {
     id: 'p-' + Date.now() + '-' + Math.random().toString(36).slice(2),
     brief: document.getElementById('briefInput').value,
     channel: ch, title: p.title, content: p.content,
-    hashtags: [...p.hashtags], layout: 'gradient',
+    hashtags: [...p.hashtags], layout: _manualLayout(),
     status: 'review', createdAt: new Date().toISOString(),
     author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
     channels: [ch],
@@ -2621,7 +2621,7 @@ function updateManualPreview() {
   if (window._aiProposals) return;
   const title   = document.getElementById('m-title')?.value   || '';
   const content = document.getElementById('m-content')?.value || '';
-  const mockPost = { channel: S.manualChannel, layout: 'gradient', title, content, hashtags: S.manualTags, imageUrl: activeImageUrl(), imageStyle: S.imageStyle };
+  const mockPost = { channel: S.manualChannel, layout: _manualLayout(), title, content, hashtags: S.manualTags, imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null };
   const body = document.getElementById('prevBody');
   if (!body) return;
   const panelTitle = document.getElementById('prevPanelTitle');
@@ -2683,7 +2683,7 @@ function addManualToReview() {
         id: 'pm-' + Date.now() + '-' + ch + '-' + Math.random().toString(36).slice(2,5),
         brief: 'spot. content studio',
         channel: ch, title, content,
-        hashtags: [...S.manualTags], layout: 'gradient',
+        hashtags: [...S.manualTags], layout: _manualLayout(),
         author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
         channels: [...(S.manualChannels||[S.manualChannel])],
         status: 'review', createdAt: new Date().toISOString(),
@@ -3545,8 +3545,10 @@ function _currentCreateLayout(){
     if (props && props.length) return _cardLayoutsForWs()[selIdx] || 'gradient';
     if (S.manualLayout) return S.manualLayout;
   } catch(e) {}
-  return 'gradient';
+  return _manualLayout();
 }
+// Manuellt läge utgår alltid från teamets första mall: Spot -> studio, kund -> egen mallbild (annars Gradient)
+function _manualLayout(){ try { return S.manualLayout || _cardLayoutsForWs()[0] || 'gradient'; } catch (e) { return 'gradient'; } }
 function openCreateEditor() {
   const t  = document.getElementById('m-title');
   const c  = document.getElementById('m-content');
