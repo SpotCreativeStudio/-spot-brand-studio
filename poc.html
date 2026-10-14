@@ -5188,6 +5188,20 @@ function _cvElementsHTML(post){
       st += 'background:' + (e.fill || '#b31e59') + ';border-radius:50%;';
     } else if (e.type === 'line') {
       st += 'background:' + (e.fill || '#ffffff') + ';';
+    } else if (e.type === 'shape') {
+      var P = { arrow:'M0 38H62V15L100 50L62 85V62H0Z', star:'M50 2L62 37H99L69 59L80 95L50 73L20 95L31 59L1 37H38Z', bubble:'M8 4H92Q98 4 98 10V64Q98 70 92 70H40L18 94L22 70H8Q2 70 2 64V10Q2 4 8 4Z', triangle:'M50 3L98 97H2Z', heart:'M50 92L10 52Q-6 30 14 14Q34 2 50 24Q66 2 86 14Q106 30 90 52Z', check:'M8 52L36 80L92 18L82 8L36 58L18 42Z', hexagon:'M25 4H75L99 50L75 96H25L1 50Z', diamond:'M50 2L98 50L50 98L2 50Z' };
+      inner = '<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:100%;display:block;overflow:visible"><path d="' + (P[e.shape] || P.star) + '" fill="' + _cvAttr(e.fill || '#b31e59') + '"' + (e.border ? ' stroke="' + _cvAttr(e.borderColor || '#ffffff') + '" stroke-width="' + (e.borderW || 3) + '" vector-effect="non-scaling-stroke"' : '') + '/></svg>';
+    }
+    // Skugga och kant
+    if (e.shadow) {
+      if (e.type === 'text') st += 'text-shadow:0 0.4cqw 1.6cqw rgba(0,0,0,.55);';
+      else if (e.type === 'shape' || e.type === 'logo') st += 'filter:drop-shadow(0 0.6cqw 1.6cqw rgba(0,0,0,.45));';
+      else st += 'box-shadow:0 0.8cqw 2.4cqw rgba(0,0,0,.4);';
+    }
+    if (e.border && e.type !== 'shape' && e.type !== 'line') st += 'border:' + (e.borderW || 3) + 'px solid ' + (e.borderColor || '#ffffff') + ';' + (e.type === 'image' && !e.radius ? '' : '');
+    // Bildfilter
+    if (e.type === 'image' && (e.gray || (e.bright && e.bright !== 1) || (e.contrast && e.contrast !== 1) || e.sepia)) {
+      inner = inner.replace('pointer-events:none;', 'pointer-events:none;filter:' + (e.gray ? 'grayscale(1) ' : '') + (e.sepia ? 'sepia(.8) ' : '') + 'brightness(' + (e.bright || 1) + ') contrast(' + (e.contrast || 1) + ');');
     }
     return '<div class="cv-el" data-cv="' + _cvAttr(e.id) + '" style="' + st + '">' + inner + '</div>';
   }).join('');
@@ -5216,6 +5230,7 @@ function cvAdd(type, extra){
   if (type === 'line') Object.assign(e, { fill: '#ffffff', x: 10, y: 50, w: 80, h: 0.8 });
   if (type === 'logo') Object.assign(e, { x: 6, y: 6, w: 22, h: 12, fit: 'contain' });
   if (type === 'image') Object.assign(e, { x: 25, y: 25, w: 50, h: 50, fit: 'cover' });
+  if (type === 'shape') Object.assign(e, { shape: 'star', fill: _cvBrandColor(), x: 35, y: 35, w: 30, h: 30 });
   Object.assign(e, extra || {});
   post.elements.push(e);
   _cvSel = e.id;
@@ -5284,6 +5299,7 @@ function _cvToolbarHTML(){
     _cvBtn('▭ Form', "cvAdd('rect')", 'Rektangel') +
     _cvBtn('◯ Cirkel', "cvAdd('circle')", 'Cirkel') +
     _cvBtn('— Linje', "cvAdd('line')", 'Linje') +
+    '<select onchange="if(this.value){cvAdd(\'shape\',{shape:this.value});this.value=\'\';}" title="Fler former" style="font-size:12px;font-weight:600;padding:6px;border:1.5px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer"><option value="">✦ Fler former</option><option value="arrow">Pil</option><option value="star">Stjärna</option><option value="bubble">Pratbubbla</option><option value="triangle">Triangel</option><option value="heart">Hjärta</option><option value="check">Bock</option><option value="hexagon">Hexagon</option><option value="diamond">Romb</option></select>' +
     _cvBtn('↺ Återställ bild', 'cvResetImage()', 'Återställ huvudbildens position och zoom') +
     '<div id="cvImgPop" style="display:none;position:absolute;top:36px;left:60px;z-index:60;width:260px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px"></div>' +
     '</div>';
@@ -5298,11 +5314,20 @@ function _cvToolbarHTML(){
       (fonts.length ? '<select onchange="cvSet(\'font\', this.value)" style="font-size:12px;padding:5px;border:1.5px solid #e5e7eb;border-radius:8px"><option value="">Typsnitt</option>' + fonts.map(function(f){ return '<option' + (e.font === f ? ' selected' : '') + '>' + _cvEsc(f) + '</option>'; }).join('') + '</select>' : '') +
       '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Bakgrund<input type="checkbox"' + (e.bg ? ' checked' : '') + ' onchange="cvSet(\'bg\', this.checked ? \'rgba(0,0,0,.45)\' : \'\')"></label>';
   }
-  if (e.type === 'rect' || e.type === 'circle' || e.type === 'line') {
+  if (e.type === 'rect' || e.type === 'circle' || e.type === 'line' || e.type === 'shape') {
     row += '<input type="color" value="' + _cvAttr(/^#/.test(e.fill || '') ? e.fill : '#b31e59') + '" oninput="cvSet(\'fill\', this.value)" title="Färg" style="width:32px;height:28px;border:none;background:none;cursor:pointer">';
     if (e.type === 'rect') row += _cvBtn('Rundade hörn', "cvBump('radius', 2, 0, 50)", 'Rundare hörn') + _cvBtn('Raka hörn', "cvSet('radius', 0)", 'Raka hörn');
   }
-  if (e.type === 'image') row += _cvBtn(e.fit === 'contain' ? 'Fyll ruta' : 'Visa hela', "cvSet('fit', '" + (e.fit === 'contain' ? 'cover' : 'contain') + "')", 'Beskär eller visa hela bilden');
+  if (e.type === 'image') {
+    row += _cvBtn(e.fit === 'contain' ? 'Fyll ruta' : 'Visa hela', "cvSet('fit', '" + (e.fit === 'contain' ? 'cover' : 'contain') + "')", 'Beskär eller visa hela bilden') +
+      _cvBtn('Gråskala', "cvToggle('gray')", 'Svartvitt', e.gray) + _cvBtn('Sepia', "cvToggle('sepia')", 'Varm ton', e.sepia) +
+      '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Ljus<input type="range" min="0.4" max="1.6" step="0.05" value="' + (e.bright || 1) + '" oninput="cvSet(\'bright\', parseFloat(this.value))" style="width:60px"></label>' +
+      '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Kontrast<input type="range" min="0.4" max="1.6" step="0.05" value="' + (e.contrast || 1) + '" oninput="cvSet(\'contrast\', parseFloat(this.value))" style="width:60px"></label>';
+  }
+  if (e.type !== 'line') {
+    row += _cvBtn('Skugga', "cvToggle('shadow')", 'Skugga', e.shadow) + _cvBtn('Kant', "cvToggle('border')", 'Kant runt elementet', e.border);
+    if (e.border) row += '<input type="color" value="' + _cvAttr(e.borderColor || '#ffffff') + '" oninput="cvSet(\'borderColor\', this.value)" title="Kantfärg" style="width:32px;height:28px;border:none;background:none;cursor:pointer">' + _cvBtn('Tunnare', "cvBump('borderW', -1, 1, 20)", 'Tunnare kant') + _cvBtn('Tjockare', "cvBump('borderW', 1, 1, 20)", 'Tjockare kant');
+  }
   row += '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Opacitet<input type="range" min="0.1" max="1" step="0.05" value="' + (e.op == null ? 1 : e.op) + '" oninput="cvSet(\'op\', parseFloat(this.value))" style="width:70px"></label>' +
     _cvBtn('⬆ Fram', "cvLayer('front')", 'Längst fram') + _cvBtn('⬇ Bak', "cvLayer('back')", 'Längst bak') +
     _cvBtn('⧉ Duplicera', 'cvDuplicate()', 'Duplicera (Ctrl+D)') +
