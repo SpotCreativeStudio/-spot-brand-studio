@@ -3251,7 +3251,7 @@ function _emFitPreview(){
   // Dra av verktygsraden och tipsraderna så att kortet inte hamnar över dem
   // Verktygsraden räknas inte bort: kortet behåller sin storlek och panelen scrollar i stället
   var _panel = (host.id === 'cvScroll' && host.parentElement) ? host.parentElement : host;
-  var availH = _panel.clientHeight - 24 - Array.prototype.reduce.call(host.children, function(sum, c){ return c === card ? sum : sum + c.offsetHeight + 12; }, 0) - (host.id === 'cvScroll' ? 60 : 0);
+  var availH = host.clientHeight - 24 - Array.prototype.reduce.call(host.children, function(sum, c){ return c === card ? sum : sum + c.offsetHeight + 12; }, 0);
   if (availW <= 0 || availH <= 0) return;
   var baseW = 280;
   var ratio = 1;
@@ -3261,7 +3261,7 @@ function _emFitPreview(){
   } catch(e) {}
   var baseH = baseW / ratio;
   var scale = Math.min(availW / baseW, availH / baseH);
-  scale = Math.max(0.6, Math.min(2.2, scale));
+  scale = Math.max(0.25, Math.min(2.2, scale));
   card.style.transform = 'scale(' + scale.toFixed(3) + ')';
   card.style.margin = ((baseH * scale - baseH) / 2).toFixed(1) + 'px ' + ((baseW * scale - baseW) / 2).toFixed(1) + 'px';
   card.dataset.previewScale = scale;
@@ -5323,10 +5323,7 @@ function _cvToolbarHTML(){
     _cvBtn('T Text', "cvAdd('text')", 'Ny textruta') +
     _cvBtn('🖼 Bild', 'cvToggleImgPop()', 'Bild från dator eller bildbank') +
     _cvBtn('Logga', "cvAdd('logo')", 'Varumärkets logga') +
-    _cvBtn('▭ Form', "cvAdd('rect')", 'Rektangel') +
-    _cvBtn('◯ Cirkel', "cvAdd('circle')", 'Cirkel') +
-    _cvBtn('— Linje', "cvAdd('line')", 'Linje') +
-    '<select onchange="if(this.value){cvAdd(\'shape\',{shape:this.value});this.value=\'\';}" title="Fler former" style="font-size:12px;font-weight:600;padding:6px;border:1.5px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer"><option value="">✦ Fler former</option><option value="arrow">Pil</option><option value="star">Stjärna</option><option value="bubble">Pratbubbla</option><option value="triangle">Triangel</option><option value="heart">Hjärta</option><option value="check">Bock</option><option value="hexagon">Hexagon</option><option value="diamond">Romb</option></select>' +
+    '<select onchange="var v=this.value;if(v){if(v===\'rect\'||v===\'circle\'||v===\'line\')cvAdd(v);else cvAdd(\'shape\',{shape:v});this.value=\'\';}" title="Fler former" style="font-size:12px;font-weight:600;padding:6px;border:1.5px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer"><option value="">✦ Former</option><option value="rect">Rektangel</option><option value="circle">Cirkel</option><option value="line">Linje</option><option value="arrow">Pil</option><option value="star">Stjärna</option><option value="bubble">Pratbubbla</option><option value="triangle">Triangel</option><option value="heart">Hjärta</option><option value="check">Bock</option><option value="hexagon">Hexagon</option><option value="diamond">Romb</option></select>' +
     _cvBtn('↺ Återställ bild', 'cvResetImage()', 'Återställ huvudbildens position och zoom') +
     '<div id="cvImgPop" style="display:none;position:absolute;top:36px;left:60px;z-index:60;width:260px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px"></div>' +
     '</div>';
