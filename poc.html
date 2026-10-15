@@ -3242,7 +3242,8 @@ function _emFitPreview(){
   var availW = host.clientWidth - 24;
   // Dra av verktygsraden och tipsraderna så att kortet inte hamnar över dem
   // Verktygsraden räknas inte bort: kortet behåller sin storlek och panelen scrollar i stället
-  var availH = host.clientHeight - 24 - Array.prototype.reduce.call(host.children, function(sum, c){ return c === card ? sum : sum + c.offsetHeight + 12; }, 0);
+  var _panel = (host.id === 'cvScroll' && host.parentElement) ? host.parentElement : host;
+  var availH = _panel.clientHeight - 24 - Array.prototype.reduce.call(host.children, function(sum, c){ return c === card ? sum : sum + c.offsetHeight + 12; }, 0) - (host.id === 'cvScroll' ? 60 : 0);
   if (availW <= 0 || availH <= 0) return;
   var baseW = 280;
   var ratio = 1;
@@ -5307,8 +5308,8 @@ function cvResetImage(){ var p = _cvPost(); if (!p) return; _cvSnap(); p.imgPos 
 function _cvBtn(label, onclick, title, active){ return '<button type="button" title="' + _cvAttr(title || label) + '" onclick="' + onclick + '" style="font-size:12px;font-weight:600;padding:6px 9px;border-radius:8px;border:1.5px solid ' + (active ? '#b31e59' : '#e5e7eb') + ';background:' + (active ? '#fdf0f6' : '#fff') + ';color:#111;cursor:pointer;white-space:nowrap">' + label + '</button>'; }
 function _cvToolbarHTML(){
   var p = _cvPost(), e = _cvFind(p, _cvSel);
-  var add = '<div style="display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;align-items:center;padding-bottom:4px">' +
-    '<span style="font-size:11px;font-weight:700;color:#6b7280;margin-right:2px;white-space:nowrap">Lägg till</span>' +
+  var add = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;position:relative">' +
+    '<span style="font-size:11px;font-weight:700;color:#6b7280;margin-right:2px">Lägg till</span>' +
     _cvBtn('T Text', "cvAdd('text')", 'Ny textruta') +
     _cvBtn('🖼 Bild', 'cvToggleImgPop()', 'Bild från dator eller bildbank') +
     _cvBtn('Logga', "cvAdd('logo')", 'Varumärkets logga') +
@@ -5317,9 +5318,9 @@ function _cvToolbarHTML(){
     _cvBtn('— Linje', "cvAdd('line')", 'Linje') +
     '<select onchange="if(this.value){cvAdd(\'shape\',{shape:this.value});this.value=\'\';}" title="Fler former" style="font-size:12px;font-weight:600;padding:6px;border:1.5px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer"><option value="">✦ Fler former</option><option value="arrow">Pil</option><option value="star">Stjärna</option><option value="bubble">Pratbubbla</option><option value="triangle">Triangel</option><option value="heart">Hjärta</option><option value="check">Bock</option><option value="hexagon">Hexagon</option><option value="diamond">Romb</option></select>' +
     _cvBtn('↺ Återställ bild', 'cvResetImage()', 'Återställ huvudbildens position och zoom') +
-    '</div>' +
-    '<div id="cvImgPop" style="display:none;position:absolute;top:52px;left:12px;z-index:60;width:260px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px"></div>';
-  if (!e) return add + '<div title="Dubbelklicka på text för att skriva. Delete tar bort, Ctrl+D duplicerar, piltangenter flyttar, Ctrl+Z ångrar." style="font-size:11px;color:#9ca3af;margin-top:8px;padding:8px 0 4px;border-top:1px solid #f0f0f0;height:30px;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Klicka på ett element för att ändra det. Dubbelklicka på text för att skriva.</div>';
+    '<div id="cvImgPop" style="display:none;position:absolute;top:36px;left:60px;z-index:60;width:260px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px"></div>' +
+    '</div>';
+  if (!e) return add + '<div style="font-size:11px;color:#9ca3af;margin-top:6px">Tips: klicka på ett element för att markera det. Dubbelklicka på text för att skriva. Delete tar bort, Ctrl+D duplicerar, piltangenter flyttar, Ctrl+Z ångrar.</div>';
   var row = '<div style="display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;align-items:center;margin-top:8px;padding:8px 0 4px;border-top:1px solid #f0f0f0">';
   if (e.type === 'text') {
     var fonts = (typeof TYPOGRAPHY !== 'undefined' && Array.isArray(TYPOGRAPHY)) ? TYPOGRAPHY.map(function(t){ return String(t.name || '').replace(/\s+(Bold|Regular|Light|Medium|Black|Thin)$/i, ''); }).filter(function(v, i, a){ return v && a.indexOf(v) === i; }) : [];
@@ -5349,7 +5350,7 @@ function _cvToolbarHTML(){
     _cvBtn('⧉ Duplicera', 'cvDuplicate()', 'Duplicera (Ctrl+D)') +
     _cvBtn(e.locked ? '🔒 Låst' : '🔓 Lås', "cvToggle('locked')", 'Lås position', e.locked) +
     _cvBtn('🗑 Ta bort', 'cvDelete()', 'Ta bort (Delete)') +
-    '<span style="font-size:11px;color:#6b7280;align-self:center;margin-left:6px">Justera</span>' +
+    '</div><div style="display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;margin-top:4px;padding-bottom:4px"><span style="font-size:11px;color:#6b7280;align-self:center">Justera</span>' +
     _cvBtn('⇤', "cvAlign('left')", 'Vänster kant') + _cvBtn('↔', "cvAlign('hcenter')", 'Mitten') + _cvBtn('⇥', "cvAlign('right')", 'Höger kant') +
     _cvBtn('⤒', "cvAlign('top')", 'Överkant') + _cvBtn('↕', "cvAlign('vcenter')", 'Mitten') + _cvBtn('⤓', "cvAlign('bottom')", 'Nederkant') + '</div>';
   return add + row;
@@ -5358,10 +5359,14 @@ function _cvRenderToolbar(card){
   var tb = document.getElementById('cvToolbar');
   if (!tb) {
     tb = document.createElement('div'); tb.id = 'cvToolbar';
-    tb.style.cssText = 'background:#fff;border:1px solid #f0f0f0;border-radius:12px;padding:8px 12px;margin-bottom:12px;max-width:640px;width:100%;box-sizing:border-box;align-self:center;position:relative;flex-shrink:0;min-width:0';
-    if (card.parentNode) card.parentNode.style.minWidth = '0';
+    tb.style.cssText = 'background:#fff;border:1px solid #f0f0f0;border-radius:12px;padding:10px 12px;margin-bottom:12px;max-width:640px;width:100%;box-sizing:border-box;align-self:center;position:relative;flex-shrink:0;min-width:0';
     var host = card.parentNode; if (!host) return;
-    host.insertBefore(tb, card);
+    // Verktygsraden ligger fast överst. Kort och tips ligger i en egen yta under som scrollar.
+    var sc = document.createElement('div'); sc.id = 'cvScroll';
+    sc.style.cssText = 'flex:1;min-height:0;width:100%;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;align-items:center;gap:12px;padding:4px 0 12px';
+    while (host.firstChild) sc.appendChild(host.firstChild);
+    host.style.minWidth = '0'; host.style.overflow = 'hidden'; host.style.justifyContent = 'flex-start';
+    host.appendChild(tb); host.appendChild(sc);
   }
   if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE === 'granskare') { tb.style.display = 'none'; return; }
   tb.style.display = '';
