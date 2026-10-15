@@ -1385,11 +1385,7 @@ function setImgZoom(v){if(!S._imgPos)S._imgPos={x:0,y:0,zoom:1};S._imgPos.zoom=p
 function repromptImage(){var t=document.getElementById("imgReprompt");var extra=t?t.value.trim():"";var base=S._aiImageBrief||S._lastBrief||"";if(!base&&!extra){showToast("Skriv en beskrivning av ändringen.");return;}var brief=extra?(base?(base+". Ändring: "+extra):extra):base;S._uploadedImageUrl=null;generateBrandImage(brief,true);}
 function _imgObjPos(post) {
   const p = (post && post.imgPos) ? post.imgPos : (S._imgPos || { x: 0, y: 0, zoom: 1 });
-  const z = (p.zoom || 1);
-  const mx = z>1 ? (1 - 1/z) * 50 : 0;
-  const x = Math.max(-mx, Math.min(mx, p.x || 0));
-  const y = Math.max(-mx, Math.min(mx, p.y || 0));
-  return ((p.ox == null ? 50 : p.ox) + '% ' + (p.oy == null ? 50 : p.oy) + '%') + ';transform:scale(' + z.toFixed(3) + ') translate(' + x.toFixed(2) + '%,' + y.toFixed(2) + '%);transform-origin:center';
+  return ((p.ox == null ? 50 : p.ox) + '% ' + (p.oy == null ? 50 : p.oy) + '%') + ';' + (_imgZoomCss({ imgPos: p }) || 'transform:none;');
 }
 // Returns CSS filter string + overlay rgba based on imageStyle setting
 function _imgStyleProps(post) {
@@ -1439,14 +1435,10 @@ function _fontStackFor(name, role) { var _isDisp = role && /display|editorial/i.
 // Bild (uppladdad/AI) eller grå platshållare – fyller en position:relative-container
 function _imgTransform(post){
   var p = (post && post.imgPos) ? post.imgPos : { x:0, y:0, zoom:1 };
-  if (p.zoom === undefined || p.zoom === null) p.zoom = 1;
-  var z = p.zoom || 1, x = p.x || 0, y = p.y || 0;
-  if (z === 1 && !x && !y) return '';
-  var ez = (z <= 1) ? z * 1.06 : z;
-  var m = Math.max(0, (1 - 1/ez) * 50 * ez);
-  x = Math.max(-m, Math.min(m, x));
-  y = Math.max(-m, Math.min(m, y));
-  return 'scale(' + ez + ') translate(' + (x/ez) + '%,' + (y/ez) + '%)';
+  var z = p.zoom || 1, x = p.x || 0, y = p.y || 0, r = p.rot || 0, fx = p.flipX ? -1 : 1, fy = p.flipY ? -1 : 1;
+  if (z === 1 && !x && !y && !r && fx === 1 && fy === 1) return '';
+  // Fri placering: ingen spärr, bilden kan dras hur långt som helst (⤢ Fyll återställer)
+  return 'translate(' + x.toFixed(2) + '%,' + y.toFixed(2) + '%) rotate(' + r + 'deg) scale(' + (z * fx).toFixed(3) + ',' + (z * fy).toFixed(3) + ')';
 }
 function _imgZoomCss(post){ var t = _imgTransform(post); return t ? ('transform:' + t + ';transform-origin:center center;') : ''; }
 function _imgOrGray(post) {
@@ -1489,7 +1481,7 @@ function _getPostImageHTMLRaw(post, size='card') {
     var _ctSrc = String(_ct.cleanSrc).split('"').join('&quot;');
     var _ctPhoto = hasImg ? _pbWrap(post, _imgOrGray(post), { x:8, y:8, w:84, h:46 }, 'box-shadow:0 4px 18px rgba(0,0,0,.25)') : '';
     return `<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">
-      <div class="tpl-bg" style="position:absolute;inset:0;background-image:url('${_ctSrc.split("'").join("%27")}');background-size:cover;background-position:center"></div>
+      ${hasImg ? `<div class="tpl-bg" style="position:absolute;inset:0;background-image:url('${_ctSrc.split("'").join("%27")}');background-size:cover;background-position:center"></div>` : `<img class="tpl-bg" src="${_ctSrc}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:${_imgObjPos(post)};display:block">`}
       ${_ctPhoto}
       <div style="position:absolute;top:10px;left:12px;font-size:11px;font-weight:700;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.35);font-family:${_getSANS()}">spot.</div>
       <div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.65) 100%)"></div>
@@ -2928,10 +2920,21 @@ function openEditorModal(post) {
       <div class="em-field-label">🎨 Bild</div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <span style="font-size:11px;color:#6b7280;font-weight:600;white-space:nowrap">Bildzoom</span>
-        <input type="range" id="emZoomSlider" min="0.3" max="4" step="0.05" value="${(post.imgPos&&post.imgPos.zoom)||1}" oninput="emSetZoom(this.value)" style="flex:1">
+        <input type="range" id="emZoomSlider" min="0.2" max="8" step="0.05" value="${(post.imgPos&&post.imgPos.zoom)||1}" oninput="emSetZoom(this.value)" style="flex:1">
         <span id="emZoomLabel" style="font-size:11px;color:#6b7280;min-width:38px;text-align:right">${Math.round((((post.imgPos&&post.imgPos.zoom)||1))*100)}%</span>
       </div>
-      <div style="font-size:11px;color:#9ca3af;margin-bottom:8px">Dra i bilden för att flytta motivet · scrolla för att zooma</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:11px;color:#6b7280;font-weight:600;white-space:nowrap">Rotation</span>
+        <input type="range" id="emRotSlider" min="-180" max="180" step="1" value="${(post.imgPos&&post.imgPos.rot)||0}" oninput="emImgAdjust('rot',this.value)" style="flex:1">
+        <span id="emRotLabel" style="font-size:11px;color:#6b7280;min-width:38px;text-align:right">${(post.imgPos&&post.imgPos.rot)||0}°</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        <button onclick="emImgAdjust('fill')" title="Snabbkommando: F" style="font-size:12px;font-weight:700;padding:6px 10px;border-radius:8px;border:1.5px solid var(--m);background:#fff;color:var(--m);cursor:pointer">⤢ Fyll inlägget (F)</button>
+        <button onclick="emImgAdjust('rot90')" style="font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer">⟳ 90°</button>
+        <button onclick="emImgAdjust('flipX')" style="font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer">⇋ Spegla</button>
+        <button onclick="emImgAdjust('flipY')" style="font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer">⇵ Vänd</button>
+      </div>
+      <div style="font-size:11px;color:#9ca3af;margin-bottom:8px">Dra i bilden för att flytta den fritt · dra i hörnpunkterna för att zooma · F fyller hela inlägget</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
         <button onclick="openLibraryPicker('editor')" style="flex:1 1 auto;min-width:120px;font-size:12px;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer">📚 Från bibliotek</button>
         <label style="flex:1 1 auto;min-width:120px;font-size:12px;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer;text-align:center">📤 Ladda upp<input type="file" accept="image/*" style="display:none" onchange="emUploadImage(this)"></label>
@@ -3153,9 +3156,10 @@ function emRenderPreview() {
   if (_pbEl) _emWirePhotoBox(post, card, _pbEl);
   if (typeof _cvWire === 'function') _cvWire(post, card);
   // Canvas: drag image to pan, wheel to zoom
-  var imgEl = card.querySelector('img');
+  var imgEl = _emMainImg(card);
   if (imgEl) {
     card.style.cursor = 'grab';
+    _emImgHandles(post, card, imgEl);
     var idr = false, isx = 0, isy = 0, sp = null;
     card.addEventListener('mousedown', function(ev){
       // don't start a pan when grabbing a text widget or its X button
@@ -3190,25 +3194,14 @@ function emRenderPreview() {
         post.imgPos.ox = _pc.ox; post.imgPos.oy = _pc.oy; imgEl.style.objectPosition = _pc.ox + '% ' + _pc.oy + '%';
         var dx = (_pc.rx / Math.max(1, imgEl.offsetWidth)) * 100;
         var dy = (_pc.ry / Math.max(1, imgEl.offsetHeight)) * 100;
-        var _zz = sp.zoom || post.imgPos.zoom || 1;
-        var _ez = _zz <= 1 ? _zz * 1.06 : _zz;
-        var _max = Math.max(0, (1 - 1/_ez) * 50 * _ez);
-        post.imgPos.x = Math.max(-_max, Math.min(_max, sp.x + dx));
-        post.imgPos.y = Math.max(-_max, Math.min(_max, sp.y + dy));
+        post.imgPos.x = sp.x + dx;
+        post.imgPos.y = sp.y + dy;
         imgEl.style.transformOrigin = 'center center';
         imgEl.style.transform = _imgTransform(post);
+        if (window._emPlaceImgHandles) window._emPlaceImgHandles();
       },
       end: function(){ if (idr) { idr = false; card.style.cursor = 'grab'; } }
     };
-    imgEl.addEventListener('wheel', function(ev){
-      ev.preventDefault();
-      post.imgPos = post.imgPos || { x:0, y:0, zoom:1 };
-      post.imgPos.zoom = Math.max(0.3, Math.min(4, (post.imgPos.zoom||1) + (ev.deltaY<0 ? 0.08 : -0.08)));
-      var zs = document.getElementById('emZoomSlider'); if (zs) zs.value = post.imgPos.zoom;
-      var zl = document.getElementById('emZoomLabel'); if (zl) zl.textContent = Math.round(post.imgPos.zoom*100)+'%';
-      imgEl.style.transformOrigin = 'center center';
-      imgEl.style.transform = _imgTransform(post);
-    }, { passive: false });
   }
 }
 var _emActiveWidget = null;
@@ -3270,21 +3263,94 @@ if (!window.__emFitBound) {
   window.__emFitBound = true;
   window.addEventListener('resize', function(){ if (typeof _emFitPreview === 'function') _emFitPreview(); });
 }
+// Huvudbilden i förhandsvisningen (fotot i mallen, annars mallbilden) – inte bilder i lagren
+function _emMainImg(card){
+  if (!card) return null;
+  var a = [].slice.call(card.querySelectorAll('.tpl-photo img, img.tpl-bg, img'));
+  for (var i = 0; i < a.length; i++) { if (!a[i].closest('.cv-layer') && !a[i].closest('.cv-el')) return a[i]; }
+  return null;
+}
+// Fyra hörnpunkter runt bilden: dra i en hörnpunkt för att zooma (ersätter scrollhjulet)
+function _emImgHandles(post, card, imgEl){
+  [].slice.call(card.querySelectorAll('.em-imgh')).forEach(function(h){ h.remove(); });
+  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE === 'granskare') return;
+  var hs = ['nw','ne','sw','se'].map(function(k){
+    var h = document.createElement('div'); h.className = 'em-imgh'; h.title = 'Dra för att zooma bilden';
+    h.style.cssText = 'position:absolute;z-index:45;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:3px;background:#fff;border:2px solid #b31e59;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:' + (k === 'nw' || k === 'se' ? 'nwse' : 'nesw') + '-resize';
+    h.dataset.k = k; card.appendChild(h); return h;
+  });
+  function place(){
+    if (!imgEl.isConnected) return;
+    var s = parseFloat(card.dataset.previewScale) || 1, c = card.getBoundingClientRect(), r = imgEl.getBoundingClientRect();
+    var cw = card.offsetWidth, ch = card.offsetHeight;
+    function cl(v, m){ return Math.max(6, Math.min(m - 6, v)); }
+    var L = cl((r.left - c.left) / s, cw), T = cl((r.top - c.top) / s, ch), Rr = cl((r.right - c.left) / s, cw), B = cl((r.bottom - c.top) / s, ch);
+    var pos = { nw:[L,T], ne:[Rr,T], sw:[L,B], se:[Rr,B] };
+    hs.forEach(function(h){ var p = pos[h.dataset.k]; h.style.left = p[0] + 'px'; h.style.top = p[1] + 'px'; });
+  }
+  window._emPlaceImgHandles = place;
+  requestAnimationFrame(place); setTimeout(place, 150);
+  hs.forEach(function(h){
+    h.addEventListener('mousedown', function(ev){
+      ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation();
+      post.imgPos = post.imgPos || { x:0, y:0, zoom:1 };
+      var r = imgEl.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      var d0 = Math.max(8, Math.hypot(ev.clientX - cx, ev.clientY - cy)), z0 = post.imgPos.zoom || 1;
+      function mv(e){
+        var z = Math.max(0.2, Math.min(8, z0 * Math.hypot(e.clientX - cx, e.clientY - cy) / d0));
+        post.imgPos.zoom = Math.round(z * 100) / 100;
+        imgEl.style.transformOrigin = 'center center'; imgEl.style.transform = _imgTransform(post);
+        var zs = document.getElementById('emZoomSlider'); if (zs) zs.value = post.imgPos.zoom;
+        var zl = document.getElementById('emZoomLabel'); if (zl) zl.textContent = Math.round(post.imgPos.zoom * 100) + '%';
+        place();
+      }
+      function up(){ window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); }
+      window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+    });
+  });
+}
+// Bildverktyg: fyll hela inlägget, rotera, spegla
+function emImgAdjust(kind, val){
+  var post = S._editPost; if (!post) return;
+  if (typeof _cvSnap === 'function') { try { _cvSnap(); } catch(e){} }
+  var p = post.imgPos = post.imgPos || { x:0, y:0, zoom:1 };
+  if (kind === 'fill') {
+    post.imgPos = { x:0, y:0, zoom:1, ox:50, oy:50, rot:0 };
+    post.photoBox = { layout: post.layout || 'gradient', x:0, y:0, w:100, h:100 };
+  } else if (kind === 'rot90') p.rot = (((p.rot || 0) + 90 + 180) % 360) - 180;
+  else if (kind === 'rot') p.rot = parseFloat(val) || 0;
+  else if (kind === 'flipX') p.flipX = !p.flipX;
+  else if (kind === 'flipY') p.flipY = !p.flipY;
+  var q = post.imgPos;
+  var zs = document.getElementById('emZoomSlider'); if (zs) zs.value = q.zoom || 1;
+  var zl = document.getElementById('emZoomLabel'); if (zl) zl.textContent = Math.round((q.zoom || 1) * 100) + '%';
+  var rs = document.getElementById('emRotSlider'); if (rs && kind !== 'rot') rs.value = q.rot || 0;
+  var rl = document.getElementById('emRotLabel'); if (rl) rl.textContent = (q.rot || 0) + '°';
+  if (kind === 'rot') { var img = _emMainImg(document.getElementById('emPreviewCard')); if (img) { img.style.transform = _imgTransform(post); if (window._emPlaceImgHandles) window._emPlaceImgHandles(); return; } }
+  emRenderPreview();
+}
+if (!window.__emFillKey) {
+  window.__emFillKey = true;
+  document.addEventListener('keydown', function(ev){
+    if (!S._editPost || !document.getElementById('emPreviewCard') || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    var t = ev.target, tag = (t && t.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    if (ev.key === 'f' || ev.key === 'F') { ev.preventDefault(); emImgAdjust('fill'); }
+  });
+}
 function emSetZoom(v){
   const post = S._editPost;
   if (!post) return;
   post.imgPos = post.imgPos || { x:0, y:0, zoom:1 };
   post.imgPos.zoom = parseFloat(v) || 1;
-  var _m = (1 - 1/post.imgPos.zoom) * 50 * post.imgPos.zoom;
-  post.imgPos.x = Math.max(-_m, Math.min(_m, post.imgPos.x || 0));
-  post.imgPos.y = Math.max(-_m, Math.min(_m, post.imgPos.y || 0));
   var zl = document.getElementById('emZoomLabel'); if (zl) zl.textContent = Math.round(post.imgPos.zoom*100)+'%';
   var card = document.getElementById('emPreviewCard');
-  var imgEl = card ? card.querySelector('img') : null;
+  var imgEl = card ? _emMainImg(card) : null;
   if (imgEl) {
     imgEl.style.transformOrigin = 'center center';
     imgEl.style.transform = _imgTransform(post);
   }
+  if (window._emPlaceImgHandles) window._emPlaceImgHandles();
 }
 
 function emSyncFromForm() {
