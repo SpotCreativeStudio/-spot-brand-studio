@@ -1363,7 +1363,18 @@ const MOCK_PROPOSALS = {
 //  LAYOUT RENDERER
 // ════════════════════════════════════════════════════════
 // Returns object-position CSS value — reads from post if available, else global drag state
-function applyImgPreviewTransform(){var _fr=document.getElementById("imgRepoFrame");if(_fr&&typeof _arFor==="function"){try{_fr.style.aspectRatio=_arFor(S.manualChannel||(S.manualChannels&&S.manualChannels[0])||"linkedin");}catch(e){}}var pv=document.getElementById("imgPreview");if(!pv)return;var p=S._imgPos||{x:0,y:0,zoom:1};var z0=(p.zoom||1);var z=z0<=1?z0*1.06:z0;var mx=Math.max(0,(1-1/z)*50*z);var x=Math.max(-mx,Math.min(mx,p.x||0));var y=Math.max(-mx,Math.min(mx,p.y||0));pv.style.objectPosition="center";pv.style.transform="scale("+z.toFixed(3)+") translate("+(x/z).toFixed(2)+"%,"+(y/z).toFixed(2)+"%)";}
+// Panorering som i Canva: dra först genom den del av bilden som är beskuren (object-position),
+// så att bilden alltid fyller rutan. Det som blir över går till förflyttning när man har zoomat in.
+function _panCrop(img, st, dx, dy){
+  var ox0 = (st && st.ox != null) ? st.ox : 50, oy0 = (st && st.oy != null) ? st.oy : 50;
+  var bw = img ? img.offsetWidth : 0, bh = img ? img.offsetHeight : 0, nw = img ? img.naturalWidth : 0, nh = img ? img.naturalHeight : 0;
+  if (!bw || !bh || !nw || !nh) return { ox: ox0, oy: oy0, rx: dx, ry: dy };
+  var sc = Math.max(bw / nw, bh / nh), ovx = nw * sc - bw, ovy = nh * sc - bh, ox = ox0, oy = oy0, rx = dx, ry = dy;
+  if (ovx > 0.5) { ox = Math.max(0, Math.min(100, ox0 - dx / ovx * 100)); rx = dx - (ox0 - ox) / 100 * ovx; }
+  if (ovy > 0.5) { oy = Math.max(0, Math.min(100, oy0 - dy / ovy * 100)); ry = dy - (oy0 - oy) / 100 * ovy; }
+  return { ox: Math.round(ox * 10) / 10, oy: Math.round(oy * 10) / 10, rx: rx, ry: ry };
+}
+function applyImgPreviewTransform(){var _fr=document.getElementById("imgRepoFrame");if(_fr&&typeof _arFor==="function"){try{_fr.style.aspectRatio=_arFor(S.manualChannel||(S.manualChannels&&S.manualChannels[0])||"linkedin");}catch(e){}}var pv=document.getElementById("imgPreview");if(!pv)return;var p=S._imgPos||{x:0,y:0,zoom:1};var z0=(p.zoom||1);var z=z0<=1?z0*1.06:z0;var mx=Math.max(0,(1-1/z)*50*z);var x=Math.max(-mx,Math.min(mx,p.x||0));var y=Math.max(-mx,Math.min(mx,p.y||0));pv.style.objectPosition=((p.ox==null?50:p.ox)+'% '+(p.oy==null?50:p.oy)+'%');pv.style.transform="scale("+z.toFixed(3)+") translate("+(x/z).toFixed(2)+"%,"+(y/z).toFixed(2)+"%)";}
 function setImgZoom(v){if(!S._imgPos)S._imgPos={x:0,y:0,zoom:1};S._imgPos.zoom=parseFloat(v)||1;applyImgPreviewTransform();if(window._aiProposals&&window._allChannelProposals){renderProposalCards(window._activeProposalTab||S.manualChannel);}else{updateManualPreview();}}
 function repromptImage(){var t=document.getElementById("imgReprompt");var extra=t?t.value.trim():"";var base=S._aiImageBrief||S._lastBrief||"";if(!base&&!extra){showToast("Skriv en beskrivning av ändringen.");return;}var brief=extra?(base?(base+". Ändring: "+extra):extra):base;S._uploadedImageUrl=null;generateBrandImage(brief,true);}
 function _imgObjPos(post) {
@@ -1372,7 +1383,7 @@ function _imgObjPos(post) {
   const mx = z>1 ? (1 - 1/z) * 50 : 0;
   const x = Math.max(-mx, Math.min(mx, p.x || 0));
   const y = Math.max(-mx, Math.min(mx, p.y || 0));
-  return 'center;transform:scale(' + z.toFixed(3) + ') translate(' + x.toFixed(2) + '%,' + y.toFixed(2) + '%);transform-origin:center';
+  return ((p.ox == null ? 50 : p.ox) + '% ' + (p.oy == null ? 50 : p.oy) + '%') + ';transform:scale(' + z.toFixed(3) + ') translate(' + x.toFixed(2) + '%,' + y.toFixed(2) + '%);transform-origin:center';
 }
 // Returns CSS filter string + overlay rgba based on imageStyle setting
 function _imgStyleProps(post) {
@@ -2147,6 +2158,7 @@ function loadImgFile(file) {
     startX = e.clientX; startY = e.clientY;
     startPosX = S._imgPos?.x ?? 0;
     startPosY = S._imgPos?.y ?? 0;
+    window._spOx = (S._imgPos && S._imgPos.ox != null) ? S._imgPos.ox : 50; window._spOy = (S._imgPos && S._imgPos.oy != null) ? S._imgPos.oy : 50;
     frame.style.cursor = 'grabbing';
     const hint = document.getElementById('imgDragHint');
     if (hint) hint.style.opacity = '0';
@@ -2159,6 +2171,7 @@ function loadImgFile(file) {
     startX = e.touches[0].clientX; startY = e.touches[0].clientY;
     startPosX = S._imgPos?.x ?? 0;
     startPosY = S._imgPos?.y ?? 0;
+    window._spOx = (S._imgPos && S._imgPos.ox != null) ? S._imgPos.ox : 50; window._spOy = (S._imgPos && S._imgPos.oy != null) ? S._imgPos.oy : 50;
     e.preventDefault();
   }, { passive: false });
 
@@ -2169,11 +2182,11 @@ function loadImgFile(file) {
     if (!frame || !preview) return;
     const rect = frame.getBoundingClientRect();
     // Convert pixel drag to percentage shift (inverted — drag right = show more left)
-    const z0 = (S._imgPos&&S._imgPos.zoom)||1; const z = z0<=1?z0*1.06:z0; const mx=Math.max(0,(1-1/z)*50*z); const dx = ((clientX - startX) / rect.width) * 100;
-    const dy = ((clientY - startY) / rect.height) * 100;
+    const z0 = (S._imgPos&&S._imgPos.zoom)||1; const z = z0<=1?z0*1.06:z0; const mx=Math.max(0,(1-1/z)*50*z); const _pc = _panCrop(preview, { ox: window._spOx, oy: window._spOy }, clientX - startX, clientY - startY); const dx = (_pc.rx / rect.width) * 100;
+    const dy = (_pc.ry / rect.height) * 100;
     const nx = Math.max(-mx, Math.min(mx, startPosX + dx));
     const ny = Math.max(-mx, Math.min(mx, startPosY + dy));
-    S._imgPos = { x: nx, y: ny, zoom: (S._imgPos&&S._imgPos.zoom)||1 };
+    S._imgPos = { x: nx, y: ny, zoom: (S._imgPos&&S._imgPos.zoom)||1, ox: _pc.ox, oy: _pc.oy };
     applyImgPreviewTransform();
     // Live-update preview cards
     if (window._aiProposals && window._allChannelProposals) {
@@ -3145,7 +3158,7 @@ function emRenderPreview() {
       }
       idr = true; isx = ev.clientX; isy = ev.clientY;
       post.imgPos = post.imgPos || { x:0, y:0, zoom:1 };
-      sp = { x: post.imgPos.x||0, y: post.imgPos.y||0, zoom: post.imgPos.zoom||1 };
+      sp = { x: post.imgPos.x||0, y: post.imgPos.y||0, zoom: post.imgPos.zoom||1, ox: post.imgPos.ox, oy: post.imgPos.oy };
       card.style.cursor = 'grabbing';
       ev.preventDefault();
     });
@@ -3165,8 +3178,10 @@ function emRenderPreview() {
       active: function(){ return idr; },
       move: function(ev){
         var _z2 = parseFloat(card.dataset.previewScale) || 1;
-        var dx = (((ev.clientX - isx) / _z2) / Math.max(1, card.clientWidth)) * 100;
-        var dy = (((ev.clientY - isy) / _z2) / Math.max(1, card.clientHeight)) * 100;
+        var _pc = _panCrop(imgEl, sp, (ev.clientX - isx) / _z2, (ev.clientY - isy) / _z2);
+        post.imgPos.ox = _pc.ox; post.imgPos.oy = _pc.oy; imgEl.style.objectPosition = _pc.ox + '% ' + _pc.oy + '%';
+        var dx = (_pc.rx / Math.max(1, imgEl.offsetWidth)) * 100;
+        var dy = (_pc.ry / Math.max(1, imgEl.offsetHeight)) * 100;
         var _zz = sp.zoom || post.imgPos.zoom || 1;
         var _ez = _zz <= 1 ? _zz * 1.06 : _zz;
         var _max = Math.max(0, (1 - 1/_ez) * 50 * _ez);
