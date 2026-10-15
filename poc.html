@@ -2815,7 +2815,7 @@ function renderDetailPanel() {
         <span class="dp-close" onclick="document.getElementById('detailPanel').style.display='none';S.selectedReviewId=null;renderReview()">✕</span>
       </div>
       <div class="dp-body">
-        <div style="aspect-ratio:${_arFor(post.channel,post)};border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.1)">${getPostImageHTML(post)}</div>
+        <div style="aspect-ratio:${_arFor(post.channel,post)};width:100%;flex-shrink:0;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.1)">${getPostImageHTML(post)}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:6px">
           ${LAYOUTS.map(l => `<button onclick="setReviewLayout('${post.id}','${l}')"
             style="padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;
