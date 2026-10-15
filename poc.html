@@ -286,6 +286,8 @@ textarea.field-input{resize:vertical;line-height:1.5}
 .cal-day.cal-drop{background:#fdf0f6;box-shadow:inset 0 0 0 2px var(--m)}
 .cal-chip[draggable="true"]{cursor:grab}
 body.ws-customer .brand-strip{display:none!important}
+/* Bara admin får neka inlägg i Granskning */
+body.brand-ro button[onclick*="rejectPost("],body.brand-ro .reject-btn{display:none!important}
 /* Inläggsbilder utan rundade hörn: kortet runt bilden blir också rakt */
 :has(> .post-img-root),:has(> * > .post-img-root){border-radius:0!important}
 #brandRoNote{display:none}
@@ -2322,6 +2324,7 @@ function resetCreateForm(){
   var rb=document.getElementById("regenImgBtn"); if(rb)rb.style.display="none";
 }
 function rejectPost(id){
+  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE !== 'admin') { if (typeof showToast === 'function') showToast('Endast admin kan neka inlägg'); return; }
   var post=(S.reviewQueue||[]).find(function(p){return p.id===id;});
   if(!post){ if(typeof showToast==="function")showToast("Hittar inte inlägget."); return; }
   var ov=document.createElement("div");
