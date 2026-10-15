@@ -290,6 +290,8 @@ body.ws-customer .brand-strip{display:none!important}
 body.brand-ro button[onclick*="rejectPost("],body.brand-ro .reject-btn{display:none!important}
 /* Bara admin får redigera inlägg i Granskning */
 body.brand-ro [onclick*="openEditorModal(S.reviewQueue"]{display:none!important}
+/* Bara admin får byta mall i Granskning */
+body.brand-ro .rc-layout-btn,body.brand-ro [onclick*="setReviewLayout("]{display:none!important}
 /* Inläggsbilder utan rundade hörn: kortet runt bilden blir också rakt */
 :has(> .post-img-root),:has(> * > .post-img-root){border-radius:0!important}
 #brandRoNote{display:none}
@@ -3669,6 +3671,7 @@ async function approvePost(id, scheduleMode = false) {
 //  LAYOUT PICKER
 // ════════════════════════════════════════════════════════
 function setReviewLayout(postId, layout) {
+  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE !== 'admin') { if (typeof showToast === 'function') showToast('Endast admin kan byta mall'); return; }
   const post = S.reviewQueue.find(p => p.id === postId);
   if (!post) return;
   post.layout = layout;
@@ -3676,6 +3679,7 @@ function setReviewLayout(postId, layout) {
   renderDetailPanel();
 }
 function openLayoutPicker(postId) {
+  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE !== 'admin') { if (typeof showToast === 'function') showToast('Endast admin kan byta mall'); return; }
   S.layoutPickerPostId = postId;
   const post = S.reviewQueue.find(p => p.id === postId);
   if (!post) return;
