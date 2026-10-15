@@ -2873,6 +2873,8 @@ function openEditorModal(post) {
   post.blocks = post.blocks.filter(function(b){ return b !== 'cta' && b !== 'title'; });
   const _isSamePost = S._editPost === post;
   S._editPost = post; // working copy reference
+  // Inlägg utan mall får arbetsytans mall (som i manuellt läge) i stället för Gradient
+  if (!post.layout && typeof _manualLayout === 'function') post.layout = _manualLayout();
   if (!_isSamePost) {
     S._editImgUndoStack = [];
     S._editBlockUndoStack = [];
@@ -2985,7 +2987,7 @@ function _emWirePhotoBox(post, card, box){
   var mv = mk('top:4px;left:4px;width:22px;height:22px;border-radius:6px;background:#b31e59;color:#fff;font-size:13px;line-height:22px;text-align:center;cursor:move', 'Dra för att flytta bildrutan', '✥');
   var rs = mk('bottom:4px;right:4px;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid #b31e59;cursor:nwse-resize', 'Dra för att ändra storlek');
   // Handtagen syns alltid i editorn (i vissa mallar ligger text eller toning ovanpå bilden)
-  mv.style.display = 'block'; rs.style.display = 'block';
+  mv.style.display = 'block'; rs.remove(); // storleken styrs av bildens hörnpunkter
   function drag(handle, apply){
     handle.addEventListener('mousedown', function(ev){
       ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation();
