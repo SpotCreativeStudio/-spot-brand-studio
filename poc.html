@@ -3241,7 +3241,8 @@ function _emFitPreview(){
   if (!host) return;
   var availW = host.clientWidth - 24;
   // Dra av verktygsraden och tipsraderna så att kortet inte hamnar över dem
-  var availH = host.clientHeight - 24 - Array.prototype.reduce.call(host.children, function(sum, c){ return c === card ? sum : sum + c.offsetHeight + 12; }, 0);
+  // Verktygsraden räknas inte bort: kortet behåller sin storlek och panelen scrollar i stället
+  var availH = host.clientHeight - 24 - Array.prototype.reduce.call(host.children, function(sum, c){ return (c === card || c.id === 'cvToolbar') ? sum : sum + c.offsetHeight + 12; }, 0) - 90;
   if (availW <= 0 || availH <= 0) return;
   var baseW = 280;
   var ratio = 1;
@@ -5319,7 +5320,7 @@ function _cvToolbarHTML(){
     '<div id="cvImgPop" style="display:none;position:absolute;top:36px;left:60px;z-index:60;width:260px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px"></div>' +
     '</div>';
   if (!e) return add + '<div style="font-size:11px;color:#9ca3af;margin-top:6px">Tips: klicka på ett element för att markera det. Dubbelklicka på text för att skriva. Delete tar bort, Ctrl+D duplicerar, piltangenter flyttar, Ctrl+Z ångrar.</div>';
-  var row = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #f0f0f0">';
+  var row = '<div style="display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;align-items:center;margin-top:8px;padding:8px 0 4px;border-top:1px solid #f0f0f0">';
   if (e.type === 'text') {
     var fonts = (typeof TYPOGRAPHY !== 'undefined' && Array.isArray(TYPOGRAPHY)) ? TYPOGRAPHY.map(function(t){ return String(t.name || '').replace(/\s+(Bold|Regular|Light|Medium|Black|Thin)$/i, ''); }).filter(function(v, i, a){ return v && a.indexOf(v) === i; }) : [];
     row += '<input type="color" value="' + _cvAttr(e.color || '#ffffff') + '" oninput="cvSet(\'color\', this.value)" title="Textfärg" style="width:32px;height:28px;border:none;background:none;cursor:pointer">' +
@@ -5348,7 +5349,7 @@ function _cvToolbarHTML(){
     _cvBtn('⧉ Duplicera', 'cvDuplicate()', 'Duplicera (Ctrl+D)') +
     _cvBtn(e.locked ? '🔒 Låst' : '🔓 Lås', "cvToggle('locked')", 'Lås position', e.locked) +
     _cvBtn('🗑 Ta bort', 'cvDelete()', 'Ta bort (Delete)') +
-    '</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"><span style="font-size:11px;color:#6b7280;align-self:center">Justera</span>' +
+    '</div><div style="display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;margin-top:4px;padding-bottom:4px"><span style="font-size:11px;color:#6b7280;align-self:center">Justera</span>' +
     _cvBtn('⇤', "cvAlign('left')", 'Vänster kant') + _cvBtn('↔', "cvAlign('hcenter')", 'Mitten') + _cvBtn('⇥', "cvAlign('right')", 'Höger kant') +
     _cvBtn('⤒', "cvAlign('top')", 'Överkant') + _cvBtn('↕', "cvAlign('vcenter')", 'Mitten') + _cvBtn('⤓', "cvAlign('bottom')", 'Nederkant') + '</div>';
   return add + row;
@@ -5357,7 +5358,8 @@ function _cvRenderToolbar(card){
   var tb = document.getElementById('cvToolbar');
   if (!tb) {
     tb = document.createElement('div'); tb.id = 'cvToolbar';
-    tb.style.cssText = 'background:#fff;border:1px solid #f0f0f0;border-radius:12px;padding:10px 12px;margin-bottom:12px;max-width:640px;align-self:stretch';
+    tb.style.cssText = 'background:#fff;border:1px solid #f0f0f0;border-radius:12px;padding:10px 12px;margin-bottom:12px;max-width:640px;align-self:stretch;position:sticky;top:0;z-index:5;flex-shrink:0';
+    if (card.parentNode) { card.parentNode.style.overflowY = 'auto'; card.parentNode.style.justifyContent = 'flex-start'; }
     var host = card.parentNode; if (!host) return;
     host.insertBefore(tb, card);
   }
