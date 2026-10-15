@@ -470,6 +470,9 @@ app.post('/api/clean-template', auth, async (req, res) => {
       const r0 = await getAuthPool().query('SELECT mime, data, workspace FROM stored_images WHERE id=$1', [im[1]])
       if (!r0.rows.length || r0.rows[0].workspace !== ws) return res.status(404).json({ error: 'Mallen hittades inte' })
       mime = r0.rows[0].mime; b64 = r0.rows[0].data.toString('base64')
+    } else if (/^\/assets\/tpl-[a-z-]+\.png$/.test(src) && _TPL[src.slice(8)]) {
+      // Spots inbyggda mallbilder
+      mime = 'image/png'; b64 = fs.readFileSync(path.join(__dirname, 'assets', _TPL[src.slice(8)])).toString('base64')
     } else return res.status(400).json({ error: 'Ogiltig mall' })
     if (b64.length > 11 * 1024 * 1024) return res.status(400).json({ error: 'Mallen är för stor' })
     const prompt = 'Edit this social media template image. Remove ALL text: every headline, word, letter, number, caption, hashtag, handle, logo and wordmark. Keep everything else exactly as it is: layout, colors, shapes, frames, photos and background. Fill the areas where text was removed seamlessly with the surrounding background so they look empty and ready for new text. Keep the same aspect ratio.'
