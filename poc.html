@@ -5470,6 +5470,15 @@ function cvPaste(){
 var _CV_GEOM = ['id','type','x','y','w','h','z','text','src','rows','data','pts','grp','role','locked','shape','kind'];
 function cvCopyStyle(){ var e = _cvFind(_cvPost(), _cvSel); if (!e) return; var s = {}; Object.keys(e).forEach(function(k){ if (_CV_GEOM.indexOf(k) < 0) s[k] = e[k]; }); _cvStyleClip = s; if (typeof showToast === 'function') showToast('Stil kopierad'); }
 function cvPasteStyle(){ if (!_cvStyleClip) return; var els = _cvSelEls(); if (!els.length) return; _cvSnap(); els.forEach(function(e){ Object.assign(e, JSON.parse(JSON.stringify(_cvStyleClip))); }); _cvRerender(); }
+function cvShowHelp(){
+  var old = document.getElementById('cvHelp'); if (old) { old.remove(); return; }
+  var tb = document.getElementById('cvToolbar'); if (!tb) return;
+  var tips = [['Klick', 'Markera ett element'], ['Shift + klick', 'Markera flera'], ['Ctrl + A', 'Markera allt'], ['Högerklick', 'Fler val (kopiera stil, lager, lås …)'], ['Dubbelklick på text', 'Skriv i texten'], ['Dra i bilden', 'Flytta motivet'], ['Hörnpunkter', 'Ändra bildens bredd och höjd'], ['F', 'Bilden täcker hela inlägget'], ['Piltangenter', 'Flytta (Shift = längre steg)'], ['Ctrl + C / V', 'Kopiera / klistra in'], ['Ctrl + D', 'Duplicera'], ['Ctrl + G', 'Gruppera (Ctrl + Shift + G delar upp)'], ['Delete', 'Ta bort'], ['Ctrl + Z', 'Ångra'], ['Esc', 'Avmarkera / sluta rita']];
+  var d = document.createElement('div'); d.id = 'cvHelp';
+  d.style.cssText = 'position:absolute;right:8px;top:calc(100% + 6px);z-index:70;width:290px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:10px 12px;font-size:12px;color:#111';
+  d.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>Kortkommandon och tips</b><span onclick="cvShowHelp()" style="cursor:pointer;color:#6b7280;font-size:14px">✕</span></div>' + tips.map(function(t){ return '<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-top:1px solid #f5f5f5"><span style="font-weight:600;white-space:nowrap">' + t[0] + '</span><span style="color:#6b7280;text-align:right">' + t[1] + '</span></div>'; }).join('');
+  tb.appendChild(d);
+}
 function _cvCloseCtx(){ var m = document.getElementById('cvCtx'); if (m) m.remove(); }
 function _cvCtx(x, y){
   _cvCloseCtx();
@@ -5592,7 +5601,7 @@ function _cvToolbarHTML(){
     (window._cvPen ? '<input type="color" value="' + _cvAttr(window._cvPenColor || '#b31e59') + '" oninput="window._cvPenColor=this.value" title="Pennans färg" style="width:30px;height:28px;border:none;background:none;padding:0"><label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Tjocklek<input type="range" min="1" max="14" step="1" value="' + (window._cvPenW || 3) + '" oninput="window._cvPenW=parseFloat(this.value)" style="width:60px"></label>' : '') +
     '<label title="Färgbakgrund (täcker mallen)" style="display:flex;align-items:center;flex:none"><input type="color" value="' + _cvAttr((bgEl && bgEl.fill) || '#ffffff') + '" onchange="cvPageBg(this.value)" style="width:30px;height:28px;border:none;background:none;padding:0"></label>' + (bgEl ? _cvBtn('✕', 'cvPageBg(null)', 'Ta bort färgbakgrunden') : '') +
     _cvBtn('↺', 'cvResetImage()', 'Återställ huvudbildens position och zoom') +
-    _cvBtn('?', '', 'Klicka för att markera, Shift+klick markerar flera, Ctrl+A markerar allt, högerklick ger fler val. Dubbelklicka på text för att skriva. Delete tar bort, Ctrl+D duplicerar, Ctrl+G grupperar, piltangenter flyttar, Ctrl+Z ångrar.') +
+    _cvBtn('?', 'cvShowHelp()', 'Visa kortkommandon och tips. Klicka för att markera, Shift+klick markerar flera, Ctrl+A markerar allt, högerklick ger fler val. Dubbelklicka på text för att skriva. Delete tar bort, Ctrl+D duplicerar, Ctrl+G grupperar, piltangenter flyttar, Ctrl+Z ångrar.') +
     '</div><div id="cvImgPop" style="display:none;position:absolute;top:46px;left:60px;z-index:60;width:260px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px"></div>';
   var alignBtns = _cvBtn('⇤', "cvAlign('left')", 'Vänster kant') + _cvBtn('↔', "cvAlign('hcenter')", 'Centrera vågrätt') + _cvBtn('⇥', "cvAlign('right')", 'Höger kant') + _cvBtn('⤒', "cvAlign('top')", 'Överkant') + _cvBtn('↕', "cvAlign('vcenter')", 'Centrera lodrätt') + _cvBtn('⤓', "cvAlign('bottom')", 'Nederkant');
   if (ids.length > 1) {
