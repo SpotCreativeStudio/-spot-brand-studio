@@ -1457,8 +1457,7 @@ function _tplBgLayer(post){
 }
 function _imgOrGray(post) {
   const _own = post.imageUrl || post.aiImageUrl, _imgSrc = _own || _tplBase(post);
-  // Mallbilden visas hel (contain), egna foton fyller rutan (cover)
-  if (_imgSrc) return `<img src="${_imgSrc}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:${_own ? 'cover' : 'contain'};object-position:${_imgObjPos(post)};${_imgZoomCss(post)}filter:${_imgStyleProps(post).f};display:block">`;
+  if (_imgSrc) return `<img src="${_imgSrc}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:${_imgObjPos(post)};${_imgZoomCss(post)}filter:${_imgStyleProps(post).f};display:block">`;
   return `<div style="position:absolute;inset:0;background:linear-gradient(160deg,#c4c4c4 0%,#8a8a8a 55%,#5e5e5e 100%)"></div>`;
 }
 
@@ -1512,8 +1511,8 @@ function _getPostImageHTMLRaw(post, size='card') {
     return `<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">
       ${_tplBgLayer(post)}
       ${_pbWrap(post, _imgOrGray(post))}
-      <div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.28) 0%,transparent 28%,transparent 50%,rgba(0,0,0,.6) 100%)"></div>
-      <div style="position:absolute;top:9px;left:11px;font-size:9px;font-weight:700;color:rgba(255,255,255,.92);font-family:${_getSANS()}">spot.</div>
+      ${(post.imageUrl || post.aiImageUrl) ? `<div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.28) 0%,transparent 28%,transparent 50%,rgba(0,0,0,.6) 100%)"></div>
+      <div style="position:absolute;top:9px;left:11px;font-size:9px;font-weight:700;color:rgba(255,255,255,.92);font-family:${_getSANS()}">spot.</div>` : ''}
       
       <div style="position:absolute;left:13px;right:13px;bottom:13px">
         <div style="font-family:${_getSERIF()};font-size:${_autoFit(t,30,18,16)}px;color:#fff;line-height:.95;letter-spacing:-.01em">${t}</div>
@@ -2361,7 +2360,7 @@ function rejectPost(id){
     if(typeof showToast==="function")showToast("Inlägget nekades och skickades till utkast.");
   };
 }
-function _arFor(ch,obj){try{if(obj&&obj.aspectRatio)return obj.aspectRatio==="1:1"?"1/1":"5/4";if(typeof S!=="undefined"&&S.aspectRatio)return S.aspectRatio==="1:1"?"1/1":"5/4"}catch(e){}return ({instagram:"4/5",tiktok:"9/16",facebook:"1/1",linkedin:"1/1"})[ch]||"4/5";}
+function _arFor(ch,obj){try{if(obj&&obj.aspectRatio)return obj.aspectRatio==="1:1"?"1/1":"5/4";if(obj&&typeof _SPOT_TPL_SRC!=="undefined"&&_SPOT_TPL_SRC[obj.layout])return "4/5";if(typeof S!=="undefined"&&S.aspectRatio)return S.aspectRatio==="1:1"?"1/1":"5/4"}catch(e){}return ({instagram:"4/5",tiktok:"9/16",facebook:"1/1",linkedin:"1/1"})[ch]||"4/5";}
 (function(){function _syncAR(){try{var ch=window._activeProposalTab||(typeof S!=="undefined"&&S.previewChannel)||(typeof S!=="undefined"&&S.manualChannel)||"instagram";document.documentElement.style.setProperty("--post-ar",_arFor(ch));}catch(e){}}setInterval(_syncAR,400);document.addEventListener("DOMContentLoaded",_syncAR);})();
 var _liConnected = false;
 function _loadLinkedInStatus(){
