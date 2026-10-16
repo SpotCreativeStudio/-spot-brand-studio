@@ -5284,45 +5284,167 @@ fetch('/api/me',{credentials:'same-origin'}).then(function(r){return r.json()}).
 // ════════════════════════════════════════════════════════
 function _cvEsc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function _cvAttr(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+var _CV_MASK = { circle:'ellipse(50% 50% at 50% 50%)', hexagon:'polygon(25% 2%,75% 2%,99% 50%,75% 98%,25% 98%,1% 50%)', diamond:'polygon(50% 0,100% 50%,50% 100%,0 50%)', triangle:'polygon(50% 0,100% 100%,0 100%)', star:'polygon(50% 2%,62% 37%,99% 37%,69% 59%,80% 95%,50% 73%,20% 95%,31% 59%,1% 37%,38% 37%)' };
+function _cvMaskCss(e){ var m = e.mask; if (!m) return ''; if (m === 'rounded') return 'border-radius:12cqw;overflow:hidden;'; if (m === 'arch') return 'border-radius:50% 50% 0 0/35% 35% 0 0;overflow:hidden;'; return _CV_MASK[m] ? 'clip-path:' + _CV_MASK[m] + ';' : ''; }
+// Texteffekter som i Canva
+function _cvTextFx(e){
+  var c = e.fxColor || '#b31e59';
+  switch (e.fx) {
+    case 'lift': return 'text-shadow:0 1cqw 2.5cqw rgba(0,0,0,.6);';
+    case 'outline': return '-webkit-text-stroke:0.3cqw ' + c + ';paint-order:stroke fill;';
+    case 'hollow': return 'color:transparent;-webkit-text-stroke:0.3cqw ' + (e.color || '#ffffff') + ';';
+    case 'glow': return 'text-shadow:0 0 1.5cqw ' + c + ',0 0 3cqw ' + c + ';';
+    case 'neon': return 'color:#ffffff;text-shadow:0 0 0.6cqw #ffffff,0 0 1.5cqw ' + c + ',0 0 3cqw ' + c + ',0 0 5cqw ' + c + ';';
+    case 'echo': return 'text-shadow:0.7cqw 0.7cqw 0 ' + c + '99,1.4cqw 1.4cqw 0 ' + c + '55;';
+    case 'splice': return 'color:transparent;-webkit-text-stroke:0.25cqw ' + (e.color || '#ffffff') + ';text-shadow:0.8cqw 0.8cqw 0 ' + c + ';';
+    case 'bg': return 'background:' + c + ';padding:1.5cqw;border-radius:' + (e.bgR == null ? 1.5 : e.bgR) + 'cqw;';
+  }
+  return '';
+}
+var _CV_ANIM_CSS = '@keyframes cvA-fade{from{opacity:0}}@keyframes cvA-rise{from{opacity:0;translate:0 8cqw}}@keyframes cvA-slide{from{opacity:0;translate:-15cqw 0}}@keyframes cvA-pop{0%{opacity:0;scale:.4}70%{scale:1.08}}@keyframes cvA-type{from{clip-path:inset(0 100% 0 0)}}@keyframes cvA-spin{from{opacity:0;rotate:-180deg;scale:.3}}@keyframes cvA-pulse{50%{scale:1.08}}';
+function _cvAnimCss(e){
+  if (!e.anim) return '';
+  if (e.anim === 'pulse') return 'animation:cvA-pulse 1.6s ease-in-out infinite;';
+  if (e.anim === 'type') return 'animation:cvA-type 1.4s steps(14) both;';
+  return 'animation:cvA-' + e.anim + ' .9s cubic-bezier(.2,.8,.2,1) both;';
+}
+function _cvChartHTML(e){
+  var items = String(e.data || '').split('\n').map(function(l){ var m = l.split(':'); return { l: (m[0] || '').trim(), v: parseFloat(String(m[1] || '').replace(',', '.')) || 0 }; }).filter(function(i){ return i.l || i.v; });
+  if (!items.length) return '';
+  var pal = [e.fill || '#b31e59', '#f4a3c4', '#111111', '#9ca3af', '#e8c9a0', '#6b2140', '#ffffff'];
+  var max = Math.max.apply(null, items.map(function(i){ return i.v; }).concat([1]));
+  var wrap = 'width:100%;height:100%;display:flex;color:' + (e.color || '#ffffff') + ';font-size:' + (e.fs || 2.6) + 'cqw;';
+  if (e.kind === 'pie' || e.kind === 'donut') {
+    var tot = items.reduce(function(s, i){ return s + Math.max(0, i.v); }, 0) || 1, acc = 0, C = 2 * Math.PI * 25;
+    var segs = items.map(function(it, k){ var len = Math.max(0, it.v) / tot * C; var s = '<circle r="25" cx="50" cy="50" fill="none" stroke="' + pal[k % pal.length] + '" stroke-width="' + (e.kind === 'donut' ? 16 : 50) + '" stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2) + '" stroke-dashoffset="' + (-acc).toFixed(2) + '" transform="rotate(-90 50 50)"/>'; acc += len; return s; }).join('');
+    var leg = items.map(function(it, k){ return '<span style="display:inline-flex;align-items:center;gap:.8cqw;margin:0 1.2cqw;white-space:nowrap"><i style="width:2cqw;height:2cqw;border-radius:50%;background:' + pal[k % pal.length] + ';display:inline-block"></i>' + _cvEsc(it.l) + ' ' + Math.round(Math.max(0, it.v) / tot * 100) + '%</span>'; }).join('');
+    return '<div style="' + wrap + 'flex-direction:column"><svg viewBox="0 0 100 100" style="flex:1;min-height:0;width:100%">' + segs + '</svg><div style="text-align:center;line-height:1.7">' + leg + '</div></div>';
+  }
+  if (e.kind === 'line') {
+    var n = items.length, pts = items.map(function(it, k){ return (n < 2 ? 50 : k / (n - 1) * 100).toFixed(1) + ',' + (100 - it.v / max * 92).toFixed(1); }).join(' ');
+    return '<div style="' + wrap + 'flex-direction:column"><svg viewBox="0 0 100 100" preserveAspectRatio="none" style="flex:1;min-height:0;width:100%;overflow:visible"><polyline points="' + pts + '" fill="none" stroke="' + pal[0] + '" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/></svg><div style="display:flex;justify-content:space-between">' + items.map(function(it){ return '<span>' + _cvEsc(it.l) + '</span>'; }).join('') + '</div></div>';
+  }
+  return '<div style="' + wrap + 'gap:2%;align-items:flex-end">' + items.map(function(it, k){ return '<div style="flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;min-width:0"><div style="font-weight:700">' + _cvEsc(String(it.v)) + '</div><div style="width:100%;height:' + (Math.max(0, it.v) / max * 78).toFixed(1) + '%;background:' + pal[k % pal.length] + ';border-radius:.8cqw .8cqw 0 0"></div><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">' + _cvEsc(it.l) + '</div></div>'; }).join('') + '</div>';
+}
+function _cvLineHTML(e){
+  var lc = e.fill || '#ffffff', th = e.lt || 100;
+  function cap(kind, end){
+    if (!kind) return '';
+    var sh = kind === 'arrow' ? '<polygon points="' + (end ? '0,0 10,5 0,10' : '10,0 0,5 10,10') + '"/>' : kind === 'circle' ? '<circle cx="5" cy="5" r="5"/>' : kind === 'square' ? '<rect width="10" height="10"/>' : '<rect x="' + (end ? 7 : 0) + '" width="3" height="10"/>';
+    return '<svg viewBox="0 0 10 10" preserveAspectRatio="none" style="height:100%;aspect-ratio:1;flex:none;fill:' + _cvAttr(lc) + ';display:block">' + sh + '</svg>';
+  }
+  var bar = 'flex:1;height:' + th + '%;min-height:1px;' + (e.dash === 'dash' ? 'background:repeating-linear-gradient(90deg,' + lc + ' 0 3cqw,transparent 3cqw 5cqw);' : e.dash === 'dot' ? 'background:repeating-linear-gradient(90deg,' + lc + ' 0 1cqw,transparent 1cqw 2.2cqw);' : 'background:' + lc + ';') + (e.round ? 'border-radius:999px;' : '');
+  return cap(e.capS, false) + '<div style="' + bar + '"></div>' + cap(e.capE, true);
+}
 function _cvElementsHTML(post){
   var els = (post && Array.isArray(post.elements)) ? post.elements : [];
   if (!els.length) return '';
+  var anyAnim = false;
   var h = els.slice().sort(function(a, b){ return (a.z || 0) - (b.z || 0); }).map(function(e){
-    var st = 'position:absolute;left:' + e.x + '%;top:' + e.y + '%;width:' + e.w + '%;height:' + e.h + '%;opacity:' + (e.op == null ? 1 : e.op) + ';transform:rotate(' + (e.rot || 0) + 'deg);box-sizing:border-box;';
+    var tf = 'rotate(' + (e.rot || 0) + 'deg)' + ((e.flipX || e.flipY) ? ' scale(' + (e.flipX ? -1 : 1) + ',' + (e.flipY ? -1 : 1) + ')' : '');
+    var st = 'position:absolute;left:' + e.x + '%;top:' + e.y + '%;width:' + e.w + '%;height:' + e.h + '%;opacity:' + (e.op == null ? 1 : e.op) + ';transform:' + tf + ';box-sizing:border-box;';
     var inner = '';
     if (e.type === 'text') {
-      st += 'color:' + (e.color || '#ffffff') + ';font-size:' + (e.fs || 6) + 'cqw;font-weight:' + (e.bold ? 700 : 400) + ';font-style:' + (e.italic ? 'italic' : 'normal') + ';font-family:' + (e.font ? "'" + String(e.font).replace(/'/g, '') + "',sans-serif" : 'inherit') + ';text-align:' + (e.align || 'left') + ';line-height:1.15;white-space:pre-wrap;word-break:break-word;overflow:hidden;' + (e.bg ? 'background:' + e.bg + ';padding:1.5cqw;' : '');
-      inner = _cvEsc(e.text || '');
+      var txt = e.text || '';
+      st += 'color:' + (e.color || '#ffffff') + ';font-size:' + (e.fs || 6) + 'cqw;font-weight:' + (e.bold ? 700 : 400) + ';font-style:' + (e.italic ? 'italic' : 'normal') + ';font-family:' + (e.font ? "'" + String(e.font).replace(/'/g, '') + "',sans-serif" : 'inherit') + ';text-align:' + (e.align || 'left') + ';line-height:' + (e.lh || 1.15) + ';white-space:pre-wrap;word-break:break-word;' + (e.curve ? 'overflow:visible;' : 'overflow:hidden;') + (e.bg ? 'background:' + e.bg + ';padding:1.5cqw;' : '') + (e.deco ? 'text-decoration:' + e.deco + ';' : '') + (e.upper ? 'text-transform:uppercase;' : '') + (e.ls ? 'letter-spacing:' + e.ls + 'em;' : '') + _cvTextFx(e);
+      if (e.curve) {
+        var fsU = (e.fs || 6) * 200 / Math.max(1, e.w), k = e.curve / 100, y0 = k > 0 ? 80 : 20, cy = y0 - 120 * k;
+        inner = '<svg viewBox="0 0 200 100" style="width:100%;height:100%;overflow:visible;display:block"><path id="cvc_' + _cvAttr(e.id) + '" d="M4,' + y0 + ' Q100,' + cy.toFixed(1) + ' 196,' + y0 + '" fill="none"/><text text-anchor="middle" fill="currentColor" style="font:inherit;font-size:' + fsU.toFixed(2) + 'px"><textPath href="#cvc_' + _cvAttr(e.id) + '" startOffset="50%">' + _cvEsc(txt) + '</textPath></text></svg>';
+      } else inner = _cvEsc(txt);
     } else if (e.type === 'image' || e.type === 'logo') {
       var src = e.type === 'logo' ? ((typeof BRAND_LOGO === 'string' && BRAND_LOGO) || e.src || '') : e.src;
-      inner = src ? '<img src="' + _cvAttr(src) + '" alt="" draggable="false" style="width:100%;height:100%;object-fit:' + (e.fit || 'contain') + ';display:block;pointer-events:none;border-radius:' + (e.radius || 0) + 'cqw">' : (e.type === 'logo' ? '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:5cqw">' + _cvEsc((typeof BRAND_NAME !== 'undefined' && BRAND_NAME) || 'Logga') + '</div>' : '');
+      inner = src ? '<img src="' + _cvAttr(src) + '" alt="" draggable="false" style="width:100%;height:100%;object-fit:' + (e.fit || 'contain') + ';display:block;pointer-events:none;border-radius:' + (e.radius || 0) + 'cqw">' : (e.type === 'logo' ? '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:5cqw">' + _cvEsc((typeof BRAND_NAME !== 'undefined' && BRAND_NAME) || 'Logga') + '</div>' : '<div style="width:100%;height:100%;background:repeating-linear-gradient(45deg,#d1d5db 0 2cqw,#e5e7eb 2cqw 4cqw);display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:3.5cqw;font-weight:700">Välj bild</div>');
+      if (e.type === 'image') st += _cvMaskCss(e);
     } else if (e.type === 'rect') {
       st += 'background:' + (e.fill || '#b31e59') + ';border-radius:' + (e.radius || 0) + 'cqw;';
     } else if (e.type === 'circle') {
       st += 'background:' + (e.fill || '#b31e59') + ';border-radius:50%;';
     } else if (e.type === 'line') {
-      st += 'background:' + (e.fill || '#ffffff') + ';';
+      st += 'display:flex;align-items:center;';
+      inner = _cvLineHTML(e);
     } else if (e.type === 'shape') {
       var P = { arrow:'M0 38H62V15L100 50L62 85V62H0Z', star:'M50 2L62 37H99L69 59L80 95L50 73L20 95L31 59L1 37H38Z', bubble:'M8 4H92Q98 4 98 10V64Q98 70 92 70H40L18 94L22 70H8Q2 70 2 64V10Q2 4 8 4Z', triangle:'M50 3L98 97H2Z', heart:'M50 92L10 52Q-6 30 14 14Q34 2 50 24Q66 2 86 14Q106 30 90 52Z', check:'M8 52L36 80L92 18L82 8L36 58L18 42Z', hexagon:'M25 4H75L99 50L75 96H25L1 50Z', diamond:'M50 2L98 50L50 98L2 50Z' };
       inner = '<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:100%;display:block;overflow:visible"><path d="' + (P[e.shape] || P.star) + '" fill="' + _cvAttr(e.fill || '#b31e59') + '"' + (e.border ? ' stroke="' + _cvAttr(e.borderColor || '#ffffff') + '" stroke-width="' + (e.borderW || 3) + '" vector-effect="non-scaling-stroke"' : '') + '/></svg>';
+    } else if (e.type === 'table') {
+      var rows = Array.isArray(e.rows) ? e.rows : [];
+      inner = '<table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed;font-size:' + (e.fs || 3) + 'cqw;color:' + (e.color || '#111111') + ';background:' + (e.bgc || '#ffffff') + '">' + rows.map(function(r, i){ return '<tr>' + r.map(function(c){ var hd = i === 0 && e.head !== false; return '<td style="border:.2cqw solid ' + (e.lineColor || '#e5e7eb') + ';padding:.6cqw 1cqw;overflow:hidden;' + (hd ? 'background:' + (e.fill || '#b31e59') + ';color:#fff;font-weight:700' : '') + '">' + _cvEsc(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>';
+    } else if (e.type === 'chart') {
+      inner = _cvChartHTML(e);
+    } else if (e.type === 'draw') {
+      inner = '<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:100%;display:block;overflow:visible"><polyline points="' + _cvAttr(e.pts || '') + '" fill="none" stroke="' + _cvAttr(e.fill || '#b31e59') + '" stroke-width="' + (e.sw || 3) + '" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>';
     }
     // Skugga och kant
     if (e.shadow) {
       if (e.type === 'text') st += 'text-shadow:0 0.4cqw 1.6cqw rgba(0,0,0,.55);';
-      else if (e.type === 'shape' || e.type === 'logo') st += 'filter:drop-shadow(0 0.6cqw 1.6cqw rgba(0,0,0,.45));';
+      else if (e.type === 'shape' || e.type === 'logo' || e.type === 'line' || e.type === 'draw' || e.type === 'chart') st += 'filter:drop-shadow(0 0.6cqw 1.6cqw rgba(0,0,0,.45));';
       else st += 'box-shadow:0 0.8cqw 2.4cqw rgba(0,0,0,.4);';
     }
-    if (e.border && e.type !== 'shape' && e.type !== 'line') st += 'border:' + (e.borderW || 3) + 'px solid ' + (e.borderColor || '#ffffff') + ';' + (e.type === 'image' && !e.radius ? '' : '');
+    if (e.border && e.type !== 'shape' && e.type !== 'line' && e.type !== 'draw') st += 'border:' + (e.borderW || 3) + 'px solid ' + (e.borderColor || '#ffffff') + ';';
     // Bildfilter
-    if (e.type === 'image' && (e.gray || (e.bright && e.bright !== 1) || (e.contrast && e.contrast !== 1) || e.sepia)) {
-      inner = inner.replace('pointer-events:none;', 'pointer-events:none;filter:' + (e.gray ? 'grayscale(1) ' : '') + (e.sepia ? 'sepia(.8) ' : '') + 'brightness(' + (e.bright || 1) + ') contrast(' + (e.contrast || 1) + ');');
+    if (e.type === 'image' && (e.gray || e.sepia || (e.bright && e.bright !== 1) || (e.contrast && e.contrast !== 1) || (e.sat != null && e.sat !== 1) || e.blur)) {
+      inner = inner.replace('pointer-events:none;', 'pointer-events:none;filter:' + (e.gray ? 'grayscale(1) ' : '') + (e.sepia ? 'sepia(.8) ' : '') + 'brightness(' + (e.bright || 1) + ') contrast(' + (e.contrast || 1) + ') saturate(' + (e.sat == null ? 1 : e.sat) + ')' + (e.blur ? ' blur(' + e.blur + 'cqw)' : '') + ';');
     }
+    if (e.anim) { anyAnim = true; st += _cvAnimCss(e); }
     return '<div class="cv-el" data-cv="' + _cvAttr(e.id) + '" style="' + st + '">' + inner + '</div>';
   }).join('');
-  return '<div class="cv-layer" style="position:absolute;inset:0;container-type:size;pointer-events:none;z-index:20;overflow:hidden">' + h + '</div>';
+  return '<div class="cv-layer" style="position:absolute;inset:0;container-type:size;pointer-events:none;z-index:20;overflow:hidden">' + (anyAnim ? '<style>' + _CV_ANIM_CSS + '</style>' : '') + h + '</div>';
 }
 
+
 var _cvSel = null, _cvUndo = [], _cvClip = null;
+var _cvMulti = [], _cvStyleClip = null, _cvLiveT = 0;
+function _cvSelIds(){ return [_cvSel].concat(_cvMulti || []).filter(function(v, i, a){ return v && a.indexOf(v) === i; }); }
+function _cvSelEls(){ var p = _cvPost(); return _cvSelIds().map(function(id){ return _cvFind(p, id); }).filter(Boolean); }
+// Värden som ändras med reglage: rita om kortet men behåll verktygsraden (annars tappar reglaget greppet)
+function cvLive(prop, val){ var p = _cvPost(), e = _cvFind(p, _cvSel); if (!e) return; if (Date.now() - _cvLiveT > 900) _cvSnap(); _cvLiveT = Date.now(); e[prop] = val; window._cvKeepTb = true; try { _cvRerender(); } finally { window._cvKeepTb = false; } }
+function cvSetRows(v){ cvSet('rows', String(v || '').split('\n').map(function(l){ return l.split(';').map(function(s){ return s.trim(); }); }).filter(function(r){ return r.join('') !== ''; })); }
+function _cvSqH(w){ var c = document.getElementById('emPreviewCard'); return c && c.offsetHeight ? w * c.offsetWidth / c.offsetHeight : w; }
+function cvAddFrame(m){ var w = 40, h = _cvSqH(40); cvAdd('image', { mask: m, src: '', x: 30, y: Math.max(0, (100 - h) / 2), w: w, h: h, fit: 'cover' }); window._cvReplaceId = _cvSel; cvToggleImgPop(); }
+function cvReplaceImage(){ window._cvReplaceId = _cvSel; var p = document.getElementById('cvImgPop'); if (p) p.style.display = 'none'; cvToggleImgPop(); }
+function _cvPlaceImage(src, ratio){
+  var p = _cvPost(), t = window._cvReplaceId && _cvFind(p, window._cvReplaceId); window._cvReplaceId = null;
+  if (t) { _cvSnap(); t.src = src; _cvSel = t.id; _cvMulti = []; _cvRerender(); return; }
+  cvAdd('image', ratio ? { src: src, w: 50, h: Math.min(90, 50 * ratio), fit: 'cover' } : { src: src, fit: 'cover' });
+}
+function cvPageBg(c){
+  var p = _cvPost(); if (!p) return; _cvSnap(); p.elements = p.elements || [];
+  var b = p.elements.filter(function(e){ return e.role === 'pagebg'; })[0];
+  if (c === null) p.elements = p.elements.filter(function(e){ return e.role !== 'pagebg'; });
+  else if (b) b.fill = c;
+  else p.elements.push({ id: _cvNewId(), type: 'rect', role: 'pagebg', fill: c, x: 0, y: 0, w: 100, h: 100, rot: 0, z: Math.min.apply(null, p.elements.map(function(e){ return e.z || 0; }).concat([0])) - 1, op: 1, radius: 0 });
+  _cvRerender();
+}
+function cvTogglePen(){ window._cvPen = !window._cvPen; var c = document.getElementById('emPreviewCard'); if (c) { c.style.cursor = window._cvPen ? 'crosshair' : 'grab'; _cvRenderToolbar(c); } }
+function cvGroup(){ var els = _cvSelEls(); if (els.length < 2) return; _cvSnap(); var g = 'g' + _cvNewId(); els.forEach(function(e){ e.grp = g; }); _cvRerender(); }
+function cvUngroup(){ var els = _cvSelEls(); if (!els.length) return; _cvSnap(); els.forEach(function(e){ delete e.grp; }); _cvMulti = []; _cvRerender(); }
+function cvSelectAll(){ var p = _cvPost(); var els = ((p && p.elements) || []).filter(function(e){ return e.role !== 'pagebg'; }); if (!els.length) return; _cvSel = els[0].id; _cvMulti = els.slice(1).map(function(e){ return e.id; }); _cvRerender(); }
+function cvLockSel(){ var els = _cvSelEls(); if (!els.length) return; _cvSnap(); var v = !els[0].locked; els.forEach(function(e){ e.locked = v; }); _cvRerender(); }
+function cvCopy(){ var els = _cvSelEls(); if (els.length) _cvClip = JSON.stringify(els); }
+function cvPaste(){
+  var p = _cvPost(); if (!p || !_cvClip) return; var arr = JSON.parse(_cvClip); if (!Array.isArray(arr)) arr = [arr];
+  _cvSnap(); p.elements = p.elements || []; var gm = {}, ids = [];
+  arr.forEach(function(c){ c.id = _cvNewId(); c.x = Math.min(95, c.x + 3); c.y = Math.min(95, c.y + 3); c.z = _cvTopZ(p); c.locked = false; if (c.grp) { gm[c.grp] = gm[c.grp] || ('g' + _cvNewId()); c.grp = gm[c.grp]; } p.elements.push(c); ids.push(c.id); });
+  _cvSel = ids[0]; _cvMulti = ids.slice(1); _cvRerender();
+}
+var _CV_GEOM = ['id','type','x','y','w','h','z','text','src','rows','data','pts','grp','role','locked','shape','kind'];
+function cvCopyStyle(){ var e = _cvFind(_cvPost(), _cvSel); if (!e) return; var s = {}; Object.keys(e).forEach(function(k){ if (_CV_GEOM.indexOf(k) < 0) s[k] = e[k]; }); _cvStyleClip = s; if (typeof showToast === 'function') showToast('Stil kopierad'); }
+function cvPasteStyle(){ if (!_cvStyleClip) return; var els = _cvSelEls(); if (!els.length) return; _cvSnap(); els.forEach(function(e){ Object.assign(e, JSON.parse(JSON.stringify(_cvStyleClip))); }); _cvRerender(); }
+function _cvCloseCtx(){ var m = document.getElementById('cvCtx'); if (m) m.remove(); }
+function _cvCtx(x, y){
+  _cvCloseCtx();
+  var e = _cvFind(_cvPost(), _cvSel), multi = _cvSelIds().length > 1;
+  function it(l, fn, k){ return '<div onclick="_cvCloseCtx();' + fn + '" style="padding:7px 14px;cursor:pointer;display:flex;justify-content:space-between;gap:18px" onmouseover="this.style.background=\'#fdf0f6\'" onmouseout="this.style.background=\'\'"><span>' + l + '</span><span style="color:#9ca3af">' + (k || '') + '</span></div>'; }
+  var sep = '<div style="height:1px;background:#f0f0f0;margin:4px 0"></div>';
+  var m = document.createElement('div'); m.id = 'cvCtx';
+  m.style.cssText = 'position:fixed;left:' + x + 'px;top:' + y + 'px;z-index:10000;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:6px 0;font-size:13px;min-width:220px;color:#111';
+  m.innerHTML = it('Kopiera', 'cvCopy()', 'Ctrl+C') + (_cvClip ? it('Klistra in', 'cvPaste()', 'Ctrl+V') : '') + it('Duplicera', 'cvDuplicate()', 'Ctrl+D') + it('Ta bort', 'cvDelete()', 'Delete') + sep +
+    it('Kopiera stil', 'cvCopyStyle()') + (_cvStyleClip ? it('Klistra in stil', 'cvPasteStyle()') : '') + sep +
+    it('Längst fram', "cvLayer('front')") + it('Framåt', "cvLayer('up')") + it('Bakåt', "cvLayer('down')") + it('Längst bak', "cvLayer('back')") + sep +
+    it('Centrera på sidan', "cvAlign('hcenter');cvAlign('vcenter')") + (multi ? it('Gruppera', 'cvGroup()', 'Ctrl+G') : '') + (e && e.grp ? it('Dela upp grupp', 'cvUngroup()', 'Ctrl+Shift+G') : '') + it(e && e.locked ? 'Lås upp' : 'Lås', 'cvLockSel()');
+  document.body.appendChild(m);
+  var r = m.getBoundingClientRect(); if (r.bottom > innerHeight) m.style.top = Math.max(4, innerHeight - r.height - 4) + 'px'; if (r.right > innerWidth) m.style.left = Math.max(4, innerWidth - r.width - 4) + 'px';
+  setTimeout(function(){ document.addEventListener('mousedown', function h(ev){ if (!m.contains(ev.target)) { _cvCloseCtx(); document.removeEventListener('mousedown', h, true); } }, true); }, 0);
+}
 function _cvPost(){ return S._editPost || null; }
 function _cvFind(post, id){ return ((post && post.elements) || []).find(function(e){ return e.id === id; }) || null; }
 function _cvSnap(){ var p = _cvPost(); if (!p) return; _cvUndo.push(JSON.stringify({ el: p.elements || [], pb: p.photoBox || null, ip: p.imgPos || null })); if (_cvUndo.length > 60) _cvUndo.shift(); }
@@ -5341,13 +5463,15 @@ function cvAdd(type, extra){
   if (type === 'text') Object.assign(e, { text: 'Skriv din text', color: '#ffffff', fs: 7, bold: true, align: 'left', x: 10, y: 40, w: 80, h: 16 });
   if (type === 'rect') Object.assign(e, { fill: _cvBrandColor(), radius: 0, x: 25, y: 35, w: 50, h: 30 });
   if (type === 'circle') Object.assign(e, { fill: _cvBrandColor(), x: 35, y: 35, w: 30, h: 30 });
-  if (type === 'line') Object.assign(e, { fill: '#ffffff', x: 10, y: 50, w: 80, h: 0.8 });
+  if (type === 'line') Object.assign(e, { fill: '#ffffff', x: 10, y: 48, w: 80, h: 4, lt: 30, capS: '', capE: '' });
+  if (type === 'table') Object.assign(e, { rows: [['Rubrik', 'Värde'], ['Rad 1', '10'], ['Rad 2', '20']], fill: _cvBrandColor(), color: '#111111', bgc: '#ffffff', fs: 3, x: 10, y: 30, w: 80, h: 30 });
+  if (type === 'chart') Object.assign(e, { kind: 'bar', data: 'Jan: 12\nFeb: 18\nMar: 9\nApr: 22', fill: _cvBrandColor(), color: '#ffffff', fs: 2.6, x: 10, y: 25, w: 80, h: 45 });
   if (type === 'logo') Object.assign(e, { x: 6, y: 6, w: 22, h: 12, fit: 'contain' });
   if (type === 'image') Object.assign(e, { x: 25, y: 25, w: 50, h: 50, fit: 'cover' });
   if (type === 'shape') Object.assign(e, { shape: 'star', fill: _cvBrandColor(), x: 35, y: 35, w: 30, h: 30 });
   Object.assign(e, extra || {});
   post.elements.push(e);
-  _cvSel = e.id;
+  _cvSel = e.id; _cvMulti = [];
   _cvRerender();
 }
 function cvAddImageFile(input){
@@ -5362,14 +5486,14 @@ function cvAddImageFile(input){
       var ratio = img.naturalHeight / Math.max(1, img.naturalWidth);
       fetch('/api/images', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ dataUrl: dataUrl }) })
         .then(function(r){ return r.json(); })
-        .then(function(d){ var src = (d && d.url) || dataUrl; cvAdd('image', { src: src, w: 50, h: Math.min(90, 50 * ratio), fit: 'cover' }); _cvHidePop(); })
-        .catch(function(){ cvAdd('image', { src: dataUrl, w: 50, h: Math.min(90, 50 * ratio), fit: 'cover' }); _cvHidePop(); });
+        .then(function(d){ var src = (d && d.url) || dataUrl; _cvPlaceImage(src, ratio); _cvHidePop(); })
+        .catch(function(){ _cvPlaceImage(dataUrl, ratio); _cvHidePop(); });
     };
     img.src = dataUrl;
   };
   rd.readAsDataURL(f);
 }
-function cvAddLibImage(i){ var lib = (typeof _getImgLib === 'function') ? _getImgLib() : []; var it = lib[i]; if (!it) return; cvAdd('image', { src: it.url, fit: 'cover' }); _cvHidePop(); }
+function cvAddLibImage(i){ var lib = (typeof _getImgLib === 'function') ? _getImgLib() : []; var it = lib[i]; if (!it) return; _cvPlaceImage(it.url); _cvHidePop(); }
 function _cvHidePop(){ var p = document.getElementById('cvImgPop'); if (p) p.style.display = 'none'; }
 function cvToggleImgPop(){
   var p = document.getElementById('cvImgPop'); if (!p) return;
@@ -5392,62 +5516,107 @@ function cvLayer(dir){
   else e.z = (e.z || 0) + (dir === 'up' ? 1.5 : -1.5);
   _cvRerender();
 }
-function cvDuplicate(){ var p = _cvPost(), e = _cvFind(p, _cvSel); if (!e) return; _cvSnap(); var c = JSON.parse(JSON.stringify(e)); c.id = _cvNewId(); c.x = Math.min(95, e.x + 3); c.y = Math.min(95, e.y + 3); c.z = _cvTopZ(p); c.locked = false; p.elements.push(c); _cvSel = c.id; _cvRerender(); }
-function cvDelete(){ var p = _cvPost(), e = _cvFind(p, _cvSel); if (!e) return; _cvSnap(); p.elements = p.elements.filter(function(x){ return x.id !== e.id; }); _cvSel = null; _cvRerender(); }
+function cvDuplicate(){ var keep = _cvClip; cvCopy(); cvPaste(); _cvClip = keep; }
+function cvDelete(){ var p = _cvPost(), ids = _cvSelIds(); if (!p || !ids.length) return; _cvSnap(); p.elements = (p.elements || []).filter(function(x){ return ids.indexOf(x.id) < 0; }); _cvSel = null; _cvMulti = []; _cvRerender(); }
 function cvAlign(where){
-  var p = _cvPost(), e = _cvFind(p, _cvSel); if (!e) return; _cvSnap();
-  if (where === 'left') e.x = 0; if (where === 'hcenter') e.x = (100 - e.w) / 2; if (where === 'right') e.x = 100 - e.w;
-  if (where === 'top') e.y = 0; if (where === 'vcenter') e.y = (100 - e.h) / 2; if (where === 'bottom') e.y = 100 - e.h;
+  var els = _cvSelEls(); if (!els.length) return; _cvSnap();
+  els.forEach(function(e){
+    if (where === 'left') e.x = 0; if (where === 'hcenter') e.x = (100 - e.w) / 2; if (where === 'right') e.x = 100 - e.w;
+    if (where === 'top') e.y = 0; if (where === 'vcenter') e.y = (100 - e.h) / 2; if (where === 'bottom') e.y = 100 - e.h;
+  });
   _cvRerender();
 }
 function cvResetImage(){ var p = _cvPost(); if (!p) return; _cvSnap(); p.imgPos = { x:0, y:0, zoom:1 }; if (p.photoBox) delete p.photoBox; _cvRerender(); var zs = document.getElementById('emZoomSlider'); if (zs) zs.value = 1; }
 
 function _cvBtn(label, onclick, title, active){ return '<button type="button" title="' + _cvAttr(title || label) + '" onclick="' + onclick + '" style="font-size:12px;font-weight:600;padding:6px 9px;border-radius:8px;border:1.5px solid ' + (active ? '#b31e59' : '#e5e7eb') + ';background:' + (active ? '#fdf0f6' : '#fff') + ';color:#111;cursor:pointer;white-space:nowrap">' + label + '</button>'; }
+function _cvDd(onchange, opts, cur, title){ return '<select title="' + _cvAttr(title || '') + '" onchange="' + onchange + '" style="font-size:12px;padding:5px;border:1.5px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer">' + opts.map(function(o){ return '<option value="' + _cvAttr(o[0]) + '"' + (String(cur == null ? '' : cur) === String(o[0]) ? ' selected' : '') + '>' + _cvEsc(o[1]) + '</option>'; }).join('') + '</select>'; }
+function _cvCol(prop, val, title){ return '<input type="color" value="' + _cvAttr(/^#[0-9a-f]{6}$/i.test(val || '') ? val : '#ffffff') + '" oninput="cvLive(\'' + prop + '\', this.value)" title="' + _cvAttr(title || '') + '" style="width:30px;height:28px;border:none;background:none;cursor:pointer;padding:0;flex:none">'; }
+function _cvRng(label, prop, min, max, step, val, w){ return '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px;white-space:nowrap">' + label + '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '" oninput="cvLive(\'' + prop + '\', parseFloat(this.value))" style="width:' + (w || 64) + 'px"></label>'; }
+function _cvNum(label, prop, val){ return '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:3px;white-space:nowrap">' + label + '<input type="number" step="0.5" value="' + (Math.round((val || 0) * 10) / 10) + '" onchange="cvSet(\'' + prop + '\', parseFloat(this.value) || 0)" style="width:54px;font-size:12px;padding:4px;border:1.5px solid #e5e7eb;border-radius:6px"></label>'; }
+function _cvTa(onchange, val, w){ return '<textarea rows="1" onchange="' + onchange + '" style="min-width:' + (w || 170) + 'px;font-size:12px;padding:5px;border:1.5px solid #e5e7eb;border-radius:8px;resize:both;font-family:inherit">' + _cvEsc(val || '') + '</textarea>'; }
+var _CV_ROW = '<div style="display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;align-items:center;margin-top:6px;padding-bottom:4px">';
+var _CV_LBL = function(t){ return '<span style="font-size:11px;font-weight:700;color:#6b7280;white-space:nowrap">' + t + '</span>'; };
 function _cvToolbarHTML(){
-  var p = _cvPost(), e = _cvFind(p, _cvSel);
-  var add = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;position:relative">' +
-    '<span style="font-size:11px;font-weight:700;color:#6b7280;margin-right:2px">Lägg till</span>' +
+  var p = _cvPost(), e = _cvFind(p, _cvSel), ids = _cvSelIds();
+  var bgEl = ((p && p.elements) || []).filter(function(x){ return x.role === 'pagebg'; })[0];
+  var add = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">' + _CV_LBL('Lägg till') +
     _cvBtn('T Text', "cvAdd('text')", 'Ny textruta') +
-    _cvBtn('🖼 Bild', 'cvToggleImgPop()', 'Bild från dator eller bildbank') +
+    _cvBtn('🖼 Bild', 'window._cvReplaceId=null;cvToggleImgPop()', 'Bild från dator eller bildbank') +
     _cvBtn('Logga', "cvAdd('logo')", 'Varumärkets logga') +
-    '<select onchange="var v=this.value;if(v){if(v===\'rect\'||v===\'circle\'||v===\'line\')cvAdd(v);else cvAdd(\'shape\',{shape:v});this.value=\'\';}" title="Fler former" style="font-size:12px;font-weight:600;padding:6px;border:1.5px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer"><option value="">✦ Former</option><option value="rect">Rektangel</option><option value="circle">Cirkel</option><option value="line">Linje</option><option value="arrow">Pil</option><option value="star">Stjärna</option><option value="bubble">Pratbubbla</option><option value="triangle">Triangel</option><option value="heart">Hjärta</option><option value="check">Bock</option><option value="hexagon">Hexagon</option><option value="diamond">Romb</option></select>' +
+    _cvDd("var v=this.value;if(v){if(v==='rect'||v==='circle')cvAdd(v);else if(v==='line')cvAdd('line');else if(v==='arrowline')cvAdd('line',{capE:'arrow'});else cvAdd('shape',{shape:v});this.value='';}", [['', '✦ Former'], ['rect', 'Rektangel'], ['circle', 'Cirkel'], ['line', 'Linje'], ['arrowline', 'Linje med pil'], ['arrow', 'Pil (form)'], ['star', 'Stjärna'], ['bubble', 'Pratbubbla'], ['triangle', 'Triangel'], ['heart', 'Hjärta'], ['check', 'Bock'], ['hexagon', 'Hexagon'], ['diamond', 'Romb']], '', 'Former och linjer') +
+    _cvDd("if(this.value){cvAddFrame(this.value);this.value='';}", [['', '▢ Ram'], ['circle', 'Cirkel'], ['rounded', 'Rundad'], ['arch', 'Båge'], ['hexagon', 'Hexagon'], ['diamond', 'Romb'], ['triangle', 'Triangel'], ['star', 'Stjärna']], '', 'Bildram – bilden beskärs efter formen') +
+    _cvBtn('▦ Tabell', "cvAdd('table')", 'Tabell') +
+    _cvBtn('📊 Diagram', "cvAdd('chart')", 'Diagram') +
+    _cvBtn(window._cvPen ? '✏️ Ritar – klicka för att sluta' : '✏️ Rita', 'cvTogglePen()', 'Rita fritt i inlägget', window._cvPen) +
+    (window._cvPen ? '<input type="color" value="' + _cvAttr(window._cvPenColor || '#b31e59') + '" oninput="window._cvPenColor=this.value" title="Pennans färg" style="width:30px;height:28px;border:none;background:none;padding:0"><label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Tjocklek<input type="range" min="1" max="14" step="1" value="' + (window._cvPenW || 3) + '" oninput="window._cvPenW=parseFloat(this.value)" style="width:60px"></label>' : '') +
+    '<label title="Färgbakgrund bakom allt" style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px;white-space:nowrap">Bakgrund<input type="color" value="' + _cvAttr((bgEl && bgEl.fill) || '#ffffff') + '" onchange="cvPageBg(this.value)" style="width:30px;height:28px;border:none;background:none;padding:0"></label>' + (bgEl ? _cvBtn('✕', 'cvPageBg(null)', 'Ta bort färgbakgrunden') : '') +
     _cvBtn('↺ Återställ bild', 'cvResetImage()', 'Återställ huvudbildens position och zoom') +
-    '<div id="cvImgPop" style="display:none;position:absolute;top:36px;left:60px;z-index:60;width:260px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px"></div>' +
-    '</div>';
-  if (!e) return add + '<div style="font-size:11px;color:#9ca3af;margin-top:6px">Tips: klicka på ett element för att markera det. Dubbelklicka på text för att skriva. Delete tar bort, Ctrl+D duplicerar, piltangenter flyttar, Ctrl+Z ångrar.</div>';
-  var row = '<div style="display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;align-items:center;margin-top:8px;padding:8px 0 4px;border-top:1px solid #f0f0f0">';
+    '</div><div id="cvImgPop" style="display:none;position:absolute;top:46px;left:60px;z-index:60;width:260px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px"></div>';
+  var alignBtns = _cvBtn('⇤', "cvAlign('left')", 'Vänster kant') + _cvBtn('↔', "cvAlign('hcenter')", 'Centrera vågrätt') + _cvBtn('⇥', "cvAlign('right')", 'Höger kant') + _cvBtn('⤒', "cvAlign('top')", 'Överkant') + _cvBtn('↕', "cvAlign('vcenter')", 'Centrera lodrätt') + _cvBtn('⤓', "cvAlign('bottom')", 'Nederkant');
+  if (ids.length > 1) {
+    return add + _CV_ROW + _CV_LBL(ids.length + ' markerade') + _cvBtn('▣ Gruppera', 'cvGroup()', 'Gruppera (Ctrl+G)') + _cvBtn('Dela upp', 'cvUngroup()', 'Dela upp grupp (Ctrl+Shift+G)') + _cvBtn('⧉ Duplicera', 'cvDuplicate()', 'Duplicera (Ctrl+D)') + _cvBtn('🔒 Lås', 'cvLockSel()', 'Lås/lås upp') + _cvBtn('🗑 Ta bort', 'cvDelete()', 'Ta bort (Delete)') + _CV_LBL('Justera mot sidan') + alignBtns + '</div>';
+  }
+  if (!e) return add + '<div style="font-size:11px;color:#9ca3af;margin-top:6px">Tips: klicka för att markera, Shift+klick markerar flera, Ctrl+A markerar allt, högerklick ger fler val. Dubbelklicka på text för att skriva. Delete tar bort, Ctrl+D duplicerar, Ctrl+G grupperar, piltangenter flyttar, Ctrl+Z ångrar.</div>';
+  var a = _CV_ROW;
   if (e.type === 'text') {
-    var fonts = (typeof TYPOGRAPHY !== 'undefined' && Array.isArray(TYPOGRAPHY)) ? TYPOGRAPHY.map(function(t){ return String(t.name || '').replace(/\s+(Bold|Regular|Light|Medium|Black|Thin)$/i, ''); }).filter(function(v, i, a){ return v && a.indexOf(v) === i; }) : [];
-    row += '<input type="color" value="' + _cvAttr(e.color || '#ffffff') + '" oninput="cvSet(\'color\', this.value)" title="Textfärg" style="width:32px;height:28px;border:none;background:none;cursor:pointer">' +
-      _cvBtn('A−', "cvBump('fs', -0.5, 2, 30)", 'Mindre text') + _cvBtn('A+', "cvBump('fs', 0.5, 2, 30)", 'Större text') +
+    var fonts = (typeof TYPOGRAPHY !== 'undefined' && Array.isArray(TYPOGRAPHY)) ? TYPOGRAPHY.map(function(t){ return String(t.name || '').replace(/\s+(Bold|Regular|Light|Medium|Black|Thin)$/i, ''); }) : [];
+    fonts = fonts.concat(['Georgia', 'Helvetica', 'Arial', 'Times New Roman', 'Trebuchet MS', 'Verdana', 'Courier New', 'Impact']).filter(function(v, i, arr){ return v && arr.indexOf(v) === i; });
+    a += _cvTa("cvSet('text', this.value)", e.text) + _cvCol('color', e.color || '#ffffff', 'Textfärg') +
+      _cvDd("cvSet('font', this.value)", [['', 'Typsnitt']].concat(fonts.map(function(f){ return [f, f]; })), e.font || '', 'Typsnitt') +
+      _cvBtn('A−', "cvBump('fs', -0.5, 1, 40)", 'Mindre text') + _cvBtn('A+', "cvBump('fs', 0.5, 1, 40)", 'Större text') +
       _cvBtn('<b>B</b>', "cvToggle('bold')", 'Fetstil', e.bold) + _cvBtn('<i>I</i>', "cvToggle('italic')", 'Kursiv', e.italic) +
-      _cvBtn('⇤', "cvSet('align','left')", 'Vänsterjustera', e.align === 'left') + _cvBtn('↔', "cvSet('align','center')", 'Centrera', e.align === 'center') + _cvBtn('⇥', "cvSet('align','right')", 'Högerjustera', e.align === 'right') +
-      (fonts.length ? '<select onchange="cvSet(\'font\', this.value)" style="font-size:12px;padding:5px;border:1.5px solid #e5e7eb;border-radius:8px"><option value="">Typsnitt</option>' + fonts.map(function(f){ return '<option' + (e.font === f ? ' selected' : '') + '>' + _cvEsc(f) + '</option>'; }).join('') + '</select>' : '') +
-      '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Bakgrund<input type="checkbox"' + (e.bg ? ' checked' : '') + ' onchange="cvSet(\'bg\', this.checked ? \'rgba(0,0,0,.45)\' : \'\')"></label>';
-  }
-  if (e.type === 'rect' || e.type === 'circle' || e.type === 'line' || e.type === 'shape') {
-    row += '<input type="color" value="' + _cvAttr(/^#/.test(e.fill || '') ? e.fill : '#b31e59') + '" oninput="cvSet(\'fill\', this.value)" title="Färg" style="width:32px;height:28px;border:none;background:none;cursor:pointer">';
-    if (e.type === 'rect') row += _cvBtn('Rundade hörn', "cvBump('radius', 2, 0, 50)", 'Rundare hörn') + _cvBtn('Raka hörn', "cvSet('radius', 0)", 'Raka hörn');
-  }
-  if (e.type === 'image') {
-    row += _cvBtn(e.fit === 'contain' ? 'Fyll ruta' : 'Visa hela', "cvSet('fit', '" + (e.fit === 'contain' ? 'cover' : 'contain') + "')", 'Beskär eller visa hela bilden') +
+      _cvBtn('<u>U</u>', "cvSet('deco', '" + (e.deco === 'underline' ? '' : 'underline') + "')", 'Understruken', e.deco === 'underline') +
+      _cvBtn('<s>S</s>', "cvSet('deco', '" + (e.deco === 'line-through' ? '' : 'line-through') + "')", 'Genomstruken', e.deco === 'line-through') +
+      _cvBtn('Aa', "cvToggle('upper')", 'Versaler', e.upper) +
+      _cvBtn('⇤', "cvSet('align','left')", 'Vänsterjustera', e.align === 'left') + _cvBtn('≡', "cvSet('align','center')", 'Centrera texten', e.align === 'center') + _cvBtn('⇥', "cvSet('align','right')", 'Högerjustera', e.align === 'right') +
+      '</div>' + _CV_ROW + _CV_LBL('Effekt') +
+      _cvDd("cvSet('fx', this.value)", [['', 'Ingen'], ['lift', 'Lyft'], ['outline', 'Kontur'], ['hollow', 'Ihålig'], ['glow', 'Glöd'], ['neon', 'Neon'], ['echo', 'Eko'], ['splice', 'Splice'], ['bg', 'Bakgrund']], e.fx || '', 'Texteffekt') +
+      (e.fx && e.fx !== 'lift' && e.fx !== 'hollow' ? _cvCol('fxColor', e.fxColor || '#b31e59', 'Effektens färg') : '') +
+      (e.fx === 'bg' ? _cvRng('Rundning', 'bgR', 0, 8, 0.5, e.bgR == null ? 1.5 : e.bgR, 54) : '') +
+      _cvRng('Böj', 'curve', -100, 100, 5, e.curve || 0, 70) + _cvRng('Avstånd', 'ls', -0.05, 0.5, 0.01, e.ls || 0, 60) + _cvRng('Radavstånd', 'lh', 0.8, 2.2, 0.05, e.lh || 1.15, 60);
+  } else if (e.type === 'line') {
+    var caps = [['', 'Ingen'], ['arrow', 'Pil'], ['circle', 'Cirkel'], ['square', 'Fyrkant'], ['bar', 'Streck']];
+    a += _cvCol('fill', e.fill || '#ffffff', 'Linjens färg') + _cvRng('Tjocklek', 'lt', 5, 100, 5, e.lt || 100, 64) +
+      _CV_LBL('Start') + _cvDd("cvSet('capS', this.value)", caps, e.capS || '', 'Startpunkt') + _CV_LBL('Slut') + _cvDd("cvSet('capE', this.value)", caps, e.capE || '', 'Slutpunkt') +
+      _cvDd("cvSet('dash', this.value)", [['', 'Hel linje'], ['dash', 'Streckad'], ['dot', 'Prickad']], e.dash || '', 'Linjestil') + _cvBtn('Rundade ändar', "cvToggle('round')", 'Rundade ändar', e.round);
+  } else if (e.type === 'rect' || e.type === 'circle' || e.type === 'shape') {
+    a += _cvCol('fill', /^#/.test(e.fill || '') ? e.fill : '#b31e59', 'Färg');
+    if (e.type === 'rect') a += _cvRng('Hörn', 'radius', 0, 50, 1, e.radius || 0, 64);
+    if (e.role === 'pagebg') a += _CV_LBL('Färgbakgrund');
+  } else if (e.type === 'image') {
+    a += _cvBtn('🔁 Byt bild', 'cvReplaceImage()', 'Byt bilden men behåll storlek och ram') +
+      _cvDd("cvSet('mask', this.value)", [['', 'Ingen ram'], ['circle', 'Cirkel'], ['rounded', 'Rundad'], ['arch', 'Båge'], ['hexagon', 'Hexagon'], ['diamond', 'Romb'], ['triangle', 'Triangel'], ['star', 'Stjärna']], e.mask || '', 'Ram') +
+      _cvBtn(e.fit === 'contain' ? 'Fyll ruta' : 'Visa hela', "cvSet('fit', '" + (e.fit === 'contain' ? 'cover' : 'contain') + "')", 'Beskär eller visa hela bilden') +
       _cvBtn('Gråskala', "cvToggle('gray')", 'Svartvitt', e.gray) + _cvBtn('Sepia', "cvToggle('sepia')", 'Varm ton', e.sepia) +
-      '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Ljus<input type="range" min="0.4" max="1.6" step="0.05" value="' + (e.bright || 1) + '" oninput="cvSet(\'bright\', parseFloat(this.value))" style="width:60px"></label>' +
-      '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Kontrast<input type="range" min="0.4" max="1.6" step="0.05" value="' + (e.contrast || 1) + '" oninput="cvSet(\'contrast\', parseFloat(this.value))" style="width:60px"></label>';
+      _cvRng('Ljus', 'bright', 0.4, 1.6, 0.05, e.bright || 1, 54) + _cvRng('Kontrast', 'contrast', 0.4, 1.6, 0.05, e.contrast || 1, 54) + _cvRng('Mättnad', 'sat', 0, 2, 0.05, e.sat == null ? 1 : e.sat, 54) + _cvRng('Oskärpa', 'blur', 0, 2, 0.1, e.blur || 0, 54);
+  } else if (e.type === 'table') {
+    a += _CV_LBL('Celler (; mellan kolumner)') + _cvTa('cvSetRows(this.value)', (e.rows || []).map(function(r){ return r.join('; '); }).join('\n'), 200) +
+      _CV_LBL('Rubrik') + _cvCol('fill', e.fill || '#b31e59', 'Rubrikradens färg') + _CV_LBL('Text') + _cvCol('color', e.color || '#111111', 'Textfärg') + _CV_LBL('Celler') + _cvCol('bgc', e.bgc || '#ffffff', 'Cellernas bakgrund') +
+      _cvBtn('A−', "cvBump('fs', -0.25, 1, 10)", 'Mindre text') + _cvBtn('A+', "cvBump('fs', 0.25, 1, 10)", 'Större text') + _cvBtn('Rubrikrad', "cvSet('head', " + (e.head === false) + ")", 'Visa första raden som rubrik', e.head !== false);
+  } else if (e.type === 'chart') {
+    a += _cvDd("cvSet('kind', this.value)", [['bar', 'Stapel'], ['line', 'Linje'], ['pie', 'Cirkel'], ['donut', 'Munk']], e.kind || 'bar', 'Diagramtyp') +
+      _CV_LBL('Data (Etikett: värde)') + _cvTa("cvSet('data', this.value)", e.data, 170) + _CV_LBL('Färg') + _cvCol('fill', e.fill || '#b31e59', 'Huvudfärg') + _CV_LBL('Text') + _cvCol('color', e.color || '#ffffff', 'Textfärg') +
+      _cvBtn('A−', "cvBump('fs', -0.25, 1, 8)", 'Mindre text') + _cvBtn('A+', "cvBump('fs', 0.25, 1, 8)", 'Större text');
+  } else if (e.type === 'draw') {
+    a += _cvCol('fill', e.fill || '#b31e59', 'Färg') + _cvRng('Tjocklek', 'sw', 1, 14, 1, e.sw || 3, 64);
+  } else if (e.type === 'logo') {
+    a += _CV_LBL('Logga');
   }
-  if (e.type !== 'line') {
-    row += _cvBtn('Skugga', "cvToggle('shadow')", 'Skugga', e.shadow) + _cvBtn('Kant', "cvToggle('border')", 'Kant runt elementet', e.border);
-    if (e.border) row += '<input type="color" value="' + _cvAttr(e.borderColor || '#ffffff') + '" oninput="cvSet(\'borderColor\', this.value)" title="Kantfärg" style="width:32px;height:28px;border:none;background:none;cursor:pointer">' + _cvBtn('Tunnare', "cvBump('borderW', -1, 1, 20)", 'Tunnare kant') + _cvBtn('Tjockare', "cvBump('borderW', 1, 1, 20)", 'Tjockare kant');
+  a += '</div>';
+  var b = _CV_ROW + _cvBtn('Skugga', "cvToggle('shadow')", 'Skugga', e.shadow);
+  if (e.type !== 'line' && e.type !== 'draw') {
+    b += _cvBtn('Kant', "cvToggle('border')", 'Kant runt elementet', e.border);
+    if (e.border) b += _cvCol('borderColor', e.borderColor || '#ffffff', 'Kantfärg') + _cvBtn('Tunnare', "cvBump('borderW', -1, 1, 20)", 'Tunnare kant') + _cvBtn('Tjockare', "cvBump('borderW', 1, 1, 20)", 'Tjockare kant');
   }
-  row += '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Opacitet<input type="range" min="0.1" max="1" step="0.05" value="' + (e.op == null ? 1 : e.op) + '" oninput="cvSet(\'op\', parseFloat(this.value))" style="width:70px"></label>' +
+  b += _cvRng('Genomskinlighet', 'op', 0.05, 1, 0.05, e.op == null ? 1 : e.op, 64) +
+    _CV_LBL('Animation') + _cvDd("cvSet('anim', this.value)", [['', 'Ingen'], ['fade', 'Tona in'], ['rise', 'Glid upp'], ['slide', 'Glid in'], ['pop', 'Studsa'], ['type', 'Skrivmaskin'], ['spin', 'Snurra in'], ['pulse', 'Pulsera']], e.anim || '', 'Animation (syns i förhandsvisningen)') +
+    (e.anim ? _cvBtn('▶ Spela', '_cvRerender()', 'Spela animationen igen') : '') + '</div>';
+  var c = _CV_ROW + _CV_LBL('Position') + _cvNum('X', 'x', e.x) + _cvNum('Y', 'y', e.y) + _cvNum('B', 'w', e.w) + _cvNum('H', 'h', e.h) + _cvNum('↻', 'rot', e.rot) +
+    _cvBtn('⇋', "cvToggle('flipX')", 'Spegla vågrätt', e.flipX) + _cvBtn('⇵', "cvToggle('flipY')", 'Vänd lodrätt', e.flipY) +
     _cvBtn('⬆ Fram', "cvLayer('front')", 'Längst fram') + _cvBtn('⬇ Bak', "cvLayer('back')", 'Längst bak') +
-    _cvBtn('⧉ Duplicera', 'cvDuplicate()', 'Duplicera (Ctrl+D)') +
-    _cvBtn(e.locked ? '🔒 Låst' : '🔓 Lås', "cvToggle('locked')", 'Lås position', e.locked) +
-    _cvBtn('🗑 Ta bort', 'cvDelete()', 'Ta bort (Delete)') +
-    '</div><div style="display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;margin-top:4px;padding-bottom:4px"><span style="font-size:11px;color:#6b7280;align-self:center">Justera</span>' +
-    _cvBtn('⇤', "cvAlign('left')", 'Vänster kant') + _cvBtn('↔', "cvAlign('hcenter')", 'Mitten') + _cvBtn('⇥', "cvAlign('right')", 'Höger kant') +
-    _cvBtn('⤒', "cvAlign('top')", 'Överkant') + _cvBtn('↕', "cvAlign('vcenter')", 'Mitten') + _cvBtn('⤓', "cvAlign('bottom')", 'Nederkant') + '</div>';
-  return add + row;
+    _cvBtn('⧉', 'cvDuplicate()', 'Duplicera (Ctrl+D)') + _cvBtn(e.locked ? '🔒' : '🔓', 'cvLockSel()', e.locked ? 'Lås upp' : 'Lås', e.locked) + _cvBtn('🗑', 'cvDelete()', 'Ta bort (Delete)') +
+    _CV_LBL('Justera mot sidan') + alignBtns + '</div>';
+  return add + a + b.replace(/<\/div>$/, '') + c.replace(_CV_ROW, '<span style="width:1px;align-self:stretch;background:#e5e7eb;flex:none"></span>');
 }
 function _cvRenderToolbar(card){
   var tb = document.getElementById('cvToolbar');
@@ -5464,13 +5633,14 @@ function _cvRenderToolbar(card){
   }
   if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE === 'granskare') { tb.style.display = 'none'; return; }
   tb.style.display = '';
+  if (window._cvKeepTb && tb.innerHTML) return;
   tb.innerHTML = _cvToolbarHTML();
   if (typeof _emFitPreview === 'function') setTimeout(_emFitPreview, 0);
 }
 
 // Kopplar ihop elementen i editorns förhandsvisning: markera, flytta, ändra storlek, rotera, snäppa
 function _cvWire(post, card){
-  if (card.dataset.cvPost !== String(post.id || '')) { card.dataset.cvPost = String(post.id || ''); _cvUndo = []; _cvSel = null; }
+  if (card.dataset.cvPost !== String(post.id || '')) { card.dataset.cvPost = String(post.id || ''); _cvUndo = []; _cvSel = null; _cvMulti = []; window._cvPen = false; }
   _cvRenderToolbar(card);
   if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE === 'granskare') return;
   var layer = card.querySelector('.cv-layer');
@@ -5480,7 +5650,7 @@ function _cvWire(post, card){
   gH.style.cssText = 'position:absolute;left:0;right:0;height:0;border-top:1px dashed #ff2d87;display:none;z-index:50;pointer-events:none';
   layer.appendChild(gV); layer.appendChild(gH);
   function rectPct(){ var r = card.getBoundingClientRect(); return { r: r, w: Math.max(1, r.width), h: Math.max(1, r.height) }; }
-  function apply(node, e){ node.style.left = e.x + '%'; node.style.top = e.y + '%'; node.style.width = e.w + '%'; node.style.height = e.h + '%'; node.style.transform = 'rotate(' + (e.rot || 0) + 'deg)'; }
+  function apply(node, e){ node.style.left = e.x + '%'; node.style.top = e.y + '%'; node.style.width = e.w + '%'; node.style.height = e.h + '%'; node.style.transform = 'rotate(' + (e.rot || 0) + 'deg)' + ((e.flipX || e.flipY) ? ' scale(' + (e.flipX ? -1 : 1) + ',' + (e.flipY ? -1 : 1) + ')' : ''); }
   function snapMove(e){
     var others = (post.elements || []).filter(function(o){ return o.id !== e.id; });
     var xs = [0, 50, 100], ys = [0, 50, 100];
@@ -5497,29 +5667,50 @@ function _cvWire(post, card){
     function up(){ window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); hideGuides(); if (onEnd) onEnd(); }
     window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
   }
+  function grpIds(e){ return e.grp ? (post.elements || []).filter(function(o){ return o.grp === e.grp && o.id !== e.id; }).map(function(o){ return o.id; }) : []; }
   layer.querySelectorAll('.cv-el').forEach(function(node){
     var e = _cvFind(post, node.getAttribute('data-cv')); if (!e) return;
+    if (e.role === 'pagebg') return; // färgbakgrunden ska inte gå att greppa – klick går vidare till bilden
     node.style.pointerEvents = 'auto'; node.style.cursor = e.locked ? 'default' : 'move';
     node.addEventListener('click', function(ev){ ev.stopPropagation(); });
+    node.addEventListener('contextmenu', function(ev){
+      ev.preventDefault(); ev.stopPropagation();
+      if (_cvSelIds().indexOf(e.id) < 0) { _cvSel = e.id; _cvMulti = grpIds(e); _cvRenderToolbar(card); markSel(); }
+      _cvCtx(ev.clientX, ev.clientY);
+    });
     node.addEventListener('mousedown', function(ev){
-      if (node.isContentEditable) return;
+      if (node.isContentEditable || window._cvPen) return;
       ev.stopPropagation(); ev.stopImmediatePropagation(); ev.preventDefault();
-      if (_cvSel !== e.id) { _cvSel = e.id; _cvRenderToolbar(card); markSel(); }
+      if (ev.button === 2) return;
+      if (ev.shiftKey) {
+        var cur = _cvSelIds();
+        if (cur.indexOf(e.id) >= 0 && cur.length > 1) { if (_cvSel === e.id) _cvSel = _cvMulti.shift(); else _cvMulti = _cvMulti.filter(function(i){ return i !== e.id; }); }
+        else if (!_cvSel) _cvSel = e.id;
+        else if (cur.indexOf(e.id) < 0) _cvMulti = _cvMulti.concat([e.id], grpIds(e));
+        _cvRenderToolbar(card); markSel(); return;
+      }
+      if (_cvSelIds().indexOf(e.id) < 0) { _cvSel = e.id; _cvMulti = grpIds(e); _cvRenderToolbar(card); markSel(); }
+      else if (_cvSel !== e.id) { _cvMulti = _cvSelIds().filter(function(i){ return i !== e.id; }); _cvSel = e.id; _cvRenderToolbar(card); markSel(); }
       if (e.locked) return;
-      var g = rectPct(), sx = ev.clientX, sy = ev.clientY, x0 = e.x, y0 = e.y, moved = false;
+      var g = rectPct(), sx = ev.clientX, sy = ev.clientY, moved = false;
+      var mov = _cvSelEls().filter(function(o){ return !o.locked; }).map(function(o){ return { e: o, x0: o.x, y0: o.y, n: layer.querySelector('.cv-el[data-cv="' + o.id + '"]') }; });
+      if (!mov.length) return;
+      var minX = Math.min.apply(null, mov.map(function(o){ return o.x0; })), minY = Math.min.apply(null, mov.map(function(o){ return o.y0; }));
+      var maxX = Math.max.apply(null, mov.map(function(o){ return o.x0 + o.e.w; })), maxY = Math.max.apply(null, mov.map(function(o){ return o.y0 + o.e.h; }));
+      var pm = mov.filter(function(o){ return o.e === e; })[0] || mov[0];
       drag(function(m){
         var dx = (m.clientX - sx) / g.w * 100, dy = (m.clientY - sy) / g.h * 100;
         if (!moved && Math.abs(dx) + Math.abs(dy) < 0.4) return;
         if (!moved) { _cvSnap(); moved = true; }
-        e.x = x0 + dx; e.y = y0 + dy;
-        if (!m.altKey) snapMove(e);
-        e.x = Math.max(0, Math.min(100 - e.w, e.x)); e.y = Math.max(0, Math.min(100 - e.h, e.y));
-        e.x = Math.round(e.x * 10) / 10; e.y = Math.round(e.y * 10) / 10;
-        apply(node, e); placeSel();
+        pm.e.x = pm.x0 + dx; pm.e.y = pm.y0 + dy;
+        if (!m.altKey && mov.length === 1) snapMove(pm.e);
+        var ddx = Math.max(-minX, Math.min(100 - maxX, pm.e.x - pm.x0)), ddy = Math.max(-minY, Math.min(100 - maxY, pm.e.y - pm.y0));
+        mov.forEach(function(o){ o.e.x = Math.round((o.x0 + ddx) * 10) / 10; o.e.y = Math.round((o.y0 + ddy) * 10) / 10; if (o.n) apply(o.n, o.e); });
+        placeSel();
       });
     });
     if (e.type === 'text') node.addEventListener('dblclick', function(ev){
-      ev.stopPropagation(); if (e.locked) return;
+      ev.stopPropagation(); if (e.locked || e.curve) return;
       _cvSnap(); node.contentEditable = 'true'; node.style.cursor = 'text'; node.style.outline = '2px solid #b31e59'; node.focus();
       try { var rg = document.createRange(); rg.selectNodeContents(node); var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rg); } catch (er) {}
       node.addEventListener('input', function(){ e.text = node.innerText.replace(/\n$/, ''); });
@@ -5530,6 +5721,9 @@ function _cvWire(post, card){
   var selBox = document.createElement('div');
   selBox.style.cssText = 'position:absolute;border:1.5px solid #b31e59;display:none;z-index:45;pointer-events:none;box-sizing:border-box';
   layer.appendChild(selBox);
+  var multiBox = document.createElement('div');
+  multiBox.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:44';
+  layer.appendChild(multiBox);
   var corners = ['nw', 'ne', 'sw', 'se'].map(function(k){
     var h = document.createElement('div'); h.dataset.k = k;
     h.style.cssText = 'position:absolute;width:12px;height:12px;background:#fff;border:2px solid #b31e59;border-radius:50%;pointer-events:auto;z-index:46;cursor:' + (k === 'nw' || k === 'se' ? 'nwse-resize' : 'nesw-resize') + ';' + (k[0] === 'n' ? 'top:-7px;' : 'bottom:-7px;') + (k[1] === 'w' ? 'left:-7px;' : 'right:-7px;');
@@ -5541,9 +5735,10 @@ function _cvWire(post, card){
   selBox.appendChild(rot);
   function placeSel(){
     var e = _cvFind(post, _cvSel);
+    multiBox.innerHTML = (_cvMulti || []).map(function(id){ var o = _cvFind(post, id); return o ? '<div style="position:absolute;left:' + o.x + '%;top:' + o.y + '%;width:' + o.w + '%;height:' + o.h + '%;border:1.5px dashed #b31e59;box-sizing:border-box;transform:rotate(' + (o.rot || 0) + 'deg)"></div>' : ''; }).join('');
     if (!e) { selBox.style.display = 'none'; return; }
     selBox.style.display = 'block'; selBox.style.left = e.x + '%'; selBox.style.top = e.y + '%'; selBox.style.width = e.w + '%'; selBox.style.height = e.h + '%'; selBox.style.transform = 'rotate(' + (e.rot || 0) + 'deg)';
-    var hide = e.locked ? 'none' : 'block'; corners.forEach(function(c){ c.style.display = hide; }); rot.style.display = hide;
+    var hide = (e.locked || (_cvMulti && _cvMulti.length)) ? 'none' : 'block'; corners.forEach(function(c){ c.style.display = hide; }); rot.style.display = hide;
   }
   function markSel(){ placeSel(); }
   corners.forEach(function(h){
@@ -5591,7 +5786,29 @@ function _cvWire(post, card){
     card.dataset.cvBound = '1';
     card.addEventListener('mousedown', function(ev){
       var hit = ev.target && ev.target.closest && (ev.target.closest('.cv-el') || ev.target.closest('[data-k]') || ev.target.title === 'Dra för att rotera');
-      if (!hit && _cvSel) { _cvSel = null; if (window._cvPlaceSel) window._cvPlaceSel(); _cvRenderToolbar(card); }
+      if (!hit && _cvSel && !window._cvPen) { _cvSel = null; _cvMulti = []; if (window._cvPlaceSel) window._cvPlaceSel(); _cvRenderToolbar(card); }
+    }, true);
+    // Ritverktyget: dra med musen för att rita en fri linje
+    card.addEventListener('mousedown', function(ev){
+      if (!window._cvPen || ev.button !== 0) return;
+      ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation();
+      var r = card.getBoundingClientRect(), pts = [], NS = 'http://www.w3.org/2000/svg';
+      var ov = document.createElementNS(NS, 'svg'); ov.setAttribute('viewBox', '0 0 100 100'); ov.setAttribute('preserveAspectRatio', 'none');
+      ov.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:60;pointer-events:none;overflow:visible';
+      var pl = document.createElementNS(NS, 'polyline');
+      pl.setAttribute('fill', 'none'); pl.setAttribute('stroke', window._cvPenColor || '#b31e59'); pl.setAttribute('stroke-width', window._cvPenW || 3); pl.setAttribute('vector-effect', 'non-scaling-stroke'); pl.setAttribute('stroke-linecap', 'round'); pl.setAttribute('stroke-linejoin', 'round');
+      ov.appendChild(pl); card.appendChild(ov);
+      function addPt(m){ pts.push([Math.max(0, Math.min(100, (m.clientX - r.left) / r.width * 100)), Math.max(0, Math.min(100, (m.clientY - r.top) / r.height * 100))]); pl.setAttribute('points', pts.map(function(q){ return q[0].toFixed(2) + ',' + q[1].toFixed(2); }).join(' ')); }
+      addPt(ev);
+      function mv(m){ m.preventDefault(); addPt(m); }
+      function up(){
+        window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); ov.remove();
+        if (pts.length < 2) return;
+        var xs = pts.map(function(q){ return q[0]; }), ys = pts.map(function(q){ return q[1]; });
+        var x0 = Math.min.apply(null, xs), y0 = Math.min.apply(null, ys), w = Math.max(0.5, Math.max.apply(null, xs) - x0), h = Math.max(0.5, Math.max.apply(null, ys) - y0);
+        cvAdd('draw', { x: Math.round(x0 * 10) / 10, y: Math.round(y0 * 10) / 10, w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10, pts: pts.map(function(q){ return ((q[0] - x0) / w * 100).toFixed(1) + ',' + ((q[1] - y0) / h * 100).toFixed(1); }).join(' '), fill: window._cvPenColor || '#b31e59', sw: window._cvPenW || 3 });
+      }
+      window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
     }, true);
   }
 }
@@ -5604,19 +5821,23 @@ document.addEventListener('keydown', function(ev){
   var p = _cvPost(); if (!p) return;
   var mod = ev.ctrlKey || ev.metaKey, k = ev.key;
   if (mod && (k === 'z' || k === 'Z') && !ev.shiftKey) { if (_cvUndoLast()) ev.preventDefault(); return; }
-  var e = _cvFind(p, _cvSel);
-  if (mod && (k === 'v' || k === 'V') && _cvClip) { ev.preventDefault(); _cvSnap(); var c = JSON.parse(_cvClip); c.id = _cvNewId(); c.x = Math.min(95, c.x + 3); c.y = Math.min(95, c.y + 3); c.z = _cvTopZ(p); p.elements = p.elements || []; p.elements.push(c); _cvSel = c.id; _cvRerender(); return; }
-  if (!e) return;
+  if (mod && (k === 'a' || k === 'A')) { ev.preventDefault(); cvSelectAll(); return; }
+  if (mod && (k === 'v' || k === 'V') && _cvClip) { ev.preventDefault(); cvPaste(); return; }
+  if (k === 'Escape') { _cvCloseCtx(); if (window._cvPen) { cvTogglePen(); return; } if (_cvSel) { _cvSel = null; _cvMulti = []; _cvRerender(); } return; }
+  var els = _cvSelEls(); if (!els.length) return;
   if (k === 'Delete' || k === 'Backspace') { ev.preventDefault(); cvDelete(); return; }
   if (mod && (k === 'd' || k === 'D')) { ev.preventDefault(); cvDuplicate(); return; }
-  if (mod && (k === 'c' || k === 'C')) { _cvClip = JSON.stringify(e); return; }
-  if (k === 'Escape') { _cvSel = null; _cvRerender(); return; }
+  if (mod && (k === 'c' || k === 'C')) { cvCopy(); return; }
+  if (mod && (k === 'g' || k === 'G')) { ev.preventDefault(); if (ev.shiftKey) cvUngroup(); else cvGroup(); return; }
   var st = ev.shiftKey ? 5 : 0.5;
-  if (/^Arrow/.test(k) && !e.locked) {
+  if (/^Arrow/.test(k)) {
+    var mv = els.filter(function(o){ return !o.locked; }); if (!mv.length) return;
     ev.preventDefault(); _cvSnap();
-    if (k === 'ArrowLeft') e.x -= st; if (k === 'ArrowRight') e.x += st; if (k === 'ArrowUp') e.y -= st; if (k === 'ArrowDown') e.y += st;
-    e.x = Math.max(0, Math.min(100 - e.w, e.x)); e.y = Math.max(0, Math.min(100 - e.h, e.y));
-    e.x = Math.round(e.x * 10) / 10; e.y = Math.round(e.y * 10) / 10; _cvRerender();
+    mv.forEach(function(e){
+      if (k === 'ArrowLeft') e.x -= st; if (k === 'ArrowRight') e.x += st; if (k === 'ArrowUp') e.y -= st; if (k === 'ArrowDown') e.y += st;
+      e.x = Math.round(Math.max(0, Math.min(100 - e.w, e.x)) * 10) / 10; e.y = Math.round(Math.max(0, Math.min(100 - e.h, e.y)) * 10) / 10;
+    });
+    _cvRerender();
   }
 });
 </script>
