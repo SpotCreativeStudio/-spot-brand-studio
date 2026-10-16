@@ -5539,24 +5539,25 @@ var _CV_LBL = function(t){ return '<span style="font-size:11px;font-weight:700;c
 function _cvToolbarHTML(){
   var p = _cvPost(), e = _cvFind(p, _cvSel), ids = _cvSelIds();
   var bgEl = ((p && p.elements) || []).filter(function(x){ return x.role === 'pagebg'; })[0];
-  var add = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">' + _CV_LBL('Lägg till') +
-    _cvBtn('T Text', "cvAdd('text')", 'Ny textruta') +
-    _cvBtn('🖼 Bild', 'window._cvReplaceId=null;cvToggleImgPop()', 'Bild från dator eller bildbank') +
+  var add = '<div style="display:flex;flex-wrap:nowrap;overflow-x:auto;gap:5px;align-items:center;padding-bottom:2px">' +
+    _cvBtn('T', "cvAdd('text')", 'Lägg till text') +
+    _cvBtn('🖼', 'window._cvReplaceId=null;cvToggleImgPop()', 'Lägg till bild från dator eller bildbank') +
     _cvBtn('Logga', "cvAdd('logo')", 'Varumärkets logga') +
-    _cvDd("var v=this.value;if(v){if(v==='rect'||v==='circle')cvAdd(v);else if(v==='line')cvAdd('line');else if(v==='arrowline')cvAdd('line',{capE:'arrow'});else cvAdd('shape',{shape:v});this.value='';}", [['', '✦ Former'], ['rect', 'Rektangel'], ['circle', 'Cirkel'], ['line', 'Linje'], ['arrowline', 'Linje med pil'], ['arrow', 'Pil (form)'], ['star', 'Stjärna'], ['bubble', 'Pratbubbla'], ['triangle', 'Triangel'], ['heart', 'Hjärta'], ['check', 'Bock'], ['hexagon', 'Hexagon'], ['diamond', 'Romb']], '', 'Former och linjer') +
+    _cvDd("var v=this.value;if(v){if(v==='rect'||v==='circle')cvAdd(v);else if(v==='line')cvAdd('line');else if(v==='arrowline')cvAdd('line',{capE:'arrow'});else cvAdd('shape',{shape:v});this.value='';}", [['', '✦'], ['rect', 'Rektangel'], ['circle', 'Cirkel'], ['line', 'Linje'], ['arrowline', 'Linje med pil'], ['arrow', 'Pil (form)'], ['star', 'Stjärna'], ['bubble', 'Pratbubbla'], ['triangle', 'Triangel'], ['heart', 'Hjärta'], ['check', 'Bock'], ['hexagon', 'Hexagon'], ['diamond', 'Romb']], '', 'Former och linjer') +
     _cvDd("if(this.value){cvAddFrame(this.value);this.value='';}", [['', '▢ Ram'], ['circle', 'Cirkel'], ['rounded', 'Rundad'], ['arch', 'Båge'], ['hexagon', 'Hexagon'], ['diamond', 'Romb'], ['triangle', 'Triangel'], ['star', 'Stjärna']], '', 'Bildram – bilden beskärs efter formen') +
-    _cvBtn('▦ Tabell', "cvAdd('table')", 'Tabell') +
-    _cvBtn('📊 Diagram', "cvAdd('chart')", 'Diagram') +
-    _cvBtn(window._cvPen ? '✏️ Ritar – klicka för att sluta' : '✏️ Rita', 'cvTogglePen()', 'Rita fritt i inlägget', window._cvPen) +
+    _cvBtn('▦', "cvAdd('table')", 'Tabell') +
+    _cvBtn('📊', "cvAdd('chart')", 'Diagram') +
+    _cvBtn(window._cvPen ? '✏️ Sluta rita' : '✏️', 'cvTogglePen()', 'Rita fritt i inlägget', window._cvPen) +
     (window._cvPen ? '<input type="color" value="' + _cvAttr(window._cvPenColor || '#b31e59') + '" oninput="window._cvPenColor=this.value" title="Pennans färg" style="width:30px;height:28px;border:none;background:none;padding:0"><label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Tjocklek<input type="range" min="1" max="14" step="1" value="' + (window._cvPenW || 3) + '" oninput="window._cvPenW=parseFloat(this.value)" style="width:60px"></label>' : '') +
-    '<label title="Färgbakgrund bakom allt" style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px;white-space:nowrap">Bakgrund<input type="color" value="' + _cvAttr((bgEl && bgEl.fill) || '#ffffff') + '" onchange="cvPageBg(this.value)" style="width:30px;height:28px;border:none;background:none;padding:0"></label>' + (bgEl ? _cvBtn('✕', 'cvPageBg(null)', 'Ta bort färgbakgrunden') : '') +
-    _cvBtn('↺ Återställ bild', 'cvResetImage()', 'Återställ huvudbildens position och zoom') +
+    '<label title="Färgbakgrund (täcker mallen)" style="display:flex;align-items:center;flex:none"><input type="color" value="' + _cvAttr((bgEl && bgEl.fill) || '#ffffff') + '" onchange="cvPageBg(this.value)" style="width:30px;height:28px;border:none;background:none;padding:0"></label>' + (bgEl ? _cvBtn('✕', 'cvPageBg(null)', 'Ta bort färgbakgrunden') : '') +
+    _cvBtn('↺', 'cvResetImage()', 'Återställ huvudbildens position och zoom') +
+    _cvBtn('?', '', 'Klicka för att markera, Shift+klick markerar flera, Ctrl+A markerar allt, högerklick ger fler val. Dubbelklicka på text för att skriva. Delete tar bort, Ctrl+D duplicerar, Ctrl+G grupperar, piltangenter flyttar, Ctrl+Z ångrar.') +
     '</div><div id="cvImgPop" style="display:none;position:absolute;top:46px;left:60px;z-index:60;width:260px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px"></div>';
   var alignBtns = _cvBtn('⇤', "cvAlign('left')", 'Vänster kant') + _cvBtn('↔', "cvAlign('hcenter')", 'Centrera vågrätt') + _cvBtn('⇥', "cvAlign('right')", 'Höger kant') + _cvBtn('⤒', "cvAlign('top')", 'Överkant') + _cvBtn('↕', "cvAlign('vcenter')", 'Centrera lodrätt') + _cvBtn('⤓', "cvAlign('bottom')", 'Nederkant');
   if (ids.length > 1) {
     return add + _CV_ROW + _CV_LBL(ids.length + ' markerade') + _cvBtn('▣ Gruppera', 'cvGroup()', 'Gruppera (Ctrl+G)') + _cvBtn('Dela upp', 'cvUngroup()', 'Dela upp grupp (Ctrl+Shift+G)') + _cvBtn('⧉ Duplicera', 'cvDuplicate()', 'Duplicera (Ctrl+D)') + _cvBtn('🔒 Lås', 'cvLockSel()', 'Lås/lås upp') + _cvBtn('🗑 Ta bort', 'cvDelete()', 'Ta bort (Delete)') + _CV_LBL('Justera mot sidan') + alignBtns + '</div>';
   }
-  if (!e) return add + '<div style="font-size:11px;color:#9ca3af;margin-top:6px">Tips: klicka för att markera, Shift+klick markerar flera, Ctrl+A markerar allt, högerklick ger fler val. Dubbelklicka på text för att skriva. Delete tar bort, Ctrl+D duplicerar, Ctrl+G grupperar, piltangenter flyttar, Ctrl+Z ångrar.</div>';
+  if (!e) return add;
   var a = _CV_ROW;
   if (e.type === 'text') {
     var fonts = (typeof TYPOGRAPHY !== 'undefined' && Array.isArray(TYPOGRAPHY)) ? TYPOGRAPHY.map(function(t){ return String(t.name || '').replace(/\s+(Bold|Regular|Light|Medium|Black|Thin)$/i, ''); }) : [];
@@ -5622,7 +5623,7 @@ function _cvRenderToolbar(card){
   var tb = document.getElementById('cvToolbar');
   if (!tb) {
     tb = document.createElement('div'); tb.id = 'cvToolbar';
-    tb.style.cssText = 'background:#fff;border:1px solid #f0f0f0;border-radius:12px;padding:10px 12px;margin-bottom:12px;max-width:640px;width:100%;box-sizing:border-box;align-self:center;position:relative;flex-shrink:0;min-width:0';
+    tb.style.cssText = 'background:#fff;border:1px solid #f0f0f0;border-radius:12px;padding:6px 10px;margin-bottom:8px;max-width:640px;width:100%;box-sizing:border-box;align-self:center;position:relative;flex-shrink:0;min-width:0';
     var host = card.parentNode; if (!host) return;
     // Verktygsraden ligger fast överst. Kort och tips ligger i en egen yta under som scrollar.
     var sc = document.createElement('div'); sc.id = 'cvScroll';
@@ -5633,6 +5634,8 @@ function _cvRenderToolbar(card){
   }
   if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE === 'granskare') { tb.style.display = 'none'; return; }
   tb.style.display = '';
+  // Tipsraderna under kortet tar plats från inlägget – dölj dem i editorn
+  [].forEach.call(document.querySelectorAll('#cvScroll .em-preview-hint'), function(h){ h.style.display = 'none'; });
   if (window._cvKeepTb && tb.innerHTML) return;
   tb.innerHTML = _cvToolbarHTML();
   if (typeof _emFitPreview === 'function') setTimeout(_emFitPreview, 0);
