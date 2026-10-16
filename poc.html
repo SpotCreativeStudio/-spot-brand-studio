@@ -1436,27 +1436,34 @@ function _fontStackFor(name, role) { var _isDisp = role && /display|editorial/i.
 function _imgTransform(post){
   var p = (post && post.imgPos) ? post.imgPos : { x:0, y:0, zoom:1 };
   var z = p.zoom || 1, x = p.x || 0, y = p.y || 0, r = p.rot || 0, fx = p.flipX ? -1 : 1, fy = p.flipY ? -1 : 1;
+  if (p.zoom == null) { x = 0; y = 0; } // äldre inlägg sparade { x:50, y:50 } utan zoom – räknas som centrerad
   if (z === 1 && !x && !y && !r && fx === 1 && fy === 1) return '';
   // Fri placering: ingen spärr, bilden kan dras hur långt som helst (⤢ Fyll återställer)
   return 'translate(' + x.toFixed(2) + '%,' + y.toFixed(2) + '%) rotate(' + r + 'deg) scale(' + (z * fx).toFixed(3) + ',' + (z * fy).toFixed(3) + ')';
 }
 function _imgZoomCss(post){ var t = _imgTransform(post); return t ? ('transform:' + t + ';transform-origin:center center;') : ''; }
-// Varumärkets mallbild för Spots mallar – används som grund i stället för svart/grått
-var _SPOT_TPL_SRC = { studio:'tpl-studio', 'case':'tpl-case-hallanning', louisiana:'tpl-louisiana' };
-function _tplBase(post){
-  var key = _SPOT_TPL_SRC[(post && post.layout) || ''];
-  if (!key || typeof TEMPLATES === 'undefined') return null;
-  var ct = (TEMPLATES || []).filter(function(t){ return t && String(t.src || '').indexOf(key) >= 0; })[0];
-  if (!ct) return null;
-  // Samma bild som i Varumärke (inte den AI-tvättade versionen, som kan avvika från originalet)
-  return ct.src || null;
+// Teamets mallbild från Varumärke → Mallbilder (en per kanal). Läses från varumärket, så varje team får sin egen.
+function _teamTpl(post){
+  if (typeof TEMPLATES === 'undefined' || !Array.isArray(TEMPLATES) || !post) return null;
+  return TEMPLATES.filter(function(t){ return t && t.src && t.channel === post.channel; })[0] || null;
+}
+function _tplBase(post){ var t = _teamTpl(post); return t ? t.src : null; }
+// Mallbilden ligger alltid underst, den egna bilden ovanpå (från början lite mindre så att mallen syns runt om)
+function _tplComposeHTML(post, src, t){
+  var own = post.imageUrl || post.aiImageUrl;
+  var pz = (post.imgPos && post.imgPos.zoom != null) ? post : Object.assign({}, post, { imgPos: Object.assign({ x: 0, y: 0 }, post.imgPos || {}, { zoom: 0.72 }) });
+  return '<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">' +
+    '<div class="tpl-bg" style="position:absolute;inset:0;background:url(\'' + String(src).split("'").join('%27').split('"').join('%22') + '\') center/cover no-repeat"></div>' +
+    (own ? _pbWrap(pz, _imgOrGray(pz)) : '') +
+    (t ? '<div style="position:absolute;left:13px;right:13px;bottom:13px;font-family:' + _getSERIF().split('"').join("'") + ';font-size:' + _autoFit(t, 26, 18, 14) + 'px;color:#fff;line-height:1;text-shadow:0 2px 10px rgba(0,0,0,.45)">' + t + '</div>' : '') +
+    '</div>';
 }
 function _tplBgLayer(post){
   var u = _tplBase(post);
   return u ? '<div class="tpl-bg" style="position:absolute;inset:0;background:url(\'' + String(u).split("'").join('%27') + '\') center/contain no-repeat"></div>' : '';
 }
 function _imgOrGray(post) {
-  const _own = post.imageUrl || post.aiImageUrl, _imgSrc = _own || _tplBase(post);
+  const _imgSrc = post.imageUrl || post.aiImageUrl;
   if (_imgSrc) return `<img src="${_imgSrc}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:${_imgObjPos(post)};${_imgZoomCss(post)}filter:${_imgStyleProps(post).f};display:block">`;
   return `<div style="position:absolute;inset:0;background:linear-gradient(160deg,#c4c4c4 0%,#8a8a8a 55%,#5e5e5e 100%)"></div>`;
 }
@@ -1486,6 +1493,10 @@ function _getPostImageHTMLRaw(post, size='card') {
   const dateStr = post.date || new Date().toISOString().slice(0,10);
   const authorStr = post.author || '';
 
+  // ── TEAMETS MALLBILD (Varumärke → Mallbilder) ligger alltid bakom den egna bilden ──
+  var _teamSrc = _tplBase(post);
+  if (_teamSrc) return _tplComposeHTML(post, _teamSrc, t);
+
   // ── KUNDENS EGEN MALL (uppladdad mallbild som bakgrund) ─────────────
   if (String(layout).indexOf('tpl:') === 0) {
     var _ct = _customTemplates()[+String(layout).slice(4)];
@@ -1509,7 +1520,6 @@ function _getPostImageHTMLRaw(post, size='card') {
   // ── SPOT-MALL: studio. (helbild + Higuen-serif nedtill) ──────────────
   if (layout === 'studio') {
     return `<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">
-      ${_tplBgLayer(post)}
       ${_pbWrap(post, _imgOrGray(post))}
       ${(post.imageUrl || post.aiImageUrl) ? `<div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.28) 0%,transparent 28%,transparent 50%,rgba(0,0,0,.6) 100%)"></div>
       <div style="position:absolute;top:9px;left:11px;font-size:9px;font-weight:700;color:rgba(255,255,255,.92);font-family:${_getSANS()}">spot.</div>` : ''}
@@ -1729,7 +1739,7 @@ function getPostImageLargeHTML(post) { var _r = _applyBrandColors(_getPostImageL
 function _getPostImageLargeHTMLRaw(post) {
   const layout = post.layout || 'gradient';
   // SPOT-mallarna är responsiva – använd samma renderare som korten
-  if (layout === 'studio' || layout === 'case' || layout === 'louisiana' || String(layout).indexOf('tpl:') === 0) {
+  if (layout === 'studio' || layout === 'case' || layout === 'louisiana' || String(layout).indexOf('tpl:') === 0 || _tplBase(post)) {
     return getPostImageHTML(post, 'large');
   }
   const _blocksL = post.blocks || ['content','hashtags'];
@@ -2360,7 +2370,7 @@ function rejectPost(id){
     if(typeof showToast==="function")showToast("Inlägget nekades och skickades till utkast.");
   };
 }
-function _arFor(ch,obj){try{if(obj&&obj.aspectRatio)return obj.aspectRatio==="1:1"?"1/1":"5/4";if(obj&&typeof _SPOT_TPL_SRC!=="undefined"&&_SPOT_TPL_SRC[obj.layout])return "4/5";if(typeof S!=="undefined"&&S.aspectRatio)return S.aspectRatio==="1:1"?"1/1":"5/4"}catch(e){}return ({instagram:"4/5",tiktok:"9/16",facebook:"1/1",linkedin:"1/1"})[ch]||"4/5";}
+function _arFor(ch,obj){try{if(obj&&obj.aspectRatio)return obj.aspectRatio==="1:1"?"1/1":"5/4";if(obj&&typeof _teamTpl==="function"){var _tt=_teamTpl(obj);if(_tt&&/^\d+:\d+$/.test(_tt.ratio||""))return _tt.ratio.replace(":","/");}if(typeof S!=="undefined"&&S.aspectRatio)return S.aspectRatio==="1:1"?"1/1":"5/4"}catch(e){}return ({instagram:"4/5",tiktok:"9/16",facebook:"1/1",linkedin:"1/1"})[ch]||"4/5";}
 (function(){function _syncAR(){try{var ch=window._activeProposalTab||(typeof S!=="undefined"&&S.previewChannel)||(typeof S!=="undefined"&&S.manualChannel)||"instagram";document.documentElement.style.setProperty("--post-ar",_arFor(ch));}catch(e){}}setInterval(_syncAR,400);document.addEventListener("DOMContentLoaded",_syncAR);})();
 var _liConnected = false;
 function _loadLinkedInStatus(){
@@ -2890,6 +2900,8 @@ function openEditorModal(post) {
   S._editPost = post; // working copy reference
   // Inlägg utan mall får arbetsytans mall (som i manuellt läge) i stället för Gradient
   if (!post.layout && typeof _manualLayout === 'function') post.layout = _manualLayout();
+  // Med teamets mallbild bakom: den egna bilden börjar lite mindre så att mallen syns runt om
+  if ((post.imageUrl || post.aiImageUrl) && typeof _tplBase === 'function' && _tplBase(post) && (!post.imgPos || post.imgPos.zoom == null)) post.imgPos = { x: 0, y: 0, zoom: 0.72 };
   if (!_isSamePost) {
     S._editImgUndoStack = [];
     S._editBlockUndoStack = [];
