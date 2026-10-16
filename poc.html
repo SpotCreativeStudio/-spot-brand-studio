@@ -1448,13 +1448,13 @@ function _teamTpl(post){
   return TEMPLATES.filter(function(t){ return t && t.src && t.channel === post.channel; })[0] || null;
 }
 function _tplBase(post){ var t = _teamTpl(post); return t ? t.src : null; }
-// Mallbilden ligger alltid underst, den egna bilden ovanpå (från början lite mindre så att mallen syns runt om)
+// Mallbilden ligger alltid underst, den egna bilden ovanpå i en ruta som är lite mindre än inlägget
 function _tplComposeHTML(post, src, t){
   var own = post.imageUrl || post.aiImageUrl;
-  var pz = (post.imgPos && post.imgPos.zoom != null) ? post : Object.assign({}, post, { imgPos: Object.assign({ x: 0, y: 0 }, post.imgPos || {}, { zoom: 0.72 }) });
+  var pz = post;
   return '<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">' +
     '<div class="tpl-bg" style="position:absolute;inset:0;background:url(\'' + String(src).split("'").join('%27').split('"').join('%22') + '\') center/cover no-repeat"></div>' +
-    (own ? _pbWrap(pz, _imgOrGray(pz)) : '') +
+    (own ? _pbWrap(pz, _imgOrGray(pz), { x: 12, y: 10, w: 76, h: 80 }) : '') +
     (t ? '<div style="position:absolute;left:13px;right:13px;bottom:13px;font-family:' + _getSERIF().split('"').join("'") + ';font-size:' + _autoFit(t, 26, 18, 14) + 'px;color:#fff;line-height:1;text-shadow:0 2px 10px rgba(0,0,0,.45)">' + t + '</div>' : '') +
     '</div>';
 }
@@ -2900,8 +2900,6 @@ function openEditorModal(post) {
   S._editPost = post; // working copy reference
   // Inlägg utan mall får arbetsytans mall (som i manuellt läge) i stället för Gradient
   if (!post.layout && typeof _manualLayout === 'function') post.layout = _manualLayout();
-  // Med teamets mallbild bakom: den egna bilden börjar lite mindre så att mallen syns runt om
-  if ((post.imageUrl || post.aiImageUrl) && typeof _tplBase === 'function' && _tplBase(post) && (!post.imgPos || post.imgPos.zoom == null)) post.imgPos = { x: 0, y: 0, zoom: 0.72 };
   if (!_isSamePost) {
     S._editImgUndoStack = [];
     S._editBlockUndoStack = [];
@@ -3304,13 +3302,15 @@ function _emImgHandles(post, card, imgEl){
   [].slice.call(card.querySelectorAll('.em-imgh')).forEach(function(h){ h.remove(); });
   if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE === 'granskare') return;
   var hs = ['nw','ne','sw','se'].map(function(k){
-    var h = document.createElement('div'); h.className = 'em-imgh'; h.title = 'Dra för att zooma bilden';
+    var h = document.createElement('div'); h.className = 'em-imgh'; h.title = 'Dra för att ändra bildens bredd och höjd';
     h.style.cssText = 'position:absolute;z-index:45;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:3px;background:#fff;border:2px solid #b31e59;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:' + (k === 'nw' || k === 'se' ? 'nwse' : 'nesw') + '-resize';
     h.dataset.k = k; card.appendChild(h); return h;
   });
+  // Hörnen sitter på bildrutan (om mallen har en) och ändrar bredd och höjd var för sig
+  var box = imgEl.closest('.tpl-photo');
   function place(){
     if (!imgEl.isConnected) return;
-    var s = parseFloat(card.dataset.previewScale) || 1, c = card.getBoundingClientRect(), r = imgEl.getBoundingClientRect();
+    var s = parseFloat(card.dataset.previewScale) || 1, c = card.getBoundingClientRect(), r = (box && (post.imgPos ? (post.imgPos.zoom || 1) : 1) >= 1 ? box : imgEl).getBoundingClientRect();
     var cw = card.offsetWidth, ch = card.offsetHeight;
     function cl(v, m){ return Math.max(6, Math.min(m - 6, v)); }
     var L = cl((r.left - c.left) / s, cw), T = cl((r.top - c.top) / s, ch), Rr = cl((r.right - c.left) / s, cw), B = cl((r.bottom - c.top) / s, ch);
@@ -3323,6 +3323,7 @@ function _emImgHandles(post, card, imgEl){
     h.addEventListener('mousedown', function(ev){
       ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation();
       post.imgPos = post.imgPos || { x:0, y:0, zoom:1 };
+      if (box && box.parentElement) { _emResizeBox(ev, h.dataset.k); return; }
       var r = imgEl.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
       var d0 = Math.max(8, Math.hypot(ev.clientX - cx, ev.clientY - cy)), z0 = post.imgPos.zoom || 1;
       function mv(e){
@@ -3337,6 +3338,36 @@ function _emImgHandles(post, card, imgEl){
       window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
     });
   });
+}
+// Hörn på bildrutan: dra fritt i x och y (bredd och höjd var för sig). Bilden fyller rutan och beskärs.
+function _emResizeBox(ev, k){
+  var post = S._editPost, card = document.getElementById('emPreviewCard'); if (!post || !card) return;
+  var imgEl = _emMainImg(card), box = imgEl && imgEl.closest('.tpl-photo'); if (!box) return;
+  if (typeof _cvSnap === 'function') { try { _cvSnap(); } catch (e) {} }
+  var par = box.parentElement.getBoundingClientRect(), lay = box.dataset.layout || post.layout || 'gradient';
+  function setBox(b){ b.layout = lay; post.photoBox = b; box.style.left = b.x + '%'; box.style.top = b.y + '%'; box.style.width = b.w + '%'; box.style.height = b.h + '%'; }
+  // Förminskad bild (zoom under 100 %): gör om till en ruta i bildens synliga storlek
+  if ((post.imgPos.zoom || 1) < 1) {
+    var ir = imgEl.getBoundingClientRect();
+    post.imgPos = Object.assign({}, post.imgPos, { zoom: 1, x: 0, y: 0 });
+    setBox({ x: (ir.left - par.left) / par.width * 100, y: (ir.top - par.top) / par.height * 100, w: ir.width / par.width * 100, h: ir.height / par.height * 100 });
+    imgEl.style.transform = _imgTransform(post);
+    var zs = document.getElementById('emZoomSlider'); if (zs) zs.value = 1; var zl = document.getElementById('emZoomLabel'); if (zl) zl.textContent = '100%';
+  }
+  var cur = post.photoBox && post.photoBox.layout === lay ? post.photoBox : { x: parseFloat(box.style.left) || 0, y: parseFloat(box.style.top) || 0, w: parseFloat(box.style.width) || 100, h: parseFloat(box.style.height) || 100 };
+  var b0 = { x: cur.x, y: cur.y, w: cur.w, h: cur.h }, sx = ev.clientX, sy = ev.clientY;
+  function r1(v){ return Math.round(v * 10) / 10; }
+  function mv(e){
+    var dx = (e.clientX - sx) / par.width * 100, dy = (e.clientY - sy) / par.height * 100, b = { x: b0.x, y: b0.y, w: b0.w, h: b0.h };
+    if (k[1] === 'e') b.w = b0.w + dx; else { b.x = b0.x + dx; b.w = b0.w - dx; }
+    if (k[0] === 's') b.h = b0.h + dy; else { b.y = b0.y + dy; b.h = b0.h - dy; }
+    if (b.w < 5) { if (k[1] === 'w') b.x = b0.x + b0.w - 5; b.w = 5; }
+    if (b.h < 5) { if (k[0] === 'n') b.y = b0.y + b0.h - 5; b.h = 5; }
+    setBox({ x: r1(b.x), y: r1(b.y), w: r1(b.w), h: r1(b.h) });
+    if (window._emPlaceImgHandles) window._emPlaceImgHandles();
+  }
+  function up(){ window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); }
+  window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
 }
 // Bildverktyg: fyll hela inlägget, rotera, spegla
 function emImgAdjust(kind, val){
