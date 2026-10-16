@@ -1441,17 +1441,15 @@ function _imgTransform(post){
   return 'translate(' + x.toFixed(2) + '%,' + y.toFixed(2) + '%) rotate(' + r + 'deg) scale(' + (z * fx).toFixed(3) + ',' + (z * fy).toFixed(3) + ')';
 }
 function _imgZoomCss(post){ var t = _imgTransform(post); return t ? ('transform:' + t + ';transform-origin:center center;') : ''; }
-// Varumärkets mallbild (utan inbakad text) för Spots mallar – används som grund i stället för svart/grått
+// Varumärkets mallbild för Spots mallar – används som grund i stället för svart/grått
 var _SPOT_TPL_SRC = { studio:'tpl-studio', 'case':'tpl-case-hallanning', louisiana:'tpl-louisiana' };
 function _tplBase(post){
   var key = _SPOT_TPL_SRC[(post && post.layout) || ''];
   if (!key || typeof TEMPLATES === 'undefined') return null;
   var ct = (TEMPLATES || []).filter(function(t){ return t && String(t.src || '').indexOf(key) >= 0; })[0];
   if (!ct) return null;
-  if (ct.cleanSrc && ct.cleanFor === ct.src) return ct.cleanSrc;
-  try { var c = localStorage.getItem('tplClean:' + ct.src); if (c) { ct.cleanSrc = c; ct.cleanFor = ct.src; return c; } } catch (e) {}
-  if (typeof _cleanTemplate === 'function') _cleanTemplate(ct);
-  return null;
+  // Samma bild som i Varumärke (inte den AI-tvättade versionen, som kan avvika från originalet)
+  return ct.src || null;
 }
 function _tplBgLayer(post){
   var u = _tplBase(post);
