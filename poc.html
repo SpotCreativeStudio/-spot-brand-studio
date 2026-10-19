@@ -2443,7 +2443,11 @@ function clearCreatePostForm(){
   resetCreateForm();
   updateManualPreview();
 }
+// Det man ändrar i editorn när man skapar ett inlägg (texternas plats, typsnitt, mallens lager …) sparas här tills inlägget skickas
+var _CE_KEYS = ['imgTitle', 'imgContent', 'textPos', 'textScale', 'textBoxSize', 'textFont', 'tplSeed'];
+function _createExtra(){ return (typeof S !== 'undefined' && S._createExtra) ? JSON.parse(JSON.stringify(S._createExtra)) : {}; }
 function resetCreateForm(){
+  if (typeof S !== 'undefined') { S._createExtra = null; S._elements = null; S._photoBox = null; }
   var t=document.getElementById("m-title"); if(t)t.value="";
   var c=document.getElementById("m-content"); if(c)c.value="";
   window._allChannelProposals=null; window._selectedProposalPerChannel=null;
@@ -2698,11 +2702,11 @@ function renderProposalCards(ch) {
   const proposals = allProposals[ch] || [];
   const body = document.getElementById('prevBody');
   if (!body) return;
-  const selectedIdx = window._selectedProposalPerChannel[ch] ?? 0;
+  const selectedIdx = (window._selectedProposalPerChannel || {})[ch] ?? 0;
   body.innerHTML = `<div class="ai-proposals" style="width:100%">` +
     proposals.slice(0,3).map((p, i) => {
       const cardLayouts = _cardLayoutsForWs();
-      const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [] };
+      const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [] }; Object.assign(mockPost, _createExtra());
       const dim = i!==selectedIdx;
       return `<div class="ai-prop-card ${i===selectedIdx?'selected':''}" onclick="openProposalEditor('${ch}',${i})" style="${dim ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
         <div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(ch)}">
@@ -2767,7 +2771,7 @@ function updateManualPreview() {
   if (window._aiProposals) return;
   const title   = document.getElementById('m-title')?.value   || '';
   const content = document.getElementById('m-content')?.value || '';
-  const mockPost = { channel: S.manualChannel, layout: _manualLayout(), title, content, hashtags: S.manualTags, imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [], blocks: ((document.getElementById('m-include-brand')||{}).checked ? ['brand','content','hashtags'] : ['content','hashtags']) };
+  const mockPost = { channel: S.manualChannel, layout: _manualLayout(), title, content, hashtags: S.manualTags, imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [], blocks: ((document.getElementById('m-include-brand')||{}).checked ? ['brand','content','hashtags'] : ['content','hashtags']) }; Object.assign(mockPost, _createExtra());
   const body = document.getElementById('prevBody');
   if (!body) return;
   const panelTitle = document.getElementById('prevPanelTitle');
@@ -2816,6 +2820,7 @@ function addManualToReview() {
         photoBox: S._photoBox ? {...S._photoBox} : null,
         elements: S._elements ? JSON.parse(JSON.stringify(S._elements)) : [],
         aspectRatio: S.aspectRatio || null,
+        ..._createExtra(),
       }); saveToServer(S.reviewQueue[S.reviewQueue.length-1]); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
       added++;
     });
@@ -2840,6 +2845,7 @@ function addManualToReview() {
         photoBox: S._photoBox ? {...S._photoBox} : null,
         elements: S._elements ? JSON.parse(JSON.stringify(S._elements)) : [],
         aspectRatio: S.aspectRatio || null,
+        ..._createExtra(),
       }); saveToServer(S.reviewQueue[S.reviewQueue.length-1]); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
     });
   }
@@ -3794,9 +3800,10 @@ function saveEditorModal() {
     S._aiImageUrl = post.imageUrl || post.aiImageUrl || S._aiImageUrl;
     S._photoBox = post.photoBox || S._photoBox || null;
     S._elements = Array.isArray(post.elements) ? post.elements : (S._elements || []);
+    S._createExtra = {}; _CE_KEYS.forEach(function(k){ if (post[k] !== undefined && post[k] !== null) S._createExtra[k] = JSON.parse(JSON.stringify(post[k])); });
     S._imgPos = post.imgPos || S._imgPos; // synka positionering tillbaka så förslagskorten matchar redigeringen
     if (typeof updateManualPreview === 'function') updateManualPreview();
-    if (typeof renderProposalCards === 'function') renderProposalCards(window._activeProposalTab || S.manualChannel);
+    if (window._allChannelProposals && typeof renderProposalCards === 'function') renderProposalCards(window._activeProposalTab || S.manualChannel);
     S._editPost = null;
     showToast('✅ Ändringar sparade');
   } else {
@@ -3875,6 +3882,7 @@ function openCreateEditor() {
     layout: _currentCreateLayout(),
     blocks: _defaultBlocks,
   };
+  Object.assign(tempPost, _createExtra());
   S._editIsCreateMode = true;
   openEditorModal(tempPost);
 }
