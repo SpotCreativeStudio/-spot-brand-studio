@@ -538,8 +538,9 @@ app.post('/api/template-layers', auth, async (req, res) => {
     } else if (/^\/assets\/tpl-[a-z-]+\.png$/.test(src) && _TPL[src.slice(8)]) {
       mime = 'image/png'; b64 = fs.readFileSync(path.join(__dirname, 'assets', _TPL[src.slice(8)])).toString('base64')
     } else return res.status(400).json({ error: 'Ogiltig mall' })
-    const prompt = 'You analyse a social media post template image. Find EVERY piece of visible text (one entry per text line) and the brand logo (if any). ' +
-      'Return JSON: {"elements":[{"kind":"text","text":"exact text as written","box_2d":[ymin,xmin,ymax,xmax],"color":"#rrggbb","role":"headline|subheadline|body|caption|label","bold":true|false,"italic":false,"align":"left|center|right","rotation":0|90|-90},{"kind":"logo","box_2d":[ymin,xmin,ymax,xmax]}]}. ' +
+    const prompt = 'You analyse a social media post template image. Find EVERY piece of visible text (one entry per text line), the brand logo (if any) and every photo. ' +
+      'Return JSON: {"elements":[{"kind":"text","text":"exact text as written","box_2d":[ymin,xmin,ymax,xmax],"color":"#rrggbb","role":"headline|subheadline|body|caption|label","bold":true|false,"italic":false,"align":"left|center|right","rotation":0|90|-90},{"kind":"logo","box_2d":[ymin,xmin,ymax,xmax]},{"kind":"photo","box_2d":[ymin,xmin,ymax,xmax]}]}. ' +
+      'photo = every separate photograph or picture area (for example each image in a collage, or a placeholder area marked for an image); give one entry per photo with a tight box around that photo only. ' +
       'box_2d uses coordinates normalised to 0-1000 and must tightly enclose the text line or logo (include the whole logo, also its background plate if it sits on one). ' +
       'rotation: 0 for normal horizontal text, -90 if the text runs vertically from bottom to top, 90 if it runs from top to bottom. ' +
       'role: headline = the largest text, subheadline = medium accent text, body = normal sentences, caption = small text, label = tiny tags like "[ DIN BILD HÄR ]". Do not include decorative shapes. Only JSON.'
