@@ -1424,7 +1424,8 @@ function _withImgBg(post, inner) {
 function _fontStackFor(name, role) { var _isDisp = role && /display|editorial/i.test(role); var _fallback = _isDisp ? "Georgia,'Times New Roman',serif" : "Helvetica,Arial,sans-serif"; if (!name) return _fallback; var _clean = name.replace(/\s+(Bold|Regular|Light|Italic|Medium|Black|SemiBold|ExtraBold|Thin)$/i,''); return "'" + name + "','" + _clean + "'," + _fallback; }
   function _getSERIF(){
     var _dispT = {name:'Georgia', role:'Display / editorial rubrik'};
-    try { _dispT = TYPOGRAPHY.find(function(t){ return /display|editorial/i.test(t.role); }) || TYPOGRAPHY[TYPOGRAPHY.length-1] || _dispT; } catch(_e){}
+    // Rubriker i bilden: display/editorial-typsnittet om teamet har ett, annars teamets rubriktypsnitt (inte sista raden, som ofta är captions)
+    try { _dispT = TYPOGRAPHY.find(function(t){ return /display|editorial/i.test(t.role); }) || TYPOGRAPHY.find(function(t){ return /rubrik/i.test(t.role); }) || TYPOGRAPHY[0] || _dispT; } catch(_e){}
     return _fontStackFor(_dispT.name, _dispT.role);
   }
   function _getSANS(){
