@@ -497,6 +497,45 @@ app.post('/api/clean-template', auth, async (req, res) => {
     res.json({ url })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+// Gör en platt mallbild redigerbar: AI hittar varje textrad och loggan (position, färg, roll).
+// Klienten lyfter sedan ut dem ur bilden och gör dem till egna element i editorn.
+app.post('/api/template-layers', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    const ws = s.workspace || 'spot'
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY saknas' })
+    const src = String((req.body || {}).src || '')
+    let mime = null, b64 = null
+    const dm = src.match(/^data:(image\/(png|jpeg|jpg|webp|gif));base64,(.+)$/)
+    const im = src.match(/\/img\/([a-f0-9]{24})$/)
+    if (dm) { mime = dm[1]; b64 = dm[3] }
+    else if (im) {
+      await ensureImagesTable()
+      const r0 = await getAuthPool().query('SELECT mime, data, workspace FROM stored_images WHERE id=$1', [im[1]])
+      if (!r0.rows.length || r0.rows[0].workspace !== ws) return res.status(404).json({ error: 'Mallen hittades inte' })
+      mime = r0.rows[0].mime; b64 = r0.rows[0].data.toString('base64')
+    } else if (/^\/assets\/tpl-[a-z-]+\.png$/.test(src) && _TPL[src.slice(8)]) {
+      mime = 'image/png'; b64 = fs.readFileSync(path.join(__dirname, 'assets', _TPL[src.slice(8)])).toString('base64')
+    } else return res.status(400).json({ error: 'Ogiltig mall' })
+    const prompt = 'You analyse a social media post template image. Find EVERY piece of visible text (one entry per text line) and the brand logo (if any). ' +
+      'Return JSON: {"elements":[{"kind":"text","text":"exact text as written","box_2d":[ymin,xmin,ymax,xmax],"color":"#rrggbb","role":"headline|subheadline|body|caption|label","bold":true|false,"italic":false,"align":"left|center|right"},{"kind":"logo","box_2d":[ymin,xmin,ymax,xmax]}]}. ' +
+      'box_2d uses coordinates normalised to 0-1000 and must tightly enclose the text line or logo (include the whole logo, also its background plate if it sits on one). ' +
+      'role: headline = the largest text, subheadline = medium accent text, body = normal sentences, caption = small text, label = tiny tags like "[ DIN BILD HÄR ]". Do not include decorative shapes. Only JSON.'
+    const model = process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash'
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: mime, data: b64 } }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0 } })
+    })
+    const data = await r.json()
+    if (data.error) throw new Error('Gemini: ' + data.error.message)
+    const txt = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('')
+    let out = null
+    try { out = JSON.parse(txt) } catch (e) { const m = txt.match(/\{[\s\S]*\}/); if (m) out = JSON.parse(m[0]) }
+    const els = ((out && out.elements) || []).filter(e => e && Array.isArray(e.box_2d) && e.box_2d.length === 4)
+    res.json({ elements: els })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 app.post('/api/generate-image', auth, async (req, res) => { try { const { brief = '', style = 'modern', brand = null, previousImageBase64 = null, previousImageMimeType = 'image/png', includeBrand = true } = req.body; const apiKey = process.env.GEMINI_API_KEY; if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY saknas' }); let brandVisual = ''; if (brand && includeBrand) { brandVisual = ' Varumarkets visuella stil (foljs strikt): ' + (brand.visualStyle||'') + '. Fargpalett: ' + (brand.colors||'') + '.'; } const brandNameImg = includeBrand ? ((brand && brand.name) ? brand.name : 'spot. creative studio Halmstad') : ''; let promptText = 'CRITICAL RULE: absolutely NO text, no letters, no words, no numbers, no captions, no logos, no wordmarks, no watermarks, no icons and no brand marks anywhere in the image - it must be a purely visual photo with zero written characters and zero logos or brand symbols. Professional social media image.' + brandVisual + ' Style: ' + style + '. Brief: ' + (brief || 'creative studio') + '.'; const imgParts = []; if (previousImageBase64) { imgParts.push({ inlineData: { mimeType: previousImageMimeType || 'image/png', data: previousImageBase64 } }); promptText = 'Skapa en variant av den har bilden utifran: ' + promptText; if (!includeBrand) { promptText += ' Ta bort alla logotyper, varumarkesmarken, ikoner eller vattenstamplar som eventuellt finns i referensbilden.'; } } imgParts.push({ text: promptText }); const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=' + apiKey, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: imgParts }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } }) }); const data = await r.json(); if (data.error) throw new Error('Gemini: ' + data.error.message); const imgPart = (data.candidates?.[0]?.content?.parts || []).find(p => p.inlineData?.mimeType?.startsWith('image/')); if (imgPart) return res.json({ imageUrl: 'data:' + imgPart.inlineData.mimeType + ';base64,' + imgPart.inlineData.data }); res.json({ imageUrl: 'https://placehold.co/1080x1080/c8003c/ffffff?text=spot.' }) } catch (e) { res.status(500).json({ error: e.message }) } })
 app.post('/api/save-post', auth, async (req, res) => { try { const s = sessions[getToken(req)] || {}; const { Pool } = require('pg'); const pool = getAuthPool(); await pool.query('CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, data JSONB, created_at TIMESTAMPTZ DEFAULT NOW())'); const post = req.body; post.workspace = s.workspace || 'spot'; for (const _k of ['imageUrl', 'aiImageUrl']) { if (typeof post[_k] === 'string' && post[_k].indexOf('data:') === 0) { const _u = await storeDataUrlImage(post[_k], post.workspace, s.u, 'https://' + req.get('host')); if (_u) post[_k] = _u } } const _pid = post.id || Date.now().toString(); const _links = postLinks(_pid, post, 'https://' + req.get('host')); await ensurePostLinkColumns(); await pool.query('INSERT INTO posts (id,data,link,image_url) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET data=$2,link=$3,image_url=$4,created_at=NOW()', [_pid, JSON.stringify(post), _links.link, _links.image_url]); res.json({ saved: true }) } catch (e) { res.status(500).json({ error: e.message }) } })
 app.get('/api/published-posts', auth, async (req, res) => { try { const s = sessions[getToken(req)] || {}; const { Pool } = require('pg'); const pool = getAuthPool(); await pool.query('CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, data JSONB, created_at TIMESTAMPTZ DEFAULT NOW())'); const result = await pool.query("SELECT data FROM posts WHERE data->>'status' IN ('published','archived') AND data->>'workspace' = $1 AND (data->>'deleted' IS NULL OR data->>'deleted' <> 'true') ORDER BY created_at DESC LIMIT 200", [s.workspace || 'spot']); res.json({ posts: result.rows.map(r => r.data) }) } catch (e) { res.status(500).json({ error: e.message }) } })
