@@ -532,10 +532,17 @@ app.post('/api/template-layers', auth, async (req, res) => {
     const data = await r.json()
     if (data.error) throw new Error('Gemini: ' + data.error.message)
     const txt = (data.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('')
+    // Tolerant tolkning: modellen kan svara med {elements:[…]}, en ren lista, i kodblock eller med andra namn på rutan
+    const clean = txt.replace(/```json/gi, '').replace(/```/g, '').trim()
     let out = null
-    try { out = JSON.parse(txt) } catch (e) { const m = txt.match(/\{[\s\S]*\}/); if (m) out = JSON.parse(m[0]) }
-    const els = ((out && out.elements) || []).filter(e => e && Array.isArray(e.box_2d) && e.box_2d.length === 4)
-    res.json({ elements: els })
+    try { out = JSON.parse(clean) } catch (e) {
+      const mo = clean.match(/\{[\s\S]*\}/), ma = clean.match(/\[[\s\S]*\]/)
+      try { out = mo ? JSON.parse(mo[0]) : null } catch (e2) { out = null }
+      if (!out && ma) { try { out = JSON.parse(ma[0]) } catch (e3) { out = null } }
+    }
+    const list = Array.isArray(out) ? out : ((out && (out.elements || out.items || out.texts)) || [])
+    const els = list.map(e => { if (!e) return null; const b = e.box_2d || e.box2d || e.bbox || e.box; return Array.isArray(b) && b.length === 4 ? Object.assign({}, e, { box_2d: b.map(Number) }) : null }).filter(Boolean)
+    res.json(els.length ? { elements: els } : { elements: [], raw: clean.slice(0, 1500) })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 app.post('/api/generate-image', auth, async (req, res) => { try { const { brief = '', style = 'modern', brand = null, previousImageBase64 = null, previousImageMimeType = 'image/png', includeBrand = true } = req.body; const apiKey = process.env.GEMINI_API_KEY; if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY saknas' }); let brandVisual = ''; if (brand && includeBrand) { brandVisual = ' Varumarkets visuella stil (foljs strikt): ' + (brand.visualStyle||'') + '. Fargpalett: ' + (brand.colors||'') + '.'; } const brandNameImg = includeBrand ? ((brand && brand.name) ? brand.name : 'spot. creative studio Halmstad') : ''; let promptText = 'CRITICAL RULE: absolutely NO text, no letters, no words, no numbers, no captions, no logos, no wordmarks, no watermarks, no icons and no brand marks anywhere in the image - it must be a purely visual photo with zero written characters and zero logos or brand symbols. Professional social media image.' + brandVisual + ' Style: ' + style + '. Brief: ' + (brief || 'creative studio') + '.'; const imgParts = []; if (previousImageBase64) { imgParts.push({ inlineData: { mimeType: previousImageMimeType || 'image/png', data: previousImageBase64 } }); promptText = 'Skapa en variant av den har bilden utifran: ' + promptText; if (!includeBrand) { promptText += ' Ta bort alla logotyper, varumarkesmarken, ikoner eller vattenstamplar som eventuellt finns i referensbilden.'; } } imgParts.push({ text: promptText }); const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent?key=' + apiKey, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: imgParts }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } }) }); const data = await r.json(); if (data.error) throw new Error('Gemini: ' + data.error.message); const imgPart = (data.candidates?.[0]?.content?.parts || []).find(p => p.inlineData?.mimeType?.startsWith('image/')); if (imgPart) return res.json({ imageUrl: 'data:' + imgPart.inlineData.mimeType + ';base64,' + imgPart.inlineData.data }); res.json({ imageUrl: 'https://placehold.co/1080x1080/c8003c/ffffff?text=spot.' }) } catch (e) { res.status(500).json({ error: e.message }) } })
