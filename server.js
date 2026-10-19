@@ -787,6 +787,26 @@ app.get('/api/brand', auth, async (req, res) => {
     res.json({ brand: r.rows[0] ? r.rows[0].data : null })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+// Google Fonts-lista till Varumärke → Typografi. Officiellt API om GOOGLE_FONTS_API_KEY finns, annars Googles öppna metadata. Cachas ett dygn.
+let _gfCache = null, _gfAt = 0
+app.get('/api/google-fonts', auth, async (req, res) => {
+  try {
+    if (_gfCache && Date.now() - _gfAt < 24 * 3600 * 1000) return res.json({ fonts: _gfCache })
+    let fonts = []
+    const key = process.env.GOOGLE_FONTS_API_KEY
+    if (key) {
+      const d = await (await fetch('https://www.googleapis.com/webfonts/v1/webfonts?sort=popularity&key=' + encodeURIComponent(key))).json()
+      fonts = (d.items || []).map(f => ({ family: f.family, category: f.category, weights: (f.variants || []).map(v => v === 'regular' ? '400' : v).filter(v => /^\d{3}$/.test(v)) }))
+    } else {
+      const txt = await (await fetch('https://fonts.google.com/metadata/fonts')).text()
+      const d = JSON.parse(txt.replace(/^\)\]\}'\s*/, ''))
+      fonts = (d.familyMetadataList || []).map(f => ({ family: f.family, category: (f.category || '').toLowerCase(), weights: Object.keys(f.fonts || {}).filter(v => /^\d{3}$/.test(v)) }))
+    }
+    fonts = fonts.filter(f => f.family).map(f => ({ family: f.family, category: f.category, weights: Array.from(new Set(f.weights)).sort() }))
+    if (fonts.length) { _gfCache = fonts; _gfAt = Date.now() }
+    res.json({ fonts })
+  } catch (e) { res.status(502).json({ error: 'Kunde inte hämta Google Fonts: ' + e.message, fonts: [] }) }
+})
 app.post('/api/brand', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
