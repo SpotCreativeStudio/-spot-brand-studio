@@ -5576,10 +5576,10 @@ function _cvElementsHTML(post){
       } else inner = _cvEsc(txt);
     } else if (e.type === 'image' || e.type === 'logo') {
       var src = e.type === 'logo' ? ((typeof BRAND_LOGO === 'string' && BRAND_LOGO) || e.src || '') : e.src;
-      inner = src ? '<img src="' + _cvAttr(src) + '" alt="" draggable="false" style="width:100%;height:100%;object-fit:' + (e.fit || 'contain') + ';display:block;pointer-events:none;border-radius:' + (e.radius || 0) + 'cqw">' : (e.type === 'logo' ? '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:5cqw">' + _cvEsc((typeof BRAND_NAME !== 'undefined' && BRAND_NAME) || 'Logga') + '</div>' : '<div style="width:100%;height:100%;background:repeating-linear-gradient(45deg,#d1d5db 0 2cqw,#e5e7eb 2cqw 4cqw);display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:3.5cqw;font-weight:700">Välj bild</div>');
+      inner = src ? '<img src="' + _cvAttr(src) + '" alt="" draggable="false" style="width:100%;height:100%;object-fit:' + (e.fit || 'contain') + ';display:block;pointer-events:none;border-radius:' + (e.radius || 0) + 'cqw;' + ((e.ix || e.iy || (e.iz && e.iz !== 1)) ? 'transform:translate(' + (e.ix || 0) + '%,' + (e.iy || 0) + '%) scale(' + (e.iz || 1) + ');' : '') + '">' : (e.type === 'logo' ? '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:5cqw">' + _cvEsc((typeof BRAND_NAME !== 'undefined' && BRAND_NAME) || 'Logga') + '</div>' : '<div style="width:100%;height:100%;background:repeating-linear-gradient(45deg,#d1d5db 0 2cqw,#e5e7eb 2cqw 4cqw);display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:3.5cqw;font-weight:700">Välj bild</div>');
       if (e.type === 'logo' && e.tint && src) inner = '<div style="width:100%;height:100%;background:' + _cvAttr(e.tint) + ';-webkit-mask:url(\'' + _cvAttr(src) + '\') center/contain no-repeat;mask:url(\'' + _cvAttr(src) + '\') center/contain no-repeat"></div>';
       if (e.type === 'image' && e.tint) inner += '<div style="position:absolute;inset:0;pointer-events:none;background:' + _cvAttr(e.tint) + ';opacity:' + (e.tintOp == null ? 0.35 : e.tintOp) + '"></div>';
-      if (e.type === 'image') st += _cvMaskCss(e);
+      if (e.type === 'image') st += _cvMaskCss(e) + 'overflow:hidden;';
     } else if (e.type === 'rect') {
       st += 'background:' + (e.fill || '#b31e59') + ';border-radius:' + (e.radius || 0) + 'cqw;';
     } else if (e.type === 'circle') {
@@ -5635,6 +5635,14 @@ function cvSetGFont(fam){
 function cvSetRows(v){ cvSet('rows', String(v || '').split('\n').map(function(l){ return l.split(';').map(function(s){ return s.trim(); }); }).filter(function(r){ return r.join('') !== ''; })); }
 function _cvSqH(w){ var c = document.getElementById('emPreviewCard'); return c && c.offsetHeight ? w * c.offsetWidth / c.offsetHeight : w; }
 function cvAddFrame(m){ var w = 40, h = _cvSqH(40); cvAdd('image', { mask: m, src: '', x: 30, y: Math.max(0, (100 - h) / 2), w: w, h: h, fit: 'cover' }); window._cvReplaceId = _cvSel; cvToggleImgPop(); }
+// Beskärningsläge (som i Canva): dra för att flytta bilden inuti ramen, scrolla eller använd reglaget för att zooma
+function cvToggleCrop(id){
+  var p = _cvPost(), e = _cvFind(p, id || _cvSel); if (!e || e.type !== 'image') return;
+  window._cvCrop = (window._cvCrop === e.id) ? null : e.id;
+  _cvSel = e.id; _cvMulti = [];
+  if (window._cvCrop && typeof showToast === 'function') showToast('Dra i bilden för att flytta den i ramen · scrolla för att zooma · Esc när du är klar');
+  _cvRerender();
+}
 function cvReplaceImage(){ window._cvReplaceId = _cvSel; var p = document.getElementById('cvImgPop'); if (p) p.style.display = 'none'; cvToggleImgPop(); }
 function _cvPlaceImage(src, ratio){
   var p = _cvPost(), t = window._cvReplaceId && _cvFind(p, window._cvReplaceId); window._cvReplaceId = null;
@@ -5667,7 +5675,7 @@ function cvPasteStyle(){ if (!_cvStyleClip) return; var els = _cvSelEls(); if (!
 function cvShowHelp(){
   var old = document.getElementById('cvHelp'); if (old) { old.remove(); return; }
   var tb = document.getElementById('cvToolbar'); if (!tb) return;
-  var tips = [['Klick', 'Markera ett element'], ['Shift + klick', 'Markera flera'], ['Ctrl + A', 'Markera allt'], ['Högerklick', 'Fler val (kopiera stil, lager, lås …)'], ['Dubbelklick på text', 'Skriv i texten'], ['Dra i bilden', 'Flytta motivet'], ['Hörnpunkter', 'Ändra bildens bredd och höjd'], ['Dubbelklick på bild', 'Byt bilden (t.ex. ett foto i mallen)'], ['F', 'Bilden täcker hela inlägget'], ['Piltangenter', 'Flytta (Shift = längre steg)'], ['Ctrl + C / V', 'Kopiera / klistra in'], ['Ctrl + D', 'Duplicera'], ['Ctrl + G', 'Gruppera (Ctrl + Shift + G delar upp)'], ['Delete', 'Ta bort'], ['Ctrl + Z', 'Ångra'], ['Esc', 'Avmarkera / sluta rita']];
+  var tips = [['Klick', 'Markera ett element'], ['Shift + klick', 'Markera flera'], ['Ctrl + A', 'Markera allt'], ['Högerklick', 'Fler val (kopiera stil, lager, lås …)'], ['Dubbelklick på text', 'Skriv i texten'], ['Dra i bilden', 'Flytta motivet'], ['Hörnpunkter', 'Ändra bildens bredd och höjd'], ['Dubbelklick på bild', 'Flytta och zooma bilden inuti ramen (Esc när du är klar)'], ['F', 'Bilden täcker hela inlägget'], ['Piltangenter', 'Flytta (Shift = längre steg)'], ['Ctrl + C / V', 'Kopiera / klistra in'], ['Ctrl + D', 'Duplicera'], ['Ctrl + G', 'Gruppera (Ctrl + Shift + G delar upp)'], ['Delete', 'Ta bort'], ['Ctrl + Z', 'Ångra'], ['Esc', 'Avmarkera / sluta rita']];
   var d = document.createElement('div'); d.id = 'cvHelp';
   d.style.cssText = 'position:absolute;right:8px;top:calc(100% + 6px);z-index:70;width:290px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:10px 12px;font-size:12px;color:#111';
   d.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>Kortkommandon och tips</b><span onclick="cvShowHelp()" style="cursor:pointer;color:#6b7280;font-size:14px">✕</span></div>' + tips.map(function(t){ return '<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-top:1px solid #f5f5f5"><span style="font-weight:600;white-space:nowrap">' + t[0] + '</span><span style="color:#6b7280;text-align:right">' + t[1] + '</span></div>'; }).join('');
@@ -5682,6 +5690,7 @@ function _cvCtx(x, y){
   var m = document.createElement('div'); m.id = 'cvCtx';
   m.style.cssText = 'position:fixed;left:' + x + 'px;top:' + y + 'px;z-index:10000;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:6px 0;font-size:13px;min-width:220px;color:#111';
   m.innerHTML = it('Kopiera', 'cvCopy()', 'Ctrl+C') + (_cvClip ? it('Klistra in', 'cvPaste()', 'Ctrl+V') : '') + it('Duplicera', 'cvDuplicate()', 'Ctrl+D') + it('Ta bort', 'cvDelete()', 'Delete') + sep +
+    (e && e.type === 'image' ? it('Byt bild', 'cvReplaceImage()') + it('Flytta bilden i ramen', 'cvToggleCrop()', 'Dubbelklick') + sep : '') +
     it('Kopiera stil', 'cvCopyStyle()') + (_cvStyleClip ? it('Klistra in stil', 'cvPasteStyle()') : '') + sep +
     it('Längst fram', "cvLayer('front')") + it('Framåt', "cvLayer('up')") + it('Bakåt', "cvLayer('down')") + it('Längst bak', "cvLayer('back')") + sep +
     it('Centrera på sidan', "cvAlign('hcenter');cvAlign('vcenter')") + (multi ? it('Gruppera', 'cvGroup()', 'Ctrl+G') : '') + (e && e.grp ? it('Dela upp grupp', 'cvUngroup()', 'Ctrl+Shift+G') : '') + it(e && e.locked ? 'Lås upp' : 'Lås', 'cvLockSel()');
@@ -5840,6 +5849,8 @@ function _cvToolbarHTML(){
   } else if (e.type === 'image') {
     a += _CV_LBL('Färgton') + _cvSw('tint', e.tint || '', 'Lägg en färg över bilden', true) + (e.tint ? _cvRng('Styrka', 'tintOp', 0.05, 0.9, 0.05, e.tintOp == null ? 0.35 : e.tintOp, 54) : '') + '</div>' + _CV_ROW +
       _cvBtn('🔁 Byt bild', 'cvReplaceImage()', 'Byt bilden men behåll storlek och ram') +
+      _cvBtn(window._cvCrop === e.id ? '✓ Klar' : '✂ Flytta i ramen', 'cvToggleCrop()', 'Dra bilden inuti ramen (dubbelklick på bilden gör samma sak)', window._cvCrop === e.id) +
+      _cvRng('Zoom i ram', 'iz', 0.5, 5, 0.05, e.iz || 1, 64) + ((e.ix || e.iy || (e.iz && e.iz !== 1)) ? _cvBtn('↺', "cvSet('ix',0);cvSet('iy',0);cvSet('iz',1)", 'Centrera bilden i ramen') : '') +
       _cvDd("cvSet('mask', this.value)", [['', 'Ingen ram'], ['circle', 'Cirkel'], ['rounded', 'Rundad'], ['arch', 'Båge'], ['hexagon', 'Hexagon'], ['diamond', 'Romb'], ['triangle', 'Triangel'], ['star', 'Stjärna']], e.mask || '', 'Ram') +
       _cvBtn(e.fit === 'contain' ? 'Fyll ruta' : 'Visa hela', "cvSet('fit', '" + (e.fit === 'contain' ? 'cover' : 'contain') + "')", 'Beskär eller visa hela bilden') +
       _cvBtn('Gråskala', "cvToggle('gray')", 'Svartvitt', e.gray) + _cvBtn('Sepia', "cvToggle('sepia')", 'Varm ton', e.sepia) +
@@ -5949,6 +5960,18 @@ function _cvWire(post, card){
       if (node.isContentEditable || window._cvPen) return;
       ev.stopPropagation(); ev.stopImmediatePropagation(); ev.preventDefault();
       if (ev.button === 2) return;
+      if (window._cvCrop === e.id) {
+        // Flytta bilden fritt inuti ramen
+        var im = node.querySelector('img'), r0 = node.getBoundingClientRect(), sx0 = ev.clientX, sy0 = ev.clientY, ix0 = e.ix || 0, iy0 = e.iy || 0, did = false;
+        node.style.cursor = 'grabbing';
+        drag(function(m){
+          if (!did) { _cvSnap(); did = true; }
+          e.ix = Math.round((ix0 + (m.clientX - sx0) / Math.max(1, r0.width) * 100) * 10) / 10;
+          e.iy = Math.round((iy0 + (m.clientY - sy0) / Math.max(1, r0.height) * 100) * 10) / 10;
+          if (im) im.style.transform = 'translate(' + e.ix + '%,' + e.iy + '%) scale(' + (e.iz || 1) + ')';
+        }, function(){ node.style.cursor = 'grab'; });
+        return;
+      }
       if (ev.shiftKey) {
         var cur = _cvSelIds();
         if (cur.indexOf(e.id) >= 0 && cur.length > 1) { if (_cvSel === e.id) _cvSel = _cvMulti.shift(); else _cvMulti = _cvMulti.filter(function(i){ return i !== e.id; }); }
@@ -5976,7 +5999,11 @@ function _cvWire(post, card){
         placeSel();
       });
     });
-    if (e.type === 'image') node.addEventListener('dblclick', function(ev){ ev.stopPropagation(); if (e.locked) return; _cvSel = e.id; _cvMulti = []; _cvRenderToolbar(card); markSel(); cvReplaceImage(); });
+    if (e.type === 'image') node.addEventListener('dblclick', function(ev){ ev.stopPropagation(); if (e.locked) return; if (!e.src) { _cvSel = e.id; _cvMulti = []; _cvRenderToolbar(card); markSel(); cvReplaceImage(); return; } cvToggleCrop(e.id); });
+    if (e.type === 'image' && window._cvCrop === e.id) {
+      node.style.outline = '2px dashed #b31e59'; node.style.outlineOffset = '2px'; node.style.cursor = 'grab';
+      node.addEventListener('wheel', function(ev){ ev.preventDefault(); ev.stopPropagation(); if (Date.now() - _cvLiveT > 900) _cvSnap(); _cvLiveT = Date.now(); e.iz = Math.max(0.5, Math.min(5, Math.round(((e.iz || 1) + (ev.deltaY < 0 ? 0.08 : -0.08)) * 100) / 100)); var im = node.querySelector('img'); if (im) im.style.transform = 'translate(' + (e.ix || 0) + '%,' + (e.iy || 0) + '%) scale(' + e.iz + ')'; }, { passive: false });
+    }
     if (e.type === 'text') node.addEventListener('dblclick', function(ev){
       ev.stopPropagation(); if (e.locked || e.curve) return;
       _cvSnap(); node.contentEditable = 'true'; node.style.cursor = 'text'; node.style.outline = '2px solid #b31e59'; node.focus();
@@ -6054,6 +6081,7 @@ function _cvWire(post, card){
     card.dataset.cvBound = '1';
     card.addEventListener('mousedown', function(ev){
       var hit = ev.target && ev.target.closest && (ev.target.closest('.cv-el') || ev.target.closest('[data-k]') || ev.target.title === 'Dra för att rotera');
+      if (window._cvCrop && !(ev.target.closest && ev.target.closest('.cv-el[data-cv="' + window._cvCrop + '"]'))) { window._cvCrop = null; setTimeout(_cvRerender, 0); }
       if (!hit && _cvSel && !window._cvPen) { _cvSel = null; _cvMulti = []; if (window._cvPlaceSel) window._cvPlaceSel(); _cvRenderToolbar(card); }
     }, true);
     // Ritverktyget: dra med musen för att rita en fri linje
@@ -6091,6 +6119,7 @@ document.addEventListener('keydown', function(ev){
   if (mod && (k === 'z' || k === 'Z') && !ev.shiftKey) { if (_cvUndoLast()) ev.preventDefault(); return; }
   if (mod && (k === 'a' || k === 'A')) { ev.preventDefault(); cvSelectAll(); return; }
   if (mod && (k === 'v' || k === 'V') && _cvClip) { ev.preventDefault(); cvPaste(); return; }
+  if ((k === 'Escape' || k === 'Enter') && window._cvCrop) { ev.preventDefault(); window._cvCrop = null; _cvRerender(); return; }
   if (k === 'Escape') { _cvCloseCtx(); if (window._cvPen) { cvTogglePen(); return; } if (_cvSel) { _cvSel = null; _cvMulti = []; _cvRerender(); } return; }
   var els = _cvSelEls(); if (!els.length) return;
   if (k === 'Delete' || k === 'Backspace') { ev.preventDefault(); cvDelete(); return; }
