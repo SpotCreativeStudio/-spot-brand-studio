@@ -450,7 +450,27 @@ app.get('/reset', (req, res) => { const t = req.query.token || ''; if (!validRes
 app.post('/reset', async (req, res) => { const { token, newPassword } = req.body || {}; if (!validResetToken(token)) return res.redirect('/forgot?err=1'); if (passwordError(newPassword)) return res.redirect('/reset?token=' + token + '&err=1'); const rt = resetTokens[token]; if (rt && rt.username) { await getAuthPool().query('UPDATE app_users SET password=$1 WHERE username=$2', [hashPassword(newPassword), rt.username]) } else { await setPassword(String(newPassword)) } delete resetTokens[token]; res.redirect('/login?reset=1') })
 app.get('/inject.js', (_req, res) => { try { res.setHeader('Content-Type', 'application/javascript'); res.send(fs.readFileSync(path.join(__dirname, 'inject.js'), 'utf-8')) } catch (e) { res.send('// inject.js not found') } })
 app.get('/', auth, (req, res) => { try { const html = fs.readFileSync(path.join(__dirname, 'poc.html'), 'utf-8'); const tag = '<script src="/inject.js"></script>'; const idx = html.lastIndexOf('</script>'); const patched = html.slice(0, idx + 9) + tag + html.slice(idx + 9); res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.send(patched) } catch (e) { res.status(500).send('Error: ' + e.message) } })
-app.post('/api/generate', auth, async (req, res) => { try { const { channels = ['instagram'], brief = '', brand = null } = req.body; const apiKey = process.env.GEMINI_API_KEY; if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY saknas' }); const chList = Array.isArray(channels) ? channels : [channels]; let brandBlock = ''; if (brand) { brandBlock = ' Varumarkesprofil - foljs strikt: Tonalitet: ' + (brand.tone||'') + '. Visuell stil: ' + (brand.visualStyle||'') + '. Tjanster: ' + (brand.services||'') + '.'; if (brand.dos && brand.dos.length) brandBlock += ' Gor: ' + brand.dos.join('; ') + '.'; if (brand.donts && brand.donts.length) brandBlock += ' Undvik: ' + brand.donts.join('; ') + '.'; if (brand.forbidden) brandBlock += ' Forbjudna ord/fraser: ' + brand.forbidden + '.'; } const brandName = (brand && brand.name) ? (brand.name + (brand.location ? (', ' + brand.location) : '')) : 'spot. creative studio Halmstad'; const prompt = 'Du ar copywriter for ' + brandName + '.' + brandBlock + ' Brief: ' + (brief || ('Generellt om ' + brandName)) + '. Kanaler: ' + chList.join(', ') + '. Generera EXAKT 3 korta forslag max 100 ord. Svara ENDAST med JSON-array: [{"title":"...","content":"...","hashtags":["..."],"cta":"..."},{"title":"...","content":"...","hashtags":["..."],"cta":"..."},{"title":"...","content":"...","hashtags":["..."],"cta":"..."}]'; const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent?key=' + apiKey, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.9, maxOutputTokens: 8192, responseModalities: ['TEXT'] } }) }); const data = await r.json(); if (data.error) throw new Error('Gemini: ' + data.error.message); let s = (data.candidates?.[0]?.content?.parts || []).filter(p => p.text && !p.thought).map(p => p.text).join('').replace(/```json/g, '').replace(/```/g, '').trim(); s = s.replace(/,(\s*[}\]])/g, '$1'); const start = s.indexOf('['), end = s.lastIndexOf(']'); if (start < 0 || end < 0) throw new Error('Ingen array i svar'); const flat = JSON.parse(s.slice(start, end + 1));
+// Text från Gemini: bildmodellen (Nano Banana 2.1) svarar ibland utan text, så textjobb provar en textmodell först.
+// Ordning: GEMINI_TEXT_MODEL (om satt) → gemini-3.8-flash → gemini-nano-banana-2.1. Tar första modellen som faktiskt ger text.
+async function geminiText(apiKey, parts, gen) {
+  const models = [process.env.GEMINI_TEXT_MODEL, 'gemini-3.8-flash', 'gemini-nano-banana-2.1'].filter(Boolean)
+  const notes = []
+  for (const model of models) {
+    try {
+      const cfg = Object.assign({}, gen || {})
+      if (model.indexOf('banana') >= 0 || model.indexOf('image') >= 0) cfg.responseModalities = ['TEXT']
+      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts }], generationConfig: cfg }) })
+      const d = await r.json()
+      if (d.error) { notes.push(model + ': ' + d.error.message); continue }
+      const c = d.candidates?.[0] || {}
+      const text = (c.content?.parts || []).filter(p => p.text && !p.thought).map(p => p.text).join('').trim()
+      if (text) return { text, model }
+      notes.push(model + ': tomt svar (' + (c.finishReason || d.promptFeedback?.blockReason || 'okänd orsak') + ')')
+    } catch (e) { notes.push(model + ': ' + e.message) }
+  }
+  throw new Error('Gemini gav ingen text – ' + notes.join(' | '))
+}
+app.post('/api/generate', auth, async (req, res) => { try { const { channels = ['instagram'], brief = '', brand = null } = req.body; const apiKey = process.env.GEMINI_API_KEY; if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY saknas' }); const chList = Array.isArray(channels) ? channels : [channels]; let brandBlock = ''; if (brand) { brandBlock = ' Varumarkesprofil - foljs strikt: Tonalitet: ' + (brand.tone||'') + '. Visuell stil: ' + (brand.visualStyle||'') + '. Tjanster: ' + (brand.services||'') + '.'; if (brand.dos && brand.dos.length) brandBlock += ' Gor: ' + brand.dos.join('; ') + '.'; if (brand.donts && brand.donts.length) brandBlock += ' Undvik: ' + brand.donts.join('; ') + '.'; if (brand.forbidden) brandBlock += ' Forbjudna ord/fraser: ' + brand.forbidden + '.'; } const brandName = (brand && brand.name) ? (brand.name + (brand.location ? (', ' + brand.location) : '')) : 'spot. creative studio Halmstad'; const prompt = 'Du ar copywriter for ' + brandName + '.' + brandBlock + ' Brief: ' + (brief || ('Generellt om ' + brandName)) + '. Kanaler: ' + chList.join(', ') + '. Generera EXAKT 3 korta forslag max 100 ord. Svara ENDAST med JSON-array: [{"title":"...","content":"...","hashtags":["..."],"cta":"..."},{"title":"...","content":"...","hashtags":["..."],"cta":"..."},{"title":"...","content":"...","hashtags":["..."],"cta":"..."}]'; const _gt = await geminiText(apiKey, [{ text: prompt }], { temperature: 0.9, maxOutputTokens: 8192 }); let s = _gt.text.replace(/```json/g, '').replace(/```/g, '').trim(); s = s.replace(/,(\s*[}\]])/g, '$1'); const start = s.indexOf('['), end = s.lastIndexOf(']'); if (start < 0 || end < 0) throw new Error('Ingen array i svar'); const flat = JSON.parse(s.slice(start, end + 1));
 flat.forEach(function(p){ if (p && typeof p === 'object') { if (typeof p.title === 'string') p.title = capitalizeAfterSentences(p.title); if (typeof p.content === 'string') p.content = capitalizeAfterSentences(p.content); } }); const proposals = {}; chList.forEach(ch => { proposals[ch] = flat }); res.json({ proposals }) } catch (e) { res.status(500).json({ error: e.message }) } })
 // Tvättar en kunds mallbild: AI tar bort all text och alla loggor men behåller designen,
 // så att inläggets egen rubrik och text kan läggas ovanpå. Resultatet sparas i stored_images.
@@ -523,15 +543,7 @@ app.post('/api/template-layers', auth, async (req, res) => {
       'box_2d uses coordinates normalised to 0-1000 and must tightly enclose the text line or logo (include the whole logo, also its background plate if it sits on one). ' +
       'rotation: 0 for normal horizontal text, -90 if the text runs vertically from bottom to top, 90 if it runs from top to bottom. ' +
       'role: headline = the largest text, subheadline = medium accent text, body = normal sentences, caption = small text, label = tiny tags like "[ DIN BILD HÄR ]". Do not include decorative shapes. Only JSON.'
-    // Samma modell som resten av appen (Nano Banana 2.1). Kan bytas med GEMINI_VISION_MODEL.
-    const model = process.env.GEMINI_VISION_MODEL || 'gemini-nano-banana-2.1'
-    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: mime, data: b64 } }] }], generationConfig: { temperature: 0, responseModalities: ['TEXT'] } })
-    })
-    const data = await r.json()
-    if (data.error) throw new Error('Gemini: ' + data.error.message)
-    const txt = (data.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('')
+    const txt = (await geminiText(apiKey, [{ text: prompt }, { inlineData: { mimeType: mime, data: b64 } }], { temperature: 0 })).text
     // Tolerant tolkning: modellen kan svara med {elements:[…]}, en ren lista, i kodblock eller med andra namn på rutan
     const clean = txt.replace(/```json/gi, '').replace(/```/g, '').trim()
     let out = null
