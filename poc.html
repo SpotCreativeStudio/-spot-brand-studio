@@ -1450,14 +1450,37 @@ function _teamTpl(post){
 }
 function _tplBase(post){ var t = _teamTpl(post); return t ? t.src : null; }
 // Mallbilden ligger alltid underst, den egna bilden ovanpå i en ruta som är lite mindre än inlägget
-function _tplComposeHTML(post, src, t){
+function _tplComposeHTML(post, src, t, c, tags){
   var own = post.imageUrl || post.aiImageUrl;
-  var pz = post;
+  var tt = (post.imgTitle !== undefined && post.imgTitle !== null && post.imgTitle !== '') ? post.imgTitle : t;
+  // Texterna kan flyttas, skalas och få eget typsnitt i editorn (sparas i inlägget, inte i varumärket)
+  function tw(key, base, txt){
+    if (!txt) return '';
+    var pos = (post.textPos && post.textPos[key]) || { x: 0, y: 0 }, sc = (post.textScale && post.textScale[key]) || 1;
+    var f = post.textFont && post.textFont[key]; if (f) _gfLoad(f);
+    return '<div data-tw="' + key + '" style="position:relative;transform:translate(' + (pos.x || 0) + 'px,' + (pos.y || 0) + 'px);transform-origin:left top;' + base + (sc !== 1 ? 'font-size:' + (sc * 100) + '%;' : '') + (f ? "font-family:'" + String(f).replace(/'/g, '') + "',sans-serif;" : '') + '">' + txt + '</div>';
+  }
+  var txtBlock = (tt || c || tags) ? '<div style="position:absolute;left:13px;right:13px;bottom:13px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.45)">' +
+    (tt ? '<div style="font-family:' + _getSERIF().split('"').join("'") + ';font-size:' + _autoFit(tt, 26, 18, 14) + 'px;line-height:1">' + tw('title', '', tt) + '</div>' : '') +
+    (c ? '<div style="font-family:' + _getSANS().split('"').join("'") + ';font-size:9px;line-height:1.45;margin-top:6px">' + tw('content', '', _truncateCaption(c, 160)) + '</div>' : '') +
+    (tags ? '<div style="font-family:' + _getSANS().split('"').join("'") + ';font-size:8px;margin-top:4px;opacity:.9">' + tw('hashtags', '', tags) + '</div>' : '') +
+    '</div>' : '';
   return '<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">' +
     '<div class="tpl-bg" style="position:absolute;inset:0;background:url(\'' + String(src).split("'").join('%27').split('"').join('%22') + '\') center/cover no-repeat"></div>' +
-    (own ? _pbWrap(pz, _imgOrGray(pz), { x: 12, y: 10, w: 76, h: 80 }) : '') +
-    (t ? '<div style="position:absolute;left:13px;right:13px;bottom:13px;font-family:' + _getSERIF().split('"').join("'") + ';font-size:' + _autoFit(t, 26, 18, 14) + 'px;color:#fff;line-height:1;text-shadow:0 2px 10px rgba(0,0,0,.45)">' + t + '</div>' : '') +
-    '</div>';
+    (own ? _pbWrap(post, _imgOrGray(post), { x: 12, y: 10, w: 76, h: 80 }) : '') +
+    txtBlock + '</div>';
+}
+// Laddar ett Google-typsnitt för ett enskilt inlägg (påverkar inte varumärket)
+function _gfLoad(fam){
+  if (!fam || typeof document === 'undefined') return;
+  if (typeof typoFontFor === 'function' && typoFontFor(fam)) return;
+  var id = 'gf_' + String(fam).replace(/[^a-z0-9]/gi, '_'); if (document.getElementById(id)) return;
+  var info = (typeof _gfInfo === 'function') ? _gfInfo(fam) : null;
+  if (typeof GFONTS !== 'undefined' && GFONTS && !info) return; // inte ett Google-typsnitt
+  var w = info ? (info.weights || []).filter(function(x){ return /^\d{3}$/.test(x); }) : [];
+  var l = document.createElement('link'); l.id = id; l.rel = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(fam).replace(/%20/g, '+') + (w.length ? ':wght@' + w.join(';') : '') + '&display=swap';
+  document.head.appendChild(l);
 }
 function _tplBgLayer(post){
   var u = _tplBase(post);
@@ -1496,7 +1519,7 @@ function _getPostImageHTMLRaw(post, size='card') {
 
   // ── TEAMETS MALLBILD (Varumärke → Mallbilder) ligger alltid bakom den egna bilden ──
   var _teamSrc = _tplBase(post);
-  if (_teamSrc) return _tplComposeHTML(post, _teamSrc, t);
+  if (_teamSrc) return _tplComposeHTML(post, _teamSrc, t, c, tags);
 
   // ── KUNDENS EGEN MALL (uppladdad mallbild som bakgrund) ─────────────
   if (String(layout).indexOf('tpl:') === 0) {
@@ -2942,7 +2965,12 @@ function openEditorModal(post) {
         <input type="range" id="emTextSize" min="0.5" max="2.5" step="0.05" value="1" oninput="emSetTextSize(this.value)" style="flex:1">
         <span id="emTextSizeLabel" style="font-size:11px;color:#6b7280;min-width:38px;text-align:right">100%</span>
       </div>
-      <div style="font-size:11px;color:#9ca3af;margin-top:4px">Dra widgeten i bilden för att flytta den · ✕ tar bort den</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <span style="font-size:11px;color:#6b7280;font-weight:600;white-space:nowrap">Typsnitt</span>
+        <select id="emWidgetFont" onchange="emSetWidgetFont(this.value)" style="font-size:12px;padding:5px;border:1.5px solid #e5e7eb;border-radius:8px;background:#fff;max-width:150px"></select>
+        <input list="gfontAll" placeholder="Sök i Google Fonts…" onfocus="loadGoogleFontList()" onchange="emSetWidgetFont(this.value);this.value=''" style="flex:1;min-width:130px;font-size:12px;padding:5px 8px;border:1.5px solid #e5e7eb;border-radius:8px">
+      </div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:4px">Dra texten i bilden för att flytta den. Typsnittet gäller bara det här inlägget, inte varumärket.</div>
     </div>
     <div>
       <div class="em-field-label">🎨 Bild</div>
@@ -3067,12 +3095,13 @@ function emRenderPreview() {
   const p  = _findLeaf(_imgC);
   const tagsEl = _findLeaf(_tagStr);
   var brandEl = _findLeaf((typeof BRAND_NAME !== 'undefined' && BRAND_NAME) ? BRAND_NAME : 'spot.') || card.querySelector('[class*="logo"],[class*="brand"]');
-  const widgets = [ ['brand', brandEl], ['content', p], ['hashtags', tagsEl] ];
+  const widgets = [ ['brand', brandEl], ['title', h1], ['content', p], ['hashtags', tagsEl] ];
   widgets.forEach(function(pair){
     var key = pair[0], node = pair[1];
     if (!node) return;
-    if (!(post.blocks||[]).includes(key)) return;
+    if (key !== 'title' && !(post.blocks||[]).includes(key)) return;
     var pos = post.textPos[key] || { x:0, y:0 };
+    if (post.textFont && post.textFont[key]) { node.style.fontFamily = "'" + String(post.textFont[key]).replace(/'/g, '') + "',sans-serif"; _gfLoad(post.textFont[key]); }
     var scale = post.textScale[key] || 1;
     node.style.position = 'relative';
     node.style.transform = 'translate(' + pos.x + 'px,' + pos.y + 'px)' + ((key === 'brand' && scale !== 1) ? (' scale(' + scale + ')') : '');
@@ -3243,7 +3272,34 @@ function emSelectWidget(key){
   var post = S._editPost;
   var sl = document.getElementById('emTextSize');
   if (sl && key && post) { sl.value = (post.textScale && post.textScale[key]) || 1; var sv=document.getElementById('emTextSizeLabel'); if(sv) sv.textContent = Math.round(sl.value*100)+'%'; }
+  _emFillWidgetFont(key);
+  if (key && panel && panel.scrollIntoView) { try { panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {} }
   emRenderPreview();
+}
+// Typsnitt per text i inlägget (påverkar inte varumärket)
+function _emFillWidgetFont(key){
+  var sel = document.getElementById('emWidgetFont'), post = S._editPost; if (!sel || !post) return;
+  var cur = (post.textFont && post.textFont[key]) || '';
+  var names = (TYPOGRAPHY || []).map(function(t){ return t && t.name; }).filter(Boolean);
+  if (cur && names.indexOf(cur) < 0) names.push(cur);
+  sel.innerHTML = '<option value="">Varumärkets typsnitt</option>' + names.filter(function(v, i, a){ return a.indexOf(v) === i; }).map(function(n){ return '<option' + (n === cur ? ' selected' : '') + '>' + String(n).replace(/</g, '&lt;') + '</option>'; }).join('');
+}
+function emSetWidgetFont(fam){
+  var post = S._editPost; if (!post || !_emActiveWidget) return;
+  fam = String(fam || '').trim();
+  function apply(name){
+    post.textFont = post.textFont || {};
+    if (name) post.textFont[_emActiveWidget] = name; else delete post.textFont[_emActiveWidget];
+    if (name) _gfLoad(name);
+    _emFillWidgetFont(_emActiveWidget); emRenderPreview();
+  }
+  if (!fam) return apply('');
+  if ((TYPOGRAPHY || []).some(function(t){ return t && t.name === fam; })) return apply(fam);
+  loadGoogleFontList().then(function(){
+    var f = _gfInfo(fam) || (GFONTS || []).find(function(x){ return x.family.toLowerCase() === fam.toLowerCase(); });
+    if (!f) { if (typeof showToast === 'function') showToast('Hittade inget Google-typsnitt som heter "' + fam + '"'); return; }
+    apply(f.family);
+  });
 }
 function emSetTextSize(v){
   var post = S._editPost;
@@ -3259,6 +3315,7 @@ function emResetWidgetPos(){
   post.textPos = post.textPos || {}; post.textScale = post.textScale || {};
   post.textPos[_emActiveWidget] = { x:0, y:0 };
   post.textScale[_emActiveWidget] = 1;
+  if (post.textFont) delete post.textFont[_emActiveWidget];
   var sl = document.getElementById('emTextSize'); if (sl) sl.value = 1;
   var sv = document.getElementById('emTextSizeLabel'); if (sv) sv.textContent = '100%';
   emRenderPreview();
@@ -4022,7 +4079,7 @@ var GFONTS = null, _gfLoading = null;
 function loadGoogleFontList(){
   if (GFONTS) return Promise.resolve(GFONTS);
   if (_gfLoading) return _gfLoading;
-  _gfLoading = fetch('/api/google-fonts').then(function(r){ return r.json(); }).then(function(d){ GFONTS = (d && d.fonts) || []; var dl = document.getElementById('gfontList'); if (dl) dl.innerHTML = GFONTS.map(function(f){ return '<option value="' + String(f.family).replace(/"/g, '&quot;') + '">' + (f.category || '') + '</option>'; }).join(''); return GFONTS; }).catch(function(){ _gfLoading = null; return []; });
+  _gfLoading = fetch('/api/google-fonts').then(function(r){ return r.json(); }).then(function(d){ GFONTS = (d && d.fonts) || []; var all = document.getElementById('gfontAll'); if (!all) { all = document.createElement('datalist'); all.id = 'gfontAll'; document.body.appendChild(all); } all.innerHTML = GFONTS.map(function(f){ return '<option value="' + String(f.family).replace(/"/g, '&quot;') + '">' + (f.category || '') + '</option>'; }).join(''); var dl = document.getElementById('gfontList'); if (dl) dl.innerHTML = GFONTS.map(function(f){ return '<option value="' + String(f.family).replace(/"/g, '&quot;') + '">' + (f.category || '') + '</option>'; }).join(''); return GFONTS; }).catch(function(){ _gfLoading = null; return []; });
   return _gfLoading;
 }
 function _gfInfo(fam){ return (GFONTS || []).find(function(f){ return f.family === fam; }); }
@@ -5420,6 +5477,7 @@ function _cvElementsHTML(post){
     var inner = '';
     if (e.type === 'text') {
       var txt = e.text || '';
+      if (e.gfont && e.font) _gfLoad(e.font);
       st += 'color:' + (e.color || '#ffffff') + ';font-size:' + (e.fs || 6) + 'cqw;font-weight:' + (e.bold ? 700 : 400) + ';font-style:' + (e.italic ? 'italic' : 'normal') + ';font-family:' + (e.font ? "'" + String(e.font).replace(/'/g, '') + "',sans-serif" : 'inherit') + ';text-align:' + (e.align || 'left') + ';line-height:' + (e.lh || 1.15) + ';white-space:pre-wrap;word-break:break-word;' + (e.curve ? 'overflow:visible;' : 'overflow:hidden;') + (e.bg ? 'background:' + e.bg + ';padding:1.5cqw;' : '') + (e.deco ? 'text-decoration:' + e.deco + ';' : '') + (e.upper ? 'text-transform:uppercase;' : '') + (e.ls ? 'letter-spacing:' + e.ls + 'em;' : '') + _cvTextFx(e);
       if (e.curve) {
         var fsU = (e.fs || 6) * 200 / Math.max(1, e.w), k = e.curve / 100, y0 = k > 0 ? 80 : 20, cy = y0 - 120 * k;
@@ -5475,6 +5533,14 @@ function _cvSelIds(){ return [_cvSel].concat(_cvMulti || []).filter(function(v, 
 function _cvSelEls(){ var p = _cvPost(); return _cvSelIds().map(function(id){ return _cvFind(p, id); }).filter(Boolean); }
 // Värden som ändras med reglage: rita om kortet men behåll verktygsraden (annars tappar reglaget greppet)
 function cvLive(prop, val){ var p = _cvPost(), e = _cvFind(p, _cvSel); if (!e) return; if (Date.now() - _cvLiveT > 900) _cvSnap(); _cvLiveT = Date.now(); e[prop] = val; window._cvKeepTb = true; try { _cvRerender(); } finally { window._cvKeepTb = false; } }
+function cvSetGFont(fam){
+  fam = String(fam || '').trim(); if (!fam) return;
+  loadGoogleFontList().then(function(){
+    var f = _gfInfo(fam) || (GFONTS || []).find(function(x){ return x.family.toLowerCase() === fam.toLowerCase(); });
+    if (!f) { if (typeof showToast === 'function') showToast('Hittade inget Google-typsnitt som heter "' + fam + '"'); return; }
+    _gfLoad(f.family); var p = _cvPost(), e = _cvFind(p, _cvSel); if (!e) return; _cvSnap(); e.font = f.family; e.gfont = true; _cvRerender();
+  });
+}
 function cvSetRows(v){ cvSet('rows', String(v || '').split('\n').map(function(l){ return l.split(';').map(function(s){ return s.trim(); }); }).filter(function(r){ return r.join('') !== ''; })); }
 function _cvSqH(w){ var c = document.getElementById('emPreviewCard'); return c && c.offsetHeight ? w * c.offsetWidth / c.offsetHeight : w; }
 function cvAddFrame(m){ var w = 40, h = _cvSqH(40); cvAdd('image', { mask: m, src: '', x: 30, y: Math.max(0, (100 - h) / 2), w: w, h: h, fit: 'cover' }); window._cvReplaceId = _cvSel; cvToggleImgPop(); }
@@ -5658,7 +5724,8 @@ function _cvToolbarHTML(){
     var fonts = (typeof TYPOGRAPHY !== 'undefined' && Array.isArray(TYPOGRAPHY)) ? TYPOGRAPHY.map(function(t){ return String(t.name || '').replace(/\s+(Bold|Regular|Light|Medium|Black|Thin)$/i, ''); }) : [];
     fonts = fonts.concat(['Georgia', 'Helvetica', 'Arial', 'Times New Roman', 'Trebuchet MS', 'Verdana', 'Courier New', 'Impact']).filter(function(v, i, arr){ return v && arr.indexOf(v) === i; });
     a += _cvTa("cvSet('text', this.value)", e.text) + '</div>' + _CV_ROW + _CV_LBL('Färg') + _cvSw('color', e.color || '#ffffff', 'Textfärg') + '</div>' + _CV_ROW +
-      _cvDd("cvSet('font', this.value)", [['', 'Typsnitt']].concat(fonts.map(function(f){ return [f, f]; })), e.font || '', 'Typsnitt') +
+      _cvDd("cvSet('font', this.value)", [['', 'Typsnitt']].concat(fonts.concat(e.font && fonts.indexOf(e.font) < 0 ? [e.font] : []).map(function(f){ return [f, f]; })), e.font || '', 'Typsnitt') +
+      '<input list="gfontAll" placeholder="Google Fonts…" title="Sök bland alla Google Fonts" onfocus="loadGoogleFontList()" onchange="cvSetGFont(this.value)" style="width:120px;font-size:12px;padding:5px 7px;border:1.5px solid #e5e7eb;border-radius:8px">' +
       _cvBtn('A−', "cvBump('fs', -0.5, 1, 40)", 'Mindre text') + _cvBtn('A+', "cvBump('fs', 0.5, 1, 40)", 'Större text') +
       _cvBtn('<b>B</b>', "cvToggle('bold')", 'Fetstil', e.bold) + _cvBtn('<i>I</i>', "cvToggle('italic')", 'Kursiv', e.italic) +
       _cvBtn('<u>U</u>', "cvSet('deco', '" + (e.deco === 'underline' ? '' : 'underline') + "')", 'Understruken', e.deco === 'underline') +
