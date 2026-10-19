@@ -522,10 +522,11 @@ app.post('/api/template-layers', auth, async (req, res) => {
       'Return JSON: {"elements":[{"kind":"text","text":"exact text as written","box_2d":[ymin,xmin,ymax,xmax],"color":"#rrggbb","role":"headline|subheadline|body|caption|label","bold":true|false,"italic":false,"align":"left|center|right"},{"kind":"logo","box_2d":[ymin,xmin,ymax,xmax]}]}. ' +
       'box_2d uses coordinates normalised to 0-1000 and must tightly enclose the text line or logo (include the whole logo, also its background plate if it sits on one). ' +
       'role: headline = the largest text, subheadline = medium accent text, body = normal sentences, caption = small text, label = tiny tags like "[ DIN BILD HÄR ]". Do not include decorative shapes. Only JSON.'
-    const model = process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash'
+    // Samma modell som resten av appen (Gemini 3.1 Flash Image). Kan bytas med GEMINI_VISION_MODEL.
+    const model = process.env.GEMINI_VISION_MODEL || 'gemini-3.1-flash-image-preview'
     const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: mime, data: b64 } }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0 } })
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: mime, data: b64 } }] }], generationConfig: { temperature: 0, responseModalities: ['TEXT'] } })
     })
     const data = await r.json()
     if (data.error) throw new Error('Gemini: ' + data.error.message)
