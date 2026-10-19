@@ -631,7 +631,7 @@ body.brand-ro #v-brand :is(input,select,textarea){background:#f9fafb!important}
           </div>
         </div>
 
-        <button class="add-review-btn" onclick="addManualToReview();resetCreateForm()">+ Lägg till granskning</button><button class="add-review-btn" style="border-color:#ef4444;color:#ef4444;margin-top:8px" onclick="clearCreatePostForm()">🗑️ Radera</button><div style="display:flex;gap:8px;margin-top:10px"><button onclick="saveDraft()" style="flex:1;font-size:13px;color:#374151;font-weight:600;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer">💾 Spara utkast</button><button onclick="toggleDrafts()" style="flex:1;font-size:13px;color:#374151;font-weight:600;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer">📝 Utkast</button></div><div id="draftsPanel" style="display:none;margin-top:8px;background:#fff;border:1px solid #eee;border-radius:10px;max-height:240px;overflow-y:auto"></div>
+        <button class="add-review-btn" onclick="if(addManualToReview())resetCreateForm()">+ Lägg till granskning</button><button class="add-review-btn" style="border-color:#ef4444;color:#ef4444;margin-top:8px" onclick="clearCreatePostForm()">🗑️ Radera</button><div style="display:flex;gap:8px;margin-top:10px"><button onclick="saveDraft()" style="flex:1;font-size:13px;color:#374151;font-weight:600;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer">💾 Spara utkast</button><button onclick="toggleDrafts()" style="flex:1;font-size:13px;color:#374151;font-weight:600;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer">📝 Utkast</button></div><div id="draftsPanel" style="display:none;margin-top:8px;background:#fff;border:1px solid #eee;border-radius:10px;max-height:240px;overflow-y:auto"></div>
 
         <!-- AI ASSIST MODAL -->
         <div id="aiAssistModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center">
@@ -2819,12 +2819,12 @@ function addManualToReview() {
       }); saveToServer(S.reviewQueue[S.reviewQueue.length-1]); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
       added++;
     });
-    if (!added) { showToast('Välj minst ett förslag', 'err'); return; }
+    if (!added) { showToast('Välj minst ett förslag', 'err'); return false; }
   } else {
     // Manual mode: use form fields for all selected channels
     const title   = document.getElementById('m-title').value.trim();
     const content = document.getElementById('m-content').value.trim();
-    if (!content) { showToast('Fyll i innehåll', 'err'); return; }
+    if (!content) { showToast('Fyll i innehåll', 'err'); return false; }
     channels.forEach(ch => {
       S.reviewQueue.push({
         id: 'pm-' + Date.now() + '-' + ch + '-' + Math.random().toString(36).slice(2,5),
@@ -2863,6 +2863,7 @@ function addManualToReview() {
   const schedMsg = scheduledAt ? ` — schemalagt ${new Date(scheduledAt).toLocaleDateString('sv-SE',{day:'numeric',month:'short'})}` : '';
   showToast(`✅ ${chs.length > 1 ? chs.length + ' inlägg' : 'Inlägg'} lagt till i granskning${schedMsg}`);
   navigate('review');
+  return true;
 }
 
 // ════════════════════════════════════════════════════════
