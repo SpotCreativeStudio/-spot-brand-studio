@@ -1462,7 +1462,7 @@ function _liCss(){
     '.li-fol{color:#0a66c2;font-weight:600;font-size:1em;white-space:nowrap;padding-top:.2em}' +
     '.li-txt{padding:0 .9em;font-size:1em;line-height:1.43;white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}' +
     '.li-more{color:rgba(0,0,0,.6);padding:0 .9em;text-align:right;font-size:1em;line-height:1.43}' +
-    '.li-gap{height:.7em}.li-tag{color:#0a66c2;font-weight:600}' +
+    '.li-gap{height:.7em}.li-tag{color:#0a66c2;font-weight:600}.li-more{cursor:pointer}.li-more:hover{color:#0a66c2;text-decoration:underline}.li-txt.open{display:block;-webkit-line-clamp:unset;overflow:visible}#lbCard .li-post{font-size:14px}' +
     '.li-act{display:flex;justify-content:space-between;padding:.2em .5em;border-top:1px solid #e8e8e8;color:rgba(0,0,0,.6);font-weight:600;font-size:.92em}' +
     '.li-act span{padding:.75em .35em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
   document.head.appendChild(st);
@@ -1478,7 +1478,7 @@ function _liTop(post){
   var txt = _liEsc(body) + (tags.length ? (body ? '\n\n' : '') + tags.map(function(h){ return '<span class="li-tag">' + _liEsc(h) + '</span>'; }).join(' ') : '');
   var long = (body.length + tags.join(' ').length) > 140 || (body.match(/\n/g) || []).length >= 2;
   return '<div class="li-post"><div class="li-head"><div class="li-av">' + logo + '</div><div class="li-who"><div class="li-nm">' + _liEsc(nm) + '</div><div class="li-sub">' + _liEsc(sub) + '</div><div class="li-sub">Nu · 🌐</div></div><div class="li-fol">+ Följ</div></div>' +
-    (txt ? '<div class="li-txt">' + txt + '</div>' + (long ? '<div class="li-more">…se mer</div>' : '') : '') + '<div class="li-gap"></div></div>';
+    (txt ? '<div class="li-txt">' + txt + '</div>' + (long ? '<div class="li-more" onclick="event.stopPropagation();_liMore(this)">…se mer</div>' : '') : '') + '<div class="li-gap"></div></div>';
 }
 // Förstoringsglas: snabb förhandsvisning av hela inlägget i stort format
 function _zoomBtn(){ return '<button class="li-zoom" title="Förstora" onclick="event.stopPropagation();_liZoom(this)" style="position:absolute;top:46px;right:8px;z-index:30;width:28px;height:28px;border-radius:50%;border:none;background:rgba(17,17,17,.65);color:#fff;font-size:13px;line-height:28px;cursor:zoom-in;padding:0">🔍</button>'; }
@@ -1502,6 +1502,8 @@ function _liZoomEl(cl, w){
   function esc(e){ if (e.key === 'Escape') close(); }
   ov.addEventListener('click', close); document.addEventListener('keydown', esc);
 }
+// "…se mer": visa hela texten, som i LinkedIn
+function _liMore(el){ var t = el && el.previousElementSibling; if (t) t.classList.add('open'); if (el) el.remove(); }
 // Underdelen: LinkedIns knapprad
 function _liFoot(){ _liCss(); return '<div class="li-post"><div class="li-act"><span>👍 Gilla</span><span>💬 Kommentera</span><span>🔁 Återpublicera</span><span>➤ Skicka</span></div></div>'; }
 // Kort för ett tomt (vitt) inlägg i förhandsvisningen
@@ -4151,11 +4153,21 @@ function renderLightbox() {
   const post = S._lbSingle || S.reviewQueue[S.lbIndex];
   if (!post) return;
   const card = document.getElementById('lbCard');
+  // Hela inlägget som i LinkedIn: avsändare och text, bilden, knappraden – och granskningsknappar i foten
+  const _inReview = !S._lbSingle && (S.reviewQueue || []).some(p => p.id === post.id);
+  const _bt = 'flex:1;padding:10px 12px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;';
+  card.style.maxHeight = '96vh'; card.style.overflowY = 'auto'; card.style.background = '#fff';
   card.innerHTML = `
+    <div class="lb-top">${_liTop(post)}</div>
     <div id="lbImgWrap" style="overflow:hidden;width:100%">${getPostImageLargeHTML(post)}</div>
-    <div class="lb-footer">
-      <div><div class="lb-ft">${post.title}</div><div class="lb-fs">${CH_LABEL[post.channel]} · ${post.author} · ${LAYOUT_LABELS[post.layout||'gradient']}</div></div>
-      <div class="lb-count">${S._lbSingle ? '' : (S.lbIndex + 1) + ' / ' + S.reviewQueue.length}</div>
+    ${_liFoot()}
+    <div class="lb-footer" style="flex-direction:column;align-items:stretch;gap:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div class="lb-fs">${CH_LABEL[post.channel]} · ${post.author || ''}</div><div class="lb-count">${S._lbSingle ? '' : (S.lbIndex + 1) + ' / ' + S.reviewQueue.length}</div></div>
+      ${_inReview ? `<div style="display:flex;gap:8px">
+        <button onclick="event.stopPropagation();closeLightboxBtn();rejectPost('${post.id}')" style="${_bt}background:#fff;border:1.5px solid #ef4444;color:#ef4444">✕ Neka</button>
+        <button onclick="event.stopPropagation();closeLightboxBtn();openEditorModal(S.reviewQueue.find(p=>p.id==='${post.id}'))" style="${_bt}background:#fff;border:1.5px solid #e5e7eb;color:#374151">✏️ Redigera</button>
+        <button onclick="event.stopPropagation();closeLightboxBtn();selectReview('${post.id}');approvePost('${post.id}', false)" style="${_bt}background:#b31e59;border:1.5px solid #b31e59;color:#fff">✅ Godkänn</button>
+      </div>` : ''}
     </div>`;
   _fitLightboxCard(post);
 }
@@ -4167,10 +4179,10 @@ function _fitLightboxCard(post) {
   const parts = arStr.split('/').map(Number);
   const ratio = parts[0] / parts[1];
   const footer = card.querySelector('.lb-footer');
-  const footerH = footer ? footer.offsetHeight : 70;
+  const footerH = (footer ? footer.offsetHeight : 70) + [].reduce.call(card.querySelectorAll('.lb-top,.li-act'), function(sum, el){ return sum + el.offsetHeight; }, 0);
   const sideReserve = 180;
   const vertReserve = 60;
-  const maxW = Math.max(200, window.innerWidth - sideReserve);
+  const maxW = Math.min(540, Math.max(200, window.innerWidth - sideReserve)); // LinkedIn-bredd
   const maxH = Math.max(200, window.innerHeight - vertReserve - footerH);
   let w = maxW, h = w / ratio;
   if (h > maxH) { h = maxH; w = h * ratio; }
