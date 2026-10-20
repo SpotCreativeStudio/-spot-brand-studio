@@ -6172,7 +6172,7 @@ function _cvWire(post, card){
       _cvSnap();
       var node = layer.querySelector('.cv-el[data-cv="' + e.id + '"]');
       var g = rectPct(), sx = ev.clientX, sy = ev.clientY, b0 = { x: e.x, y: e.y, w: e.w, h: e.h }, k = h.dataset.k;
-      var keepRatio = (e.type === 'image' || e.type === 'logo' || e.type === 'circle');
+      var keepRatio = (e.type === 'image' || e.type === 'logo' || e.type === 'circle' || e.type === 'text'), fs0 = e.fs || 6; // text: hörn skalar texten som i Canva, Shift = bara rutan
       var ratio = b0.h / Math.max(0.1, b0.w) * (g.h ? 1 : 1);
       drag(function(m){
         var dx = (m.clientX - sx) / g.w * 100, dy = (m.clientY - sy) / g.h * 100;
@@ -6184,8 +6184,9 @@ function _cvWire(post, card){
         if (nh < (e.type === 'line' ? 0.3 : 2)) nh = e.type === 'line' ? 0.3 : 2;
         // Ingen låsning till kanten – elementet får sticka ut utanför inlägget (beskärs visuellt)
         e.x = Math.round(nx * 10) / 10; e.y = Math.round(ny * 10) / 10; e.w = Math.round(nw * 10) / 10; e.h = Math.round(nh * 10) / 10;
+        if (e.type === 'text' && !m.shiftKey) { e.fs = Math.max(0.5, Math.round(fs0 * nw / Math.max(0.1, b0.w) * 100) / 100); if (node && !e.curve) node.style.fontSize = e.fs + 'cqw'; }
         if (node) apply(node, e); placeSel();
-      });
+      }, function(){ if (e.type === 'text') _cvRerender(); });
     });
   });
   rot.addEventListener('mousedown', function(ev){
