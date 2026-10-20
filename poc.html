@@ -1469,7 +1469,14 @@ function _tplRoleFont(role){
   return f(/brödtext|body/i) || (T[1] && T[1].name) || (T[0] && T[0].name) || '';
 }
 function _tplReady(ct){ return !!(ct && Array.isArray(ct.layers) && ct.layers.length && ct.editSrc && ct.editFor === ct.src && ct.layersV >= 2); }
-function _tplLayerEls(ct){ return ct.layers.map(function(l, k){ return Object.assign({ id: 'tl' + k, z: k + 1, op: 1, rot: 0 }, JSON.parse(JSON.stringify(l))); }); }
+function _tplLayerEls(ct){
+  var els = ct.layers.map(function(l, k){ return Object.assign({ id: 'tl' + k, z: k + 1, op: 1, rot: 0 }, JSON.parse(JSON.stringify(l))); });
+  // Mallens rubrik byts mot inläggets rubrik (AI-förslaget). Rubriker uppdelade på flera rader slås ihop till en.
+  var tx = els.filter(function(e){ return e.type === 'text'; }), heads = tx.filter(function(e){ return e.fontRole === 'headline'; });
+  if (!heads.length && tx.length) heads = [tx.slice().sort(function(a, b){ return (b.fs || 0) - (a.fs || 0); })[0]];
+  heads.forEach(function(e, k){ if (k === 0) e.tplHead = true; else e.tplHeadExtra = true; });
+  return els;
+}
 function _tplLoadImg(src){ return new Promise(function(ok, no){ var im = new Image(); im.onload = function(){ ok(im); }; im.onerror = function(){ no(new Error('Kunde inte läsa mallbilden')); }; im.src = src; }); }
 function _tplEdgeColor(c, x0, y0, x1, y1){
   var g = c.getContext('2d'), W = c.width, H = c.height, rs = [], gs = [], bs = [];
@@ -1586,7 +1593,7 @@ function _tplComposeHTML(post, src, t, c, tags){
   return '<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">' +
     '<div class="tpl-bg" style="position:absolute;inset:0;background:url(\'' + String(src).split("'").join('%27').split('"').join('%22') + '\') center/cover no-repeat"></div>' +
     (own && !(_lay && _ct.layers.some(function(l){ return l.role === 'tplPhoto'; })) ? _pbWrap(post, _imgOrGray(post), { x: 12, y: 10, w: 76, h: 80 }) : '') +
-    txtBlock + ((_lay && !(post.elements || []).some(function(e){ return e.fromTpl && (!e.tplSrc || e.tplSrc === _ct.editSrc); }) && typeof _cvElementsHTML === 'function') ? _cvElementsHTML({ elements: _tplLayerEls(_ct), imageUrl: own }) : '') + '</div>';
+    txtBlock + ((_lay && !(post.elements || []).some(function(e){ return e.fromTpl && (!e.tplSrc || e.tplSrc === _ct.editSrc); }) && typeof _cvElementsHTML === 'function') ? _cvElementsHTML({ elements: _tplLayerEls(_ct), imageUrl: own, title: post.title, imgTitle: post.imgTitle }) : '') + '</div>';
 }
 // Laddar ett Google-typsnitt för ett enskilt inlägg (påverkar inte varumärket)
 function _gfLoad(fam){
@@ -5628,6 +5635,8 @@ function _cvElementsHTML(post){
   // Mallens lyfta texter visas bara så länge mallen fortfarande är redigerbar i samma version
   if (els.some(function(e){ return e && e.fromTpl; })) { var _tc = (typeof _teamTpl === 'function') ? _teamTpl(post) : null; if (!_tplReady(_tc) || _tc.editSrc !== post.tplSeed) els = els.filter(function(e){ return !e.fromTpl; }); }
   els = els.filter(function(e){ return e && !e.hidden; });
+  var _ttl = post ? String((post.imgTitle !== undefined && post.imgTitle !== null && post.imgTitle !== '') ? post.imgTitle : (post.title || '')).trim() : '';
+  if (_ttl) els = els.filter(function(e){ return !(e.tplHeadExtra && !e.ownText); });
   if (!els.length) return '';
   var anyAnim = false;
   var h = els.slice().sort(function(a, b){ return (a.z || 0) - (b.z || 0); }).map(function(e){
@@ -5635,10 +5644,12 @@ function _cvElementsHTML(post){
     var st = 'position:absolute;left:' + e.x + '%;top:' + e.y + '%;width:' + e.w + '%;height:' + e.h + '%;opacity:' + (e.op == null ? 1 : e.op) + ';transform:' + tf + ';box-sizing:border-box;';
     var inner = '';
     if (e.type === 'text') {
-      var txt = e.text || '';
+      var txt = (e.tplHead && !e.ownText && _ttl) ? _ttl : (e.text || '');
       if (e.gfont && e.font) _gfLoad(e.font);
       st += 'color:' + (e.color || '#ffffff') + ';font-size:' + (e.fs || 6) + 'cqw;font-weight:' + (e.bold ? 700 : 400) + ';font-style:' + (e.italic ? 'italic' : 'normal') + ';font-family:' + ((e.font || (e.fontRole && typeof _tplRoleFont === 'function' && _tplRoleFont(e.fontRole))) ? "'" + String(e.font || _tplRoleFont(e.fontRole)).replace(/'/g, '') + "',sans-serif" : 'inherit') + ';text-align:' + (e.align || 'left') + ';line-height:' + (e.lh || 1.15) + ';white-space:pre-wrap;word-break:break-word;' + (e.curve ? 'overflow:visible;' : 'overflow:hidden;') + (e.bg ? 'background:' + e.bg + ';padding:1.5cqw;' : '') + (e.deco ? 'text-decoration:' + e.deco + ';' : '') + (e.upper ? 'text-transform:uppercase;' : '') + (e.ls ? 'letter-spacing:' + e.ls + 'em;' : '') + _cvTextFx(e);
       if (e.nowrap && !e.curve) st += 'white-space:pre;overflow:visible;';
+      // Utbytt rubrik: får radbrytas i rutan och krymper om den är längre än mallens text
+      if (txt !== (e.text || '') && !e.curve) { var _r = Math.max(1, String(e.text || '').length) / Math.max(1, txt.length), _v = ((e.rot || 0) % 180) === 90; var _k = _v ? Math.max(0.25, Math.min(1, _r * 0.8)) : Math.max(0.45, Math.min(1, Math.sqrt(_r))); st += 'font-size:' + Math.round((e.fs || 6) * _k * 100) / 100 + 'cqw;' + (_v ? 'white-space:pre;' : 'white-space:normal;overflow-wrap:break-word;'); }
       if (e.curve) {
         var fsU = (e.fs || 6) * 200 / Math.max(1, e.w), k = e.curve / 100, y0 = k > 0 ? 80 : 20, cy = y0 - 120 * k;
         inner = '<svg viewBox="0 0 200 100" style="width:100%;height:100%;overflow:visible;display:block"><path id="cvc_' + _cvAttr(e.id) + '" d="M4,' + y0 + ' Q100,' + cy.toFixed(1) + ' 196,' + y0 + '" fill="none"/><text text-anchor="middle" fill="currentColor" style="font:inherit;font-size:' + fsU.toFixed(2) + 'px"><textPath href="#cvc_' + _cvAttr(e.id) + '" startOffset="50%">' + _cvEsc(txt) + '</textPath></text></svg>';
@@ -6138,7 +6149,7 @@ function _cvWire(post, card){
       ev.stopPropagation(); if (e.locked || e.curve) return;
       _cvSnap(); node.contentEditable = 'true'; node.style.cursor = 'text'; node.style.outline = '2px solid #b31e59'; node.focus();
       try { var rg = document.createRange(); rg.selectNodeContents(node); var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rg); } catch (er) {}
-      node.addEventListener('input', function(){ e.text = node.innerText.replace(/\n$/, ''); });
+      node.addEventListener('input', function(){ e.text = node.innerText.replace(/\n$/, ''); e.ownText = true; });
       node.addEventListener('blur', function(){ node.contentEditable = 'false'; node.style.outline = 'none'; e.text = node.innerText.replace(/\n$/, ''); }, { once: true });
     });
   });
