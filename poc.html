@@ -5953,7 +5953,7 @@ function _cvWire(post, card){
     var others = (post.elements || []).filter(function(o){ return o.id !== e.id; });
     var xs = [0, 50, 100], ys = [0, 50, 100];
     others.forEach(function(o){ xs.push(o.x, o.x + o.w / 2, o.x + o.w); ys.push(o.y, o.y + o.h / 2, o.y + o.h); });
-    var T = 1.2, gx = null, gy = null;
+    var T = 0.8, gx = null, gy = null;
     [[e.x, 0], [e.x + e.w / 2, e.w / 2], [e.x + e.w, e.w]].some(function(c){ return xs.some(function(t){ if (Math.abs(c[0] - t) < T) { e.x = t - c[1]; gx = t; return true; } return false; }); });
     [[e.y, 0], [e.y + e.h / 2, e.h / 2], [e.y + e.h, e.h]].some(function(c){ return ys.some(function(t){ if (Math.abs(c[0] - t) < T) { e.y = t - c[1]; gy = t; return true; } return false; }); });
     gV.style.display = gx == null ? 'none' : 'block'; if (gx != null) gV.style.left = gx + '%';
@@ -6014,7 +6014,7 @@ function _cvWire(post, card){
         if (!moved) { _cvSnap(); moved = true; }
         pm.e.x = pm.x0 + dx; pm.e.y = pm.y0 + dy;
         if (!m.altKey && mov.length === 1) snapMove(pm.e);
-        var ddx = Math.max(-minX, Math.min(100 - maxX, pm.e.x - pm.x0)), ddy = Math.max(-minY, Math.min(100 - maxY, pm.e.y - pm.y0));
+        var ddx = Math.max(3 - maxX, Math.min(97 - minX, pm.e.x - pm.x0)), ddy = Math.max(3 - maxY, Math.min(97 - minY, pm.e.y - pm.y0)); // fritt som i Canva: får gå utanför kanten, minst 3 % syns
         mov.forEach(function(o){ o.e.x = Math.round((o.x0 + ddx) * 10) / 10; o.e.y = Math.round((o.y0 + ddy) * 10) / 10; if (o.n) apply(o.n, o.e); });
         placeSel();
       });
@@ -6073,8 +6073,7 @@ function _cvWire(post, card){
         if ((keepRatio && !m.shiftKey) || (!keepRatio && m.shiftKey)) { var nh2 = nw * ratio; if (k[0] === 'n') ny = b0.y + b0.h - nh2; nh = nh2; }
         if (nw < 2) { if (k[1] === 'w') nx -= 2 - nw; nw = 2; }
         if (nh < (e.type === 'line' ? 0.3 : 2)) nh = e.type === 'line' ? 0.3 : 2;
-        if (nx < 0) { nw += nx; nx = 0; } if (ny < 0) { nh += ny; ny = 0; }
-        if (nx + nw > 100) nw = 100 - nx; if (ny + nh > 100) nh = 100 - ny;
+        // Ingen låsning till kanten – elementet får sticka ut utanför inlägget (beskärs visuellt)
         e.x = Math.round(nx * 10) / 10; e.y = Math.round(ny * 10) / 10; e.w = Math.round(nw * 10) / 10; e.h = Math.round(nh * 10) / 10;
         if (node) apply(node, e); placeSel();
       });
