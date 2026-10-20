@@ -3238,7 +3238,7 @@ function emRenderPreview() {
       if (!dragging) return;
       var _z = parseFloat(card.dataset.previewScale) || 1;
       var dx = (ev.clientX - sx) / _z, dy = (ev.clientY - sy) / _z;
-      if (_nr0 && _cr0) { dx = Math.max((_cr0.left - _nr0.left) / _z, Math.min((_cr0.right - _nr0.right) / _z, dx)); dy = Math.max((_cr0.top - _nr0.top) / _z, Math.min((_cr0.bottom - _nr0.bottom) / _z, dy)); }
+      // Ingen gräns: texten flyttas fritt över hela mallen, även utanför kanten
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) { moved = true; node.contentEditable = 'false'; }
       if (!moved) return;
       ev.preventDefault();
@@ -6014,7 +6014,7 @@ function _cvWire(post, card){
         if (!moved) { _cvSnap(); moved = true; }
         pm.e.x = pm.x0 + dx; pm.e.y = pm.y0 + dy;
         if (!m.altKey && mov.length === 1) snapMove(pm.e);
-        var ddx = Math.max(3 - maxX, Math.min(97 - minX, pm.e.x - pm.x0)), ddy = Math.max(3 - maxY, Math.min(97 - minY, pm.e.y - pm.y0)); // fritt som i Canva: får gå utanför kanten, minst 3 % syns
+        var ddx = pm.e.x - pm.x0, ddy = pm.e.y - pm.y0; // fritt som i Canva, ingen gräns
         mov.forEach(function(o){ o.e.x = Math.round((o.x0 + ddx) * 10) / 10; o.e.y = Math.round((o.y0 + ddy) * 10) / 10; if (o.n) apply(o.n, o.e); });
         placeSel();
       });
