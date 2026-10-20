@@ -82,7 +82,7 @@ textarea,input{font-family:inherit}
 .create-right{width:320px;background:#fff;border-left:1px solid #e5e7eb;display:flex;flex-direction:column;overflow:hidden}
 /* 3 AI proposals in right panel */
 .ai-proposals{display:flex;flex-direction:column;gap:10px;padding:12px}
-.ai-prop-card{flex-shrink:0;border:2px solid #e5e7eb;border-radius:12px;overflow:hidden;cursor:pointer;transition:all .15s}
+.ai-prop-card{position:relative;flex-shrink:0;border:2px solid #e5e7eb;border-radius:12px;overflow:hidden;cursor:pointer;transition:all .15s}
 .ai-prop-card:hover{border-color:#b31e59;box-shadow:0 2px 10px rgba(177,30,89,.15)}
 .ai-prop-card.selected{border-color:#b31e59;box-shadow:0 0 0 3px rgba(177,30,89,.15)}
 .ai-prop-thumb{aspect-ratio:var(--post-ar,1);overflow:hidden}
@@ -157,7 +157,7 @@ textarea.field-input{resize:vertical;line-height:1.5}
 #v-review{flex-direction:row}
 .review-left{flex:1;overflow-y:auto;padding:24px}
 .review-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-top:18px}
-.review-card{background:#fff;border:2px solid #e5e7eb;border-radius:14px;overflow:hidden;cursor:pointer;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.review-card{position:relative;background:#fff;border:2px solid #e5e7eb;border-radius:14px;overflow:hidden;cursor:pointer;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,.04)}
 .review-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.1)}
 .review-card.selected{border-color:var(--m);box-shadow:0 4px 16px rgba(177,30,89,.15)}
 .rc-thumb{aspect-ratio:var(--rc-ar,1);position:relative;overflow:hidden}
@@ -1480,13 +1480,35 @@ function _liTop(post){
   return '<div class="li-post"><div class="li-head"><div class="li-av">' + logo + '</div><div class="li-who"><div class="li-nm">' + _liEsc(nm) + '</div><div class="li-sub">' + _liEsc(sub) + '</div><div class="li-sub">Nu · 🌐</div></div><div class="li-fol">+ Följ</div></div>' +
     (txt ? '<div class="li-txt">' + txt + '</div>' + (long ? '<div class="li-more">…se mer</div>' : '') : '') + '<div class="li-gap"></div></div>';
 }
+// Förstoringsglas: snabb förhandsvisning av hela inlägget i stort format
+function _zoomBtn(){ return '<button class="li-zoom" title="Förstora" onclick="event.stopPropagation();_liZoom(this)" style="position:absolute;top:46px;right:8px;z-index:30;width:28px;height:28px;border-radius:50%;border:none;background:rgba(17,17,17,.65);color:#fff;font-size:13px;line-height:28px;cursor:zoom-in;padding:0">🔍</button>'; }
+function _liZoom(btn){ var src = btn && btn.parentElement; if (src) _liZoomEl(src.cloneNode(true), src.offsetWidth); }
+// Editorn: visa inlägget som det är just nu, med LinkedIn-ram, i stort format
+function _liZoomPost(){
+  var post = S._editPost; if (!post) return;
+  var el = document.createElement('div');
+  el.innerHTML = _liTop(post) + '<div style="position:relative;overflow:hidden;aspect-ratio:' + _arFor(post.channel, post) + '">' + getPostImageHTML(post) + '</div>' + _liFoot();
+  _liZoomEl(el, 340);
+}
+function _liZoomEl(cl, w){
+  cl.querySelectorAll('.li-zoom,.prop-zoom-btn,.rc-layout-btn,.ai-prop-meta,.rc-body').forEach(function(n){ n.remove(); });
+  cl.removeAttribute('onclick'); cl.style.cssText = 'width:' + w + 'px;margin:0;opacity:1;filter:none;border:none;border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.4);transform-origin:top left;cursor:default';
+  var ov = document.createElement('div'); ov.id = 'liZoomOv';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  var box = document.createElement('div'); box.appendChild(cl); ov.appendChild(box); document.body.appendChild(ov);
+  var h = cl.offsetHeight || 1, k = Math.min((window.innerHeight * 0.92) / h, Math.min(560, window.innerWidth * 0.92) / Math.max(1, w));
+  cl.style.transform = 'scale(' + k.toFixed(3) + ')'; box.style.width = (w * k) + 'px'; box.style.height = (h * k) + 'px';
+  function close(){ ov.remove(); document.removeEventListener('keydown', esc); }
+  function esc(e){ if (e.key === 'Escape') close(); }
+  ov.addEventListener('click', close); document.addEventListener('keydown', esc);
+}
 // Underdelen: LinkedIns knapprad
 function _liFoot(){ _liCss(); return '<div class="li-post"><div class="li-act"><span>👍 Gilla</span><span>💬 Kommentera</span><span>🔁 Återpublicera</span><span>➤ Skicka</span></div></div>'; }
 // Kort för ett tomt (vitt) inlägg i förhandsvisningen
 function _blankCardHTML(post, onPick, on){
   var bp = Object.assign({}, post, { blank: true, tplIdx: null });
   return '<div class="ai-prop-card ' + (on ? 'selected' : '') + '" onclick="' + onPick + ';openCreateEditor()" style="' + (on ? '' : 'opacity:.55;filter:grayscale(.3)') + ';transition:opacity .15s,filter .15s">' +
-    _liTop(post) + '<div class="ai-prop-thumb" style="position:relative;aspect-ratio:' + _arFor(post.channel, post) + ';background:#fff;border:1px dashed #d1d5db;box-sizing:border-box">' + getPostImageHTML(bp) +
+    _zoomBtn() + _liTop(post) + '<div class="ai-prop-thumb" style="position:relative;aspect-ratio:' + _arFor(post.channel, post) + ';background:#fff;border:1px dashed #d1d5db;box-sizing:border-box">' + getPostImageHTML(bp) +
     ((bp.imageUrl || bp.aiImageUrl) ? '' : '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px;font-weight:600;pointer-events:none">+ Tomt inlägg</div>') +
     '<button class="prop-zoom-btn" title="Välj tomt inlägg" onclick="event.stopPropagation();' + onPick + '" style="' + (on ? 'opacity:1;background:#b31e59' : '') + '">' + (on ? '✓' : '○') + '</button></div>' +
     _liFoot() + '<div class="ai-prop-meta"><div class="ai-prop-num">Tomt' + (on ? ' · ✓ Vald' : '') + '</div><div class="ai-prop-title">Börja från en vit yta</div></div></div>';
@@ -2801,7 +2823,7 @@ function renderProposalCards(ch) {
       const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [] }; Object.assign(mockPost, _createExtra()); mockPost.tplIdx = _tplIdxFor(ch, i); _tplStrip(mockPost);
       const dim = i!==selectedIdx || !!S._blankPick;
       return `<div class="ai-prop-card ${i===selectedIdx?'selected':''}" onclick="openProposalEditor('${ch}',${i})" style="${dim ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
-        ${_liTop(mockPost)}<div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(ch)}">
+        ${_zoomBtn()}${_liTop(mockPost)}<div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(ch)}">
           ${getPostImageHTML(mockPost)}
           ${S._aiImageLoading ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;z-index:5"><div style="width:22px;height:22px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite"></div><div style="font-size:9px;color:#fff;font-weight:600">Skapar bild…</div></div>` : ''}
           <button class="prop-zoom-btn" title="Välj som denna" onclick="event.stopPropagation();selectProposalCard('${ch}',${i})" style="${i===selectedIdx?'opacity:1;background:#b31e59':''}">${i===selectedIdx?'✓':'○'}</button>
@@ -2877,7 +2899,7 @@ function updateManualPreview() {
       const mp = Object.assign({}, mockPost, { elements: (S._elements || []).slice() }); mp.tplIdx = _tplIdxFor(S.manualChannel, i); _tplStrip(mp);
       const ct = TEMPLATES[mp.tplIdx] || {};
       return `<div class="ai-prop-card ${i === _pick ? 'selected' : ''}" onclick="S.manualTplPick=${i};S._blankPick=false;updateManualPreview();openCreateEditor()" style="${i !== _pick ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
-        ${_liTop(mp)}<div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(mp.channel, mp)}">${getPostImageHTML(mp)}
+        ${_zoomBtn()}${_liTop(mp)}<div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(mp.channel, mp)}">${getPostImageHTML(mp)}
           <button class="prop-zoom-btn" title="Välj denna mall" onclick="event.stopPropagation();S.manualTplPick=${i};S._blankPick=false;updateManualPreview()" style="${i === _pick ? 'opacity:1;background:#b31e59' : ''}">${i === _pick ? '✓' : '○'}</button></div>
         ${_liFoot()}<div class="ai-prop-meta"><div class="ai-prop-num">Mall ${i + 1}${i === _pick ? ' · ✓ Vald' : ''}</div><div class="ai-prop-title">${String(ct.label || '').replace(/</g, '&lt;')}</div></div>
       </div>`;
@@ -3008,7 +3030,7 @@ function renderReview() {
     if (c.isValid && !c.warnings.length) badges = quickActions;
     else badges = quickActions + '<div style="margin-top:6px">' + [...c.issues.map(i => `<span class="rule-err">✗ ${i}</span>`), ...c.warnings.map(w => `<span class="rule-warn">⚠ ${w}</span>`)].join('') + '</div>';
     return `<div class="review-card ${S.selectedReviewId === post.id ? 'selected' : ''}" onclick="selectReview('${post.id}')">
-      ${_liTop(post)}<div class="rc-thumb" style="aspect-ratio:${_arFor(post.channel,post)};position:relative;overflow:hidden;" onclick="event.stopPropagation();openLightbox(${idx})">
+      ${_zoomBtn()}${_liTop(post)}<div class="rc-thumb" style="aspect-ratio:${_arFor(post.channel,post)};position:relative;overflow:hidden;" onclick="event.stopPropagation();openLightbox(${idx})">
         ${getPostImageHTML(post)}
         <button class="rc-layout-btn" onclick="event.stopPropagation();openLayoutPicker('${post.id}')">🎨 Layout</button>
         <div class="rc-ch-badge" style="background:rgba(255,255,255,.9);color:${CH_TC[post.channel]}">${CH_LABEL[post.channel]}</div>
@@ -6093,7 +6115,7 @@ function _cvRenderToolbar(card){
   if (window._cvKeepTb && tb.innerHTML) return;
   // Verktygsraden ovanför kortet har bara "Lägg till". Egenskaperna för det markerade elementet visas i vänsterpanelen.
   var parts = _cvToolbarHTML().split('<!--CVPROPS-->');
-  tb.innerHTML = parts[0];
+  tb.innerHTML = parts[0] + '<button title="Förstora: se inlägget som i LinkedIn" onclick="_liZoomPost()" style="margin:4px 0 0 4px;height:34px;padding:0 10px;border-radius:8px;border:1px solid #e5e7eb;background:#fff;cursor:zoom-in;font-size:14px">🔍</button>';
   var left = document.getElementById('emLeft'), pr = document.getElementById('cvProps');
   if (left && (!pr || pr.parentNode !== left)) {
     pr = document.createElement('div'); pr.id = 'cvProps';
