@@ -3279,8 +3279,8 @@ function emRenderPreview() {
   card.innerHTML = getPostImageHTML(post);
   // LinkedIn-ram runt arbetsytan: avsändare och text ovanför, knapprad under
   var _lt = document.getElementById('emLiTop'), _lf = document.getElementById('emLiFoot');
-  if (!_lt) { _lt = document.createElement('div'); _lt.id = 'emLiTop'; _lt.style.cssText = 'flex-shrink:0;border-radius:10px 10px 0 0;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.06)'; }
-  if (!_lf) { _lf = document.createElement('div'); _lf.id = 'emLiFoot'; _lf.style.cssText = 'flex-shrink:0;border-radius:0 0 10px 10px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.06)'; }
+  if (!_lt) { _lt = document.createElement('div'); _lt.id = 'emLiTop'; _lt.style.cssText = 'flex-shrink:0;border-radius:10px 10px 0 0;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.06);margin-bottom:-12px'; }
+  if (!_lf) { _lf = document.createElement('div'); _lf.id = 'emLiFoot'; _lf.style.cssText = 'flex-shrink:0;border-radius:0 0 10px 10px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.06);margin-top:-12px'; }
   if (_lt.nextSibling !== card) card.parentNode.insertBefore(_lt, card);
   if (card.nextSibling !== _lf) card.parentNode.insertBefore(_lf, card.nextSibling);
   _lt.innerHTML = _liTop(post); _lf.innerHTML = _liFoot();
@@ -3540,7 +3540,7 @@ function _emFitPreview(){
   // Dra av verktygsraden och tipsraderna så att kortet inte hamnar över dem
   // Verktygsraden räknas inte bort: kortet behåller sin storlek och panelen scrollar i stället
   var _panel = (host.id === 'cvScroll' && host.parentElement) ? host.parentElement : host;
-  var availH = host.clientHeight - 24 - Array.prototype.reduce.call(host.children, function(sum, c){ return c === card ? sum : sum + c.offsetHeight + 12; }, 0);
+  var availH = host.clientHeight - 24 - Array.prototype.reduce.call(host.children, function(sum, c){ if (c === card || !c.offsetHeight) return sum; return sum + c.offsetHeight + ((c.id === 'emLiTop' || c.id === 'emLiFoot') ? 0 : 12); }, 0); // LinkedIn-ramen sitter ihop med kortet, dolda rader räknas inte
   if (availW <= 0 || availH <= 0) return;
   var baseW = 280;
   var ratio = 1;
@@ -3555,6 +3555,8 @@ function _emFitPreview(){
   card.style.margin = ((baseH * scale - baseH) / 2).toFixed(1) + 'px ' + ((baseW * scale - baseW) / 2).toFixed(1) + 'px';
   card.dataset.previewScale = scale;
   ['emLiTop', 'emLiFoot'].forEach(function(id){ var x = document.getElementById(id); if (x) { x.style.width = (baseW * scale).toFixed(1) + 'px'; x.style.fontSize = (11 * Math.max(0.8, Math.min(1.6, scale))).toFixed(1) + 'px'; } });
+  // Ramens höjd ändras med textstorleken – räkna om en gång så att allt fyller ytan
+  if (!window._emFit2) { window._emFit2 = true; setTimeout(function(){ _emFitPreview(); window._emFit2 = false; }, 0); }
 }
 if (!window.__emFitBound) {
   window.__emFitBound = true;
