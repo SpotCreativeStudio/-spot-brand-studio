@@ -1454,7 +1454,7 @@ function _tplsForCh(ch){ var o = []; if (typeof TEMPLATES !== 'undefined' && Arr
 // Förslag nr i i en kanal använder kanalens mall nr i – ett inlägg per mall
 function _tplIdxFor(ch, i){ var l = _tplsForCh(ch); return l.length ? l[(i || 0) % l.length] : null; }
 function _tplCount(ch){ return _tplsForCh(ch).length || 3; }
-function _currentTplIdx(){ var ch = S.manualChannel || (S.manualChannels && S.manualChannels[0]) || 'linkedin'; var i = (window._allChannelProposals && (window._allChannelProposals[ch] || []).length) ? ((window._selectedProposalPerChannel || {})[ch] || 0) : 0; return _tplIdxFor(ch, i); }
+function _currentTplIdx(){ var ch = S.manualChannel || (S.manualChannels && S.manualChannels[0]) || 'linkedin'; var i = (window._allChannelProposals && (window._allChannelProposals[ch] || []).length) ? ((window._selectedProposalPerChannel || {})[ch] || 0) : (S.manualTplPick || 0); return _tplIdxFor(ch, i); }
 // Inläggets egna mall-element hör till en viss mall – visas inte på kort med en annan mall
 function _tplStrip(post){ var ct = _teamTpl(post), cur = ct && ct.editSrc; if (post.tplSeed && post.tplSeed !== cur) { post.elements = (post.elements || []).filter(function(e){ return !e.fromTpl; }); delete post.tplSeed; } post.elements = (post.elements || []).filter(function(e){ return !e.fromTpl || !e.tplSrc || e.tplSrc === cur; }); return post; }
 function _tplBase(post){ var t = _teamTpl(post); return t ? t.src : null; }
@@ -2456,7 +2456,7 @@ function clearCreatePostForm(){
 var _CE_KEYS = ['imgTitle', 'imgContent', 'textPos', 'textScale', 'textBoxSize', 'textFont', 'tplSeed'];
 function _createExtra(){ return (typeof S !== 'undefined' && S._createExtra) ? JSON.parse(JSON.stringify(S._createExtra)) : {}; }
 function resetCreateForm(){
-  if (typeof S !== 'undefined') { S._createExtra = null; S._elements = null; S._photoBox = null; }
+  if (typeof S !== 'undefined') { S.manualTplPick = 0; S._createExtra = null; S._elements = null; S._photoBox = null; }
   var t=document.getElementById("m-title"); if(t)t.value="";
   var c=document.getElementById("m-content"); if(c)c.value="";
   window._allChannelProposals=null; window._selectedProposalPerChannel=null;
@@ -2794,6 +2794,22 @@ function updateManualPreview() {
   if (!body) return;
   const panelTitle = document.getElementById('prevPanelTitle');
   if (panelTitle) panelTitle.textContent = 'Förhandsvisning';
+  // Manuellt läge: visa ett kort per mallbild för kanalen. Klick väljer mallen och öppnar editorn.
+  const _nT = _tplsForCh(S.manualChannel).length;
+  if (_nT > 1) {
+    const _pick = Math.min(S.manualTplPick || 0, _nT - 1);
+    body.innerHTML = `<div class="ai-proposals" style="width:100%">` + Array.from({ length: _nT }, function(_, i){
+      const mp = Object.assign({}, mockPost, { elements: (S._elements || []).slice() }); mp.tplIdx = _tplIdxFor(S.manualChannel, i); _tplStrip(mp);
+      const ct = TEMPLATES[mp.tplIdx] || {};
+      return `<div class="ai-prop-card ${i === _pick ? 'selected' : ''}" onclick="S.manualTplPick=${i};updateManualPreview();openCreateEditor()" style="${i !== _pick ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
+        <div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(mp.channel, mp)}">${getPostImageHTML(mp)}
+          <button class="prop-zoom-btn" title="Välj denna mall" onclick="event.stopPropagation();S.manualTplPick=${i};updateManualPreview()" style="${i === _pick ? 'opacity:1;background:#b31e59' : ''}">${i === _pick ? '✓' : '○'}</button></div>
+        <div class="ai-prop-meta"><div class="ai-prop-num">Mall ${i + 1}${i === _pick ? ' · ✓ Vald' : ''}</div><div class="ai-prop-title">${String(ct.label || '').replace(/</g, '&lt;')}</div></div>
+      </div>`;
+    }).join('') + `</div><div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:8px">${CH_LABEL[S.manualChannel]}</div>`;
+    updateTimestamp();
+    return;
+  }
   body.innerHTML = `
     <div style="width:100%">
       <div onclick="openCreateEditor()" style="cursor:pointer;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.15);aspect-ratio:${_arFor(mockPost.channel,mockPost)}">
@@ -2853,7 +2869,7 @@ function addManualToReview() {
         id: 'pm-' + Date.now() + '-' + ch + '-' + Math.random().toString(36).slice(2,5),
         brief: 'spot. content studio',
         channel: ch, title, content,
-        hashtags: [...S.manualTags], layout: _manualLayout(),
+        hashtags: [...S.manualTags], layout: _manualLayout(), tplIdx: _currentTplIdx(),
         blocks: ((document.getElementById('m-include-brand')||{}).checked ? ['brand','content','hashtags'] : ['content','hashtags']),
         author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
         channels: [...(S.manualChannels||[S.manualChannel])],
@@ -5588,6 +5604,7 @@ function _cvElementsHTML(post){
   var els = (post && Array.isArray(post.elements)) ? post.elements : [];
   // Mallens lyfta texter visas bara så länge mallen fortfarande är redigerbar i samma version
   if (els.some(function(e){ return e && e.fromTpl; })) { var _tc = (typeof _teamTpl === 'function') ? _teamTpl(post) : null; if (!_tplReady(_tc) || _tc.editSrc !== post.tplSeed) els = els.filter(function(e){ return !e.fromTpl; }); }
+  els = els.filter(function(e){ return e && !e.hidden; });
   if (!els.length) return '';
   var anyAnim = false;
   var h = els.slice().sort(function(a, b){ return (a.z || 0) - (b.z || 0); }).map(function(e){
@@ -5690,6 +5707,56 @@ function cvTogglePen(){ window._cvPen = !window._cvPen; var c = document.getElem
 function cvGroup(){ var els = _cvSelEls(); if (els.length < 2) return; _cvSnap(); var g = 'g' + _cvNewId(); els.forEach(function(e){ e.grp = g; }); _cvRerender(); }
 function cvUngroup(){ var els = _cvSelEls(); if (!els.length) return; _cvSnap(); els.forEach(function(e){ delete e.grp; }); _cvMulti = []; _cvRerender(); }
 function cvSelectAll(){ var p = _cvPost(); var els = ((p && p.elements) || []).filter(function(e){ return e.role !== 'pagebg'; }); if (!els.length) return; _cvSel = els[0].id; _cvMulti = els.slice(1).map(function(e){ return e.id; }); _cvRerender(); }
+// ── Lager-panel (som i Canva): välj, flytta upp/ned (eller dra), dölj och lås ──
+function _cvLyrName(e){
+  if (e.type === 'text') { var t = String(e.text || '').replace(/\s+/g, ' ').trim(); return 'T  ' + (t.length > 22 ? t.slice(0, 22) + '…' : (t || 'Text')); }
+  if (e.role === 'tplLogo' || e.type === 'logo') return '◆  Logga';
+  if (e.role === 'tplPhoto') return '▣  Foto (mall)';
+  if (e.type === 'image') return '▣  Bild';
+  if (e.role === 'pagebg') return '■  Bakgrund';
+  return '●  ' + ({ rect: 'Rektangel', circle: 'Cirkel', line: 'Linje', path: 'Ritning' }[e.type] || e.type || 'Element');
+}
+function _cvRenderLayers(){
+  var left = document.getElementById('emLeft'); if (!left) return;
+  var box = document.getElementById('cvLayers');
+  if (!box) { box = document.createElement('div'); box.id = 'cvLayers'; box.style.cssText = 'border:1.5px solid #f0f0f0;border-radius:10px;padding:10px;margin-bottom:10px;background:#fff'; var pr = document.getElementById('cvProps'); left.insertBefore(box, pr ? pr.nextSibling : left.firstChild); }
+  var p = _cvPost(); if (!p || (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE === 'granskare')) { box.style.display = 'none'; return; }
+  var els = (p.elements || []).slice().sort(function(a, b){ return (b.z || 0) - (a.z || 0); });
+  box.style.display = '';
+  var sel = _cvSelIds(), btn = 'border:none;background:none;cursor:pointer;font-size:12px;padding:2px 4px;color:#6b7280';
+  box.innerHTML = '<div style="font-size:11px;font-weight:700;color:#b31e59;margin-bottom:6px">🗂 Lager <span style="font-weight:400;color:#9ca3af">· överst = längst fram, dra för att ändra ordning</span></div>' +
+    (els.length ? els.map(function(e){
+      var on = sel.indexOf(e.id) >= 0;
+      return '<div draggable="true" data-ly="' + e.id + '" onclick="cvLyrSel(\'' + e.id + '\')" style="display:flex;align-items:center;gap:4px;padding:5px 6px;margin-bottom:3px;border-radius:7px;cursor:pointer;font-size:12px;border:1px solid ' + (on ? '#b31e59' : '#f0f0f0') + ';background:' + (on ? '#fdf0f6' : '#fafafa') + ';opacity:' + (e.hidden ? .45 : 1) + '">' +
+        '<span style="cursor:grab;color:#c4c4c4">⋮⋮</span><span style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + _cvLyrName(e).replace(/</g, '&lt;') + '</span>' +
+        '<button title="Framåt" style="' + btn + '" onclick="event.stopPropagation();cvLyrMove(\'' + e.id + '\',1)">▲</button>' +
+        '<button title="Bakåt" style="' + btn + '" onclick="event.stopPropagation();cvLyrMove(\'' + e.id + '\',-1)">▼</button>' +
+        '<button title="' + (e.hidden ? 'Visa' : 'Dölj') + '" style="' + btn + '" onclick="event.stopPropagation();cvLyrHide(\'' + e.id + '\')">' + (e.hidden ? '🚫' : '👁') + '</button>' +
+        '<button title="' + (e.locked ? 'Lås upp' : 'Lås') + '" style="' + btn + '" onclick="event.stopPropagation();cvLyrLock(\'' + e.id + '\')">' + (e.locked ? '🔒' : '🔓') + '</button></div>';
+    }).join('') : '<div style="font-size:12px;color:#9ca3af">Inga element ännu</div>');
+  var dragId = null;
+  box.querySelectorAll('[data-ly]').forEach(function(r){
+    r.addEventListener('dragstart', function(ev){ dragId = r.getAttribute('data-ly'); ev.dataTransfer.effectAllowed = 'move'; try { ev.dataTransfer.setData('text/plain', dragId); } catch (er) {} });
+    r.addEventListener('dragover', function(ev){ ev.preventDefault(); r.style.borderTop = '2px solid #b31e59'; });
+    r.addEventListener('dragleave', function(){ r.style.borderTop = ''; });
+    r.addEventListener('drop', function(ev){ ev.preventDefault(); r.style.borderTop = ''; cvLyrDrop(dragId, r.getAttribute('data-ly')); });
+  });
+}
+// Lägger om z-ordningen efter listan (överst i listan = högst z)
+function _cvLyrApply(p, order){ var n = order.length; order.forEach(function(e, k){ e.z = n - k; }); _cvRerender(); }
+function cvLyrSel(id){ var p = _cvPost(), e = _cvFind(p, id); if (!e) return; if (e.hidden) { _cvSnap(); e.hidden = false; } _cvSel = id; _cvMulti = []; _cvRerender(); }
+function cvLyrMove(id, dir){
+  var p = _cvPost(); if (!p) return; var order = (p.elements || []).slice().sort(function(a, b){ return (b.z || 0) - (a.z || 0); });
+  var i = order.findIndex(function(e){ return e.id === id; }), j = i - dir; if (i < 0 || j < 0 || j >= order.length) return;
+  _cvSnap(); var t = order[i]; order[i] = order[j]; order[j] = t; _cvLyrApply(p, order);
+}
+function cvLyrDrop(fromId, toId){
+  var p = _cvPost(); if (!p || !fromId || fromId === toId) return; var order = (p.elements || []).slice().sort(function(a, b){ return (b.z || 0) - (a.z || 0); });
+  var f = order.findIndex(function(e){ return e.id === fromId; }); if (f < 0) return; _cvSnap(); var m = order.splice(f, 1)[0];
+  var t = order.findIndex(function(e){ return e.id === toId; }); order.splice(t < 0 ? order.length : t, 0, m); _cvLyrApply(p, order);
+}
+function cvLyrHide(id){ var p = _cvPost(), e = _cvFind(p, id); if (!e) return; _cvSnap(); e.hidden = !e.hidden; if (e.hidden && _cvSel === id) _cvSel = null; _cvRerender(); }
+function cvLyrLock(id){ var p = _cvPost(), e = _cvFind(p, id); if (!e) return; _cvSnap(); e.locked = !e.locked; _cvRerender(); }
 function cvLockSel(){ var els = _cvSelEls(); if (!els.length) return; _cvSnap(); var v = !els[0].locked; els.forEach(function(e){ e.locked = v; }); _cvRerender(); }
 function cvCopy(){ var els = _cvSelEls(); if (els.length) _cvClip = JSON.stringify(els); }
 function cvPaste(){
@@ -5942,6 +6009,7 @@ function _cvRenderToolbar(card){
     left.insertBefore(pr, left.firstChild);
   }
   if (pr) { pr.innerHTML = parts[1] ? '<div style="font-size:11px;font-weight:700;color:#b31e59;margin-bottom:6px">✏️ Markerat element</div>' + parts[1] : ''; pr.style.display = parts[1] ? '' : 'none'; }
+  _cvRenderLayers();
   if (typeof _emFitPreview === 'function') setTimeout(_emFitPreview, 0);
 }
 
