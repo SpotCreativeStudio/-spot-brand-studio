@@ -1206,10 +1206,19 @@ app.post('/api/admin/reminders-test', auth, async (req, res) => {
     // Spot-admin är ett fast konto utan mejladress i användartabellen, så då går testet till Spots egen adress
     const testTo = (u && u.email) || process.env.FEEDBACK_EMAIL || 'hello@spotstudio.se'
     const ws = s.workspace || 'spot'
-    const mine = (await buildReminders()).find(r => r.ws === ws && r.to === testTo) || (await buildReminders()).find(r => r.ws === ws)
-    const msgs = mine ? mine.msgs : ['3 inlägg väntar på granskning', 'Inget publicerat på 2 veckor']
-    const ok = await sendReminderMail({ to: testTo, name: (u && (u.first_name || u.username)) || 'Spot', msgs: msgs.map(m => m) })
-    res.json({ sent: ok, to: testTo, msgs, example: !mine })
+    // Riktiga siffror för arbetsytan, hämtade direkt ur databasen (ingen fast exempeltext)
+    const pool = getAuthPool()
+    const notDeleted = "(data->>'deleted' IS NULL OR data->>'deleted' <> 'true')"
+    const rv = await pool.query("SELECT COUNT(*)::int AS n FROM posts WHERE data->>'workspace' = $1 AND data->>'status' = 'review' AND " + notDeleted, [ws])
+    const pb = await pool.query("SELECT MAX(created_at) AS last FROM posts WHERE data->>'workspace' = $1 AND data->>'status' IN ('published','archived') AND " + notDeleted, [ws])
+    const waiting = (rv.rows[0] && rv.rows[0].n) || 0, last = pb.rows[0] && pb.rows[0].last ? new Date(pb.rows[0].last).getTime() : 0
+    const days = last ? Math.floor((Date.now() - last) / (24 * 3600 * 1000)) : null
+    const msgs = [
+      waiting + (waiting === 1 ? ' inlägg väntar' : ' inlägg väntar') + ' på granskning',
+      last ? (days >= 14 ? 'Inget publicerat på ' + Math.floor(days / 7) + ' veckor' : 'Senast publicerat för ' + days + (days === 1 ? ' dag' : ' dagar') + ' sedan') : 'Inget har publicerats än'
+    ]
+    const ok = await sendReminderMail({ to: testTo, name: (u && (u.first_name || u.username)) || 'Spot', msgs })
+    res.json({ sent: ok, to: testTo, msgs, waiting, lastPublished: last ? new Date(last).toISOString() : null })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 restoreSessions().finally(function(){ app.listen(PORT, () => console.log('spot. running on ' + PORT)) })
