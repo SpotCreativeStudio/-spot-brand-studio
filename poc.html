@@ -3306,6 +3306,11 @@ function emRenderPreview() {
   if (_lt.nextSibling !== card) card.parentNode.insertBefore(_lt, card);
   if (card.nextSibling !== _lf) card.parentNode.insertBefore(_lf, card.nextSibling);
   _lt.innerHTML = _liTop(post); _lf.innerHTML = _liFoot();
+  // Förstoringsglas uppe till höger i förhandsvisningen
+  var _zb = document.getElementById('emZoomBtn'), _sc = card.parentNode, _pane = _sc && _sc.parentNode;
+  if (!_zb) { _zb = document.createElement('button'); _zb.id = 'emZoomBtn'; _zb.title = 'Förstora: se inlägget som i LinkedIn'; _zb.textContent = '🔍'; _zb.onclick = function(){ _liZoomPost(); };
+    _zb.style.cssText = 'position:absolute;right:34px;z-index:60;width:34px;height:34px;border-radius:50%;border:none;background:rgba(17,17,17,.7);color:#fff;font-size:15px;cursor:zoom-in;padding:0;box-shadow:0 2px 8px rgba(0,0,0,.2)'; }
+  if (_pane) { if (getComputedStyle(_pane).position === 'static') _pane.style.position = 'relative'; if (_zb.parentNode !== _pane) _pane.appendChild(_zb); setTimeout(function(){ _zb.style.top = (_sc.offsetTop + 8) + 'px'; }, 0); }
   post.textPos = post.textPos || {};
   post.textScale = post.textScale || {};
   // Find widgets by matching their rendered text against the post data (templates use plain divs)
@@ -6115,7 +6120,7 @@ function _cvRenderToolbar(card){
   if (window._cvKeepTb && tb.innerHTML) return;
   // Verktygsraden ovanför kortet har bara "Lägg till". Egenskaperna för det markerade elementet visas i vänsterpanelen.
   var parts = _cvToolbarHTML().split('<!--CVPROPS-->');
-  tb.innerHTML = parts[0] + '<button title="Förstora: se inlägget som i LinkedIn" onclick="_liZoomPost()" style="margin:4px 0 0 4px;height:34px;padding:0 10px;border-radius:8px;border:1px solid #e5e7eb;background:#fff;cursor:zoom-in;font-size:14px">🔍</button>';
+  tb.innerHTML = parts[0];
   var left = document.getElementById('emLeft'), pr = document.getElementById('cvProps');
   if (left && (!pr || pr.parentNode !== left)) {
     pr = document.createElement('div'); pr.id = 'cvProps';
