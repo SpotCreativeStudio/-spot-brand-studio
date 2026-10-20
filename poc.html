@@ -1529,14 +1529,27 @@ function _tplBuildLayers(ct, els){
     });
   });
 }
-function tplMakeEditable(i, btn){
-  var ct = TEMPLATES[i]; if (!ct || !ct.src) return;
+function tplMakeEditable(i, btn, silent){
+  var ct = TEMPLATES[i]; if (!ct || !ct.src) return Promise.resolve();
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Analyserar mallen…'; }
-  fetch('/api/template-layers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ src: ct.src }) })
+  return fetch('/api/template-layers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ src: ct.src }) })
     .then(function(r){ return r.json(); })
     .then(function(d){ if (!d || !Array.isArray(d.elements)) throw new Error((d && d.error) || 'Ingen analys'); if (!d.elements.length) throw new Error('Hittade ingen text i mallen'); return _tplBuildLayers(ct, d.elements); })
-    .then(function(){ saveBrandSettings(); renderTemplates(); if (typeof showToast === 'function') showToast('Mallen är redigerbar – texter och logga går att ändra i editorn'); })
-    .catch(function(e){ renderTemplates(); if (typeof showToast === 'function') showToast('Kunde inte göra mallen redigerbar: ' + e.message); });
+    .then(function(){ saveBrandSettings(); renderTemplates(); _tplRefreshViews(); if (!silent && typeof showToast === 'function') showToast('Mallen är redigerbar – texter och logga går att ändra i editorn'); })
+    .catch(function(e){ ct.autoFailed = ct.src; renderTemplates(); if (!silent && typeof showToast === 'function') showToast('Kunde inte göra mallen redigerbar: ' + e.message); });
+}
+// Alla mallbilder görs redigerbara automatiskt: texten i bilden tas bort och blir flyttbar text i editorn
+var _tplAutoBusy = false;
+function _tplAutoEditable(){
+  if (_tplAutoBusy || typeof TEMPLATES === 'undefined' || !Array.isArray(TEMPLATES)) return;
+  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE && CURRENT_ROLE !== 'admin') return;
+  var i = TEMPLATES.findIndex(function(t){ return t && t.src && !_tplReady(t) && t.autoFailed !== t.src; });
+  if (i < 0) return;
+  _tplAutoBusy = true;
+  tplMakeEditable(i, null, true).then(function(){ _tplAutoBusy = false; setTimeout(_tplAutoEditable, 300); }, function(){ _tplAutoBusy = false; });
+}
+function _tplRefreshViews(){
+  try { if (window._aiProposals && window._allChannelProposals && typeof renderProposalCards === 'function') renderProposalCards(window._activeProposalTab || S.manualChannel); else if (typeof updateManualPreview === 'function') updateManualPreview(); } catch (e) {}
 }
 function tplResetEditable(i){
   var ct = TEMPLATES[i]; if (!ct) return;
@@ -1547,6 +1560,7 @@ function _tplComposeHTML(post, src, t, c, tags){
   var own = post.imageUrl || post.aiImageUrl;
   var _ct = _teamTpl(post), _lay = _tplReady(_ct);
   if (_lay) src = _ct.editSrc;
+  else if (_ct) { if (_ct.cleanSrc && _ct.cleanFor === _ct.src) src = _ct.cleanSrc; else { _cleanTemplate(_ct); _tplAutoEditable(); } }
   var tt = (post.imgTitle !== undefined && post.imgTitle !== null && post.imgTitle !== '') ? post.imgTitle : t;
   // Texterna kan flyttas, skalas och få eget typsnitt i editorn (sparas i inlägget, inte i varumärket)
   function tw(key, base, txt){
@@ -3873,7 +3887,7 @@ function _cleanTemplate(ct){
       ct.cleanSrc = d.url; ct.cleanFor = src; // servern sparar den i varumärket
       try { localStorage.setItem('tplClean:' + src, d.url); } catch (e) {}
       try { if (S._editPost && document.getElementById('emPreviewCard') && typeof emRenderPreview === 'function') emRenderPreview(); } catch (e) {}
-      try { if (window._aiProposals && window._allChannelProposals && typeof renderProposalCards === 'function') renderProposalCards(window._activeProposalTab || S.manualChannel); } catch(e) {}
+      _tplRefreshViews();
       try { if (typeof renderReview === 'function') renderReview(); } catch(e) {}
     })
     .catch(function(){ ct.cleanFailed = src; })
@@ -4262,7 +4276,7 @@ function loadBrandSettings(){
     if (typeof b.logo === "string") BRAND_LOGO = b.logo;
     if (b.dos && b.dos.length) DOS_RULES = b.dos;
     if (b.donts && b.donts.length) DONTS_RULES = b.donts;
-    if (b.templates && b.templates.length) TEMPLATES = b.templates;
+    if (b.templates && b.templates.length) { TEMPLATES = b.templates; setTimeout(_tplAutoEditable, 1500); }
     if (b.imageStyle) { S.imageStyle = b.imageStyle; if (typeof renderImgStyleGrid === 'function') renderImgStyleGrid(); }
     if (b.name) BRAND_NAME = b.name;
     if (b.tagline) BRAND_TAGLINE = b.tagline;
