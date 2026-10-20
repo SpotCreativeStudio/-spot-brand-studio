@@ -1456,7 +1456,7 @@ function _tplIdxFor(ch, i){ var l = _tplsForCh(ch); return l.length ? l[(i || 0)
 function _tplCount(ch){ return _tplsForCh(ch).length || 3; }
 function _currentTplIdx(){ var ch = S.manualChannel || (S.manualChannels && S.manualChannels[0]) || 'linkedin'; var i = (window._allChannelProposals && (window._allChannelProposals[ch] || []).length) ? ((window._selectedProposalPerChannel || {})[ch] || 0) : 0; return _tplIdxFor(ch, i); }
 // Inläggets egna mall-element hör till en viss mall – visas inte på kort med en annan mall
-function _tplStrip(post){ var ct = _teamTpl(post); if (post.tplSeed && (!ct || ct.editSrc !== post.tplSeed)) { post.elements = (post.elements || []).filter(function(e){ return !e.fromTpl; }); delete post.tplSeed; } return post; }
+function _tplStrip(post){ var ct = _teamTpl(post), cur = ct && ct.editSrc; if (post.tplSeed && post.tplSeed !== cur) { post.elements = (post.elements || []).filter(function(e){ return !e.fromTpl; }); delete post.tplSeed; } post.elements = (post.elements || []).filter(function(e){ return !e.fromTpl || !e.tplSrc || e.tplSrc === cur; }); return post; }
 function _tplBase(post){ var t = _teamTpl(post); return t ? t.src : null; }
 // Mallbilden ligger alltid underst, den egna bilden ovanpå i en ruta som är lite mindre än inlägget
 // ── Redigerbar mall: AI hittar texter och logga i mallbilden, de lyfts ut och blir egna element ──
@@ -1563,7 +1563,7 @@ function _tplComposeHTML(post, src, t, c, tags){
   return '<div style="width:100%;height:100%;position:relative;overflow:hidden;background:#222">' +
     '<div class="tpl-bg" style="position:absolute;inset:0;background:url(\'' + String(src).split("'").join('%27').split('"').join('%22') + '\') center/cover no-repeat"></div>' +
     (own ? _pbWrap(post, _imgOrGray(post), { x: 12, y: 10, w: 76, h: 80 }) : '') +
-    txtBlock + ((_lay && !post.tplSeed && typeof _cvElementsHTML === 'function') ? _cvElementsHTML({ elements: _tplLayerEls(_ct).concat(post.elements || []) }) : '') + '</div>';
+    txtBlock + ((_lay && !(post.elements || []).some(function(e){ return e.fromTpl && (!e.tplSrc || e.tplSrc === _ct.editSrc); }) && typeof _cvElementsHTML === 'function') ? _cvElementsHTML({ elements: _tplLayerEls(_ct) }) : '') + '</div>';
 }
 // Laddar ett Google-typsnitt för ett enskilt inlägg (påverkar inte varumärket)
 function _gfLoad(fam){
@@ -3036,7 +3036,7 @@ function openEditorModal(post) {
   // Inlägg utan mall får arbetsytans mall (som i manuellt läge) i stället för Gradient
   if (!post.layout && typeof _manualLayout === 'function') post.layout = _manualLayout();
   // Redigerbar mall: lägg mallens texter och logga som egna element i inlägget (första gången)
-  try { var _ct0 = _teamTpl(post); if (_tplReady(_ct0) && post.tplSeed !== _ct0.editSrc) { var _base = _tplLayerEls(_ct0).map(function(e){ e.id = _cvNewId(); e.z = (e.z || 1) - 1000; return e; }); post.elements = _base.concat((post.elements || []).filter(function(e){ return !e.fromTpl; })); post.elements.forEach(function(e){ if (_base.indexOf(e) >= 0) e.fromTpl = true; }); post.tplSeed = _ct0.editSrc; } } catch (e) {}
+  try { var _ct0 = _teamTpl(post); if (_tplReady(_ct0) && post.tplSeed !== _ct0.editSrc) { var _base = _tplLayerEls(_ct0).map(function(e){ e.id = _cvNewId(); e.z = (e.z || 1) - 1000; return e; }); post.elements = _base.concat((post.elements || []).filter(function(e){ return !e.fromTpl; })); post.elements.forEach(function(e){ if (_base.indexOf(e) >= 0) { e.fromTpl = true; e.tplSrc = _ct0.editSrc; } }); post.tplSeed = _ct0.editSrc; } } catch (e) {}
   if (!_isSamePost) {
     S._editImgUndoStack = [];
     S._editBlockUndoStack = [];
