@@ -484,7 +484,7 @@ body.brand-ro #v-brand :is(input,select,textarea){background:#f9fafb!important}
       </div>
       <div class="card" style="padding:0;flex-shrink:0">
         <div class="card-header">Allt skapat per dag</div>
-        <div id="dashChart" style="padding:14px 16px"></div>
+        <div id="dashChart" style="padding:8px 16px 10px"></div>
       </div>
       <div class="dash-grid">
         <div class="card">
@@ -2054,7 +2054,7 @@ function renderDashChart(items){
   var counts={}; items.forEach(function(p){var k=key(p.createdAt);counts[k]=(counts[k]||0)+1;});
   var data=days.map(function(k){return {k:k,v:counts[k]||0};});
   if(items.length===0){el.innerHTML='<div style="text-align:center;color:#9ca3af;font-size:13px;padding:24px">Inga inlägg i vald period.</div>';return;}
-  var W=600,H=180,pL=30,pR=14,pT=14,pB=26,n=data.length;
+  var W=1000,H=150,pL=30,pR=14,pT=12,pB=24,n=data.length; // lägre och bredare diagram
   var maxV=1; data.forEach(function(d){if(d.v>maxV)maxV=d.v;});
   function X(i){return n<=1?(pL+(W-pL-pR)/2):pL+i*(W-pL-pR)/(n-1);}
   function Y(v){return pT+(H-pT-pB)*(1-v/maxV);}
