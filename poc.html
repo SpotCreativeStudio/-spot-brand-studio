@@ -1468,7 +1468,7 @@ function _tplRoleFont(role){
   if (role === 'caption' || role === 'label') return f(/caption|datum/i) || f(/brödtext|body/i) || (T[T.length - 1] && T[T.length - 1].name) || '';
   return f(/brödtext|body/i) || (T[1] && T[1].name) || (T[0] && T[0].name) || '';
 }
-function _tplReady(ct){ return !!(ct && Array.isArray(ct.layers) && ct.layers.length && ct.editSrc && ct.editFor === ct.src); }
+function _tplReady(ct){ return !!(ct && Array.isArray(ct.layers) && ct.layers.length && ct.editSrc && ct.editFor === ct.src && ct.layersV >= 2); }
 function _tplLayerEls(ct){ return ct.layers.map(function(l, k){ return Object.assign({ id: 'tl' + k, z: k + 1, op: 1, rot: 0 }, JSON.parse(JSON.stringify(l))); }); }
 function _tplLoadImg(src){ return new Promise(function(ok, no){ var im = new Image(); im.onload = function(){ ok(im); }; im.onerror = function(){ no(new Error('Kunde inte läsa mallbilden')); }; im.src = src; }); }
 function _tplEdgeColor(c, x0, y0, x1, y1){
@@ -1479,11 +1479,19 @@ function _tplEdgeColor(c, x0, y0, x1, y1){
   return 'rgb(' + med(rs) + ',' + med(gs) + ',' + med(bs) + ')';
 }
 function _tplUpload(dataUrl){ return fetch('/api/images', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dataUrl: dataUrl }) }).then(function(r){ return r.json(); }).then(function(d){ if (!d || !d.url) throw new Error((d && d.error) || 'Uppladdning misslyckades'); return d.url; }); }
+// Mallen utan text (AI-tvättad). Foton klipps ur den så att mallens text inte följer med in i fotot.
+function _tplCleanUrl(ct){
+  if (ct.cleanSrc && ct.cleanFor === ct.src) return Promise.resolve(ct.cleanSrc);
+  return fetch('/api/clean-template', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ src: ct.src }) })
+    .then(function(r){ return r.json(); }).then(function(d){ if (!d || !d.url) throw new Error('clean'); ct.cleanSrc = d.url; ct.cleanFor = ct.src; return d.url; });
+}
 function _tplBuildLayers(ct, els){
-  return _tplLoadImg(ct.src).then(function(im){
+  return Promise.all([_tplLoadImg(ct.src), _tplCleanUrl(ct).then(_tplLoadImg).catch(function(){ return null; })]).then(function(ims){
+    var im = ims[0], ci = ims[1];
     var W = im.naturalWidth, H = im.naturalHeight;
     var orig = document.createElement('canvas'); orig.width = W; orig.height = H; orig.getContext('2d').drawImage(im, 0, 0);
-    var cv = document.createElement('canvas'); cv.width = W; cv.height = H; var g = cv.getContext('2d'); g.drawImage(im, 0, 0);
+    var clean = null; if (ci) { clean = document.createElement('canvas'); clean.width = W; clean.height = H; clean.getContext('2d').drawImage(ci, 0, 0, W, H); }
+    var cv = document.createElement('canvas'); cv.width = W; cv.height = H; var g = cv.getContext('2d'); g.drawImage(clean || im, 0, 0);
     var layers = [], logos = [];
     els.forEach(function(e){
       var b = e.box_2d.map(Number), y0 = b[0] / 1000 * H, x0 = b[1] / 1000 * W, y1 = b[2] / 1000 * H, x1 = b[3] / 1000 * W;
@@ -1493,7 +1501,7 @@ function _tplBuildLayers(ct, els){
       if (e.kind === 'photo') {
         // Foto i mallen (t.ex. i ett collage): blir en bildram som kan bytas mot en egen bild
         var pc = document.createElement('canvas'); pc.width = Math.max(1, Math.round(x1 - x0)); pc.height = Math.max(1, Math.round(y1 - y0));
-        pc.getContext('2d').drawImage(orig, x0, y0, x1 - x0, y1 - y0, 0, 0, pc.width, pc.height);
+        pc.getContext('2d').drawImage(clean || orig, x0, y0, x1 - x0, y1 - y0, 0, 0, pc.width, pc.height);
         logos.push({ k: layers.length, data: pc.toDataURL('image/jpeg', 0.9) });
         layers.push({ type: 'image', role: 'tplPhoto', x: x0 / W * 100, y: y0 / H * 100, w: (x1 - x0) / W * 100, h: (y1 - y0) / H * 100, fit: 'cover', src: '' });
         g.fillStyle = col; g.fillRect(x0, y0, x1 - x0, y1 - y0);
@@ -1512,7 +1520,7 @@ function _tplBuildLayers(ct, els){
           var cxP = (x0 + x1) / 2 / W * 100, cyP = (y0 + y1) / 2 / H * 100, thickC = (x1 - x0) / W * 100, lenW = (y1 - y0) / W * 100 + 6, thickH = (x1 - x0) / H * 100 * 1.35;
           layers.push({ type: 'text', nowrap: true, text: String(e.text), fontRole: e.role || 'body', bold: !!e.bold, italic: !!e.italic, align: 'center', color: /^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '#000000',
             fs: Math.round(thickC / 0.92 * 100) / 100, lh: 1.15, rot: rot === -90 ? 270 : 90, x: cxP - lenW / 2, y: cyP - thickH / 2, w: lenW, h: thickH });
-          g.fillStyle = col; g.fillRect(px0, py0, px1 - px0, py1 - py0);
+          if (!clean) { g.fillStyle = col; g.fillRect(px0, py0, px1 - px0, py1 - py0); }
           return;
         }
         var hC = (y1 - y0) / W * 100, hP = (y1 - y0) / H * 100, align = /^(center|right)$/.test(e.align) ? e.align : 'left';
@@ -1520,12 +1528,13 @@ function _tplBuildLayers(ct, els){
         if (align === 'center') x -= extra / 2; else if (align === 'right') x -= extra;
         layers.push({ type: 'text', nowrap: true, text: String(e.text), fontRole: e.role || 'body', bold: !!e.bold, italic: !!e.italic, align: align, color: /^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '#000000',
           fs: Math.round(hC / 0.92 * 100) / 100, lh: 1.15, x: Math.max(0, x), y: Math.max(0, y0 / H * 100 - hP * 0.12), w: Math.min(100, w), h: hP * 1.35 });
+        if (clean) return;
       }
       g.fillStyle = col; g.fillRect(px0, py0, px1 - px0, py1 - py0);
     });
     return Promise.all([_tplUpload(cv.toDataURL('image/png'))].concat(logos.map(function(l){ return _tplUpload(l.data); }))).then(function(urls){
       logos.forEach(function(l, k){ layers[l.k].src = urls[k + 1]; });
-      ct.layers = layers; ct.editSrc = urls[0]; ct.editFor = ct.src;
+      ct.layers = layers; ct.editSrc = urls[0]; ct.editFor = ct.src; ct.layersV = 2;
     });
   });
 }
