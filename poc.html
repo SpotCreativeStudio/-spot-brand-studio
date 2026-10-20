@@ -64,7 +64,7 @@ textarea,input{font-family:inherit}
 .post-content-row{font-size:11px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 .status-pill{font-size:11px;font-weight:500;padding:3px 10px;border-radius:99px;white-space:nowrap}
 .s-review{background:#fef3c7;color:#d97706}.s-pub{background:#dcfce7;color:#16a34a}
-.brand-strip{background:linear-gradient(135deg,#b31e59,#82093e);border-radius:14px;padding:20px;color:#fff}
+.brand-strip{display:none;background:linear-gradient(135deg,#b31e59,#82093e);border-radius:14px;padding:20px;color:#fff}
 .bs-logo{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .bs-icon{width:28px;height:28px;background:rgba(255,255,255,.2);border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
 .bs-text{font-size:14px;font-weight:600}
@@ -5794,7 +5794,7 @@ function cvPasteStyle(){ if (!_cvStyleClip) return; var els = _cvSelEls(); if (!
 function cvShowHelp(){
   var old = document.getElementById('cvHelp'); if (old) { old.remove(); return; }
   var tb = document.getElementById('cvToolbar'); if (!tb) return;
-  var tips = [['Klick', 'Markera ett element'], ['Shift + klick', 'Markera flera'], ['Ctrl + A', 'Markera allt'], ['Högerklick', 'Fler val (kopiera stil, lager, lås …)'], ['Dubbelklick på text', 'Skriv i texten'], ['Dra i bilden', 'Flytta motivet'], ['Hörnpunkter', 'Ändra bildens bredd och höjd'], ['Dubbelklick på bild', 'Flytta och zooma bilden inuti ramen (Esc när du är klar)'], ['F', 'Bilden täcker hela inlägget'], ['Piltangenter', 'Flytta (Shift = längre steg)'], ['Ctrl + C / V', 'Kopiera / klistra in'], ['Ctrl + D', 'Duplicera'], ['Ctrl + G', 'Gruppera (Ctrl + Shift + G delar upp)'], ['Delete', 'Ta bort'], ['Ctrl + Z', 'Ångra'], ['Esc', 'Avmarkera / sluta rita']];
+  var tips = [['Klick', 'Markera ett element'], ['Shift + klick', 'Markera flera'], ['Ctrl + A', 'Markera allt'], ['Högerklick', 'Fler val (kopiera stil, lager, lås …)'], ['Dubbelklick på text', 'Skriv i texten'], ['Dra i bilden', 'Flytta motivet'], ['Hörnpunkter', 'Ändra bildens bredd och höjd'], ['Hörn på text', 'Texten skalas live med rutan'], ['Shift + hörn på text', 'Bara rutan ändras, texten behåller sin storlek'], ['Dubbelklick på bild', 'Flytta och zooma bilden inuti ramen (Esc när du är klar)'], ['F', 'Bilden täcker hela inlägget'], ['Piltangenter', 'Flytta (Shift = längre steg)'], ['Ctrl + C / V', 'Kopiera / klistra in'], ['Ctrl + D', 'Duplicera'], ['Ctrl + G', 'Gruppera (Ctrl + Shift + G delar upp)'], ['Delete', 'Ta bort'], ['Ctrl + Z', 'Ångra'], ['Esc', 'Avmarkera / sluta rita']];
   var d = document.createElement('div'); d.id = 'cvHelp';
   d.style.cssText = 'position:absolute;right:8px;top:calc(100% + 6px);z-index:70;width:290px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:10px 12px;font-size:12px;color:#111';
   d.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>Kortkommandon och tips</b><span onclick="cvShowHelp()" style="cursor:pointer;color:#6b7280;font-size:14px">✕</span></div>' + tips.map(function(t){ return '<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-top:1px solid #f5f5f5"><span style="font-weight:600;white-space:nowrap">' + t[0] + '</span><span style="color:#6b7280;text-align:right">' + t[1] + '</span></div>'; }).join('');
