@@ -1445,9 +1445,18 @@ function _imgTransform(post){
 function _imgZoomCss(post){ var t = _imgTransform(post); return t ? ('transform:' + t + ';transform-origin:center center;') : ''; }
 // Teamets mallbild från Varumärke → Mallbilder (en per kanal). Läses från varumärket, så varje team får sin egen.
 function _teamTpl(post){
-  if (typeof TEMPLATES === 'undefined' || !Array.isArray(TEMPLATES) || !post) return null;
+  if (typeof TEMPLATES === 'undefined' || !Array.isArray(TEMPLATES) || !post || post.blank) return null;
   if (post.tplIdx != null) { var _pt = TEMPLATES[post.tplIdx]; if (_pt && _pt.src && _pt.channel === post.channel) return _pt; }
   return TEMPLATES.filter(function(t){ return t && t.src && t.channel === post.channel; })[0] || null;
+}
+// Kort för ett tomt (vitt) inlägg i förhandsvisningen
+function _blankCardHTML(post, onPick, on){
+  var bp = Object.assign({}, post, { blank: true, tplIdx: null });
+  return '<div class="ai-prop-card ' + (on ? 'selected' : '') + '" onclick="' + onPick + ';openCreateEditor()" style="' + (on ? '' : 'opacity:.55;filter:grayscale(.3)') + ';transition:opacity .15s,filter .15s">' +
+    '<div class="ai-prop-thumb" style="position:relative;aspect-ratio:' + _arFor(post.channel, post) + ';background:#fff;border:1px dashed #d1d5db;box-sizing:border-box">' + getPostImageHTML(bp) +
+    '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px;font-weight:600;pointer-events:none">+ Tomt inlägg</div>' +
+    '<button class="prop-zoom-btn" title="Välj tomt inlägg" onclick="event.stopPropagation();' + onPick + '" style="' + (on ? 'opacity:1;background:#b31e59' : '') + '">' + (on ? '✓' : '○') + '</button></div>' +
+    '<div class="ai-prop-meta"><div class="ai-prop-num">Tomt' + (on ? ' · ✓ Vald' : '') + '</div><div class="ai-prop-title">Börja från en vit yta</div></div></div>';
 }
 // Alla mallbilder (index i TEMPLATES) som är kopplade till en kanal i Varumärke
 function _tplsForCh(ch){ var o = []; if (typeof TEMPLATES !== 'undefined' && Array.isArray(TEMPLATES)) TEMPLATES.forEach(function(t, i){ if (t && t.src && t.channel === ch) o.push(i); }); return o; }
@@ -1632,6 +1641,8 @@ function _truncateCaption(str, maxChars) {
   return cut.trim() + '…';
 }
 function _getPostImageHTMLRaw(post, size='card') {
+  // Tomt inlägg: vit yta att bygga från grunden i editorn
+  if (post.blank) return '<div style="width:100%;height:100%;background:#fff"></div>';
   const layout = post.layout || 'gradient';
   const _blocks = post.blocks || ['content','hashtags'];
   const t    = _blocks.includes('title')   ? ((post.imgTitle !== undefined && post.imgTitle !== null) ? post.imgTitle : (post.title || '')) : '';
@@ -1888,7 +1899,7 @@ function getPostImageLargeHTML(post) { var _r = _applyBrandColors(_getPostImageL
 function _getPostImageLargeHTMLRaw(post) {
   const layout = post.layout || 'gradient';
   // SPOT-mallarna är responsiva – använd samma renderare som korten
-  if (layout === 'studio' || layout === 'case' || layout === 'louisiana' || String(layout).indexOf('tpl:') === 0 || _tplBase(post)) {
+  if (layout === 'studio' || layout === 'case' || layout === 'louisiana' || String(layout).indexOf('tpl:') === 0 || _tplBase(post) || post.blank) {
     return getPostImageHTML(post, 'large');
   }
   const _blocksL = post.blocks || ['content','hashtags'];
@@ -2486,7 +2497,7 @@ function clearCreatePostForm(){
 var _CE_KEYS = ['imgTitle', 'imgContent', 'textPos', 'textScale', 'textBoxSize', 'textFont', 'tplSeed'];
 function _createExtra(){ return (typeof S !== 'undefined' && S._createExtra) ? JSON.parse(JSON.stringify(S._createExtra)) : {}; }
 function resetCreateForm(){
-  if (typeof S !== 'undefined') { S.manualTplPick = 0; S._createExtra = null; S._elements = null; S._photoBox = null; }
+  if (typeof S !== 'undefined') { S.manualTplPick = 0; S._blankPick = false; S._createExtra = null; S._elements = null; S._photoBox = null; }
   var t=document.getElementById("m-title"); if(t)t.value="";
   var c=document.getElementById("m-content"); if(c)c.value="";
   window._allChannelProposals=null; window._selectedProposalPerChannel=null;
@@ -2568,7 +2579,7 @@ function saveDraft(){
   var title=t?t.value:"", content=c?c.value:"";
   var channels=[].slice.call(document.querySelectorAll("#manualChGrid .ch-pill.active")).map(function(p){return p.dataset.ch;});
   if(!(title||"").trim()&&!(content||"").trim()){ showToast("Inget att spara – fyll i prompt eller innehåll."); return; }
-  var draft = { title:title, content:content, channels:channels, proposals:(window._allChannelProposals||null), selected:(window._selectedProposalPerChannel||null), aiImageUrl:(S._aiImageUrl||null), imgPos:(S._imgPos||null), uploaded:(S._uploadedImageUrl||null), photoBox:(S._photoBox||null), elements:(S._elements||null), extra:_createExtra(), tags:(S.manualTags||[]), activeTab:(window._activeProposalTab||null) };
+  var draft = { title:title, content:content, channels:channels, proposals:(window._allChannelProposals||null), selected:(window._selectedProposalPerChannel||null), aiImageUrl:(S._aiImageUrl||null), imgPos:(S._imgPos||null), uploaded:(S._uploadedImageUrl||null), photoBox:(S._photoBox||null), elements:(S._elements||null), extra:_createExtra(), tags:(S.manualTags||[]), activeTab:(window._activeProposalTab||null), blank:!!S._blankPick, tplPick:(S.manualTplPick||0) };
   fetch("/api/drafts", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(draft) })
     .then(function(r){ return r.json(); })
     .then(function(res){
@@ -2600,7 +2611,7 @@ function openDraft(id){
     if(dft.channels&&dft.channels.length){ S.manualChannels=dft.channels.slice(); S.manualChannel=dft.channels[0]; }
     S.manualTags=(dft.tags||[]).slice(); if(typeof renderManualTags==="function")renderManualTags();
     S._aiImageUrl=dft.aiImageUrl||null; S._imgPos=cp(dft.imgPos); S._uploadedImageUrl=dft.uploaded||null;
-    S._photoBox=cp(dft.photoBox); S._elements=cp(dft.elements); S._createExtra=(dft.extra&&Object.keys(dft.extra).length)?cp(dft.extra):null;
+    S._blankPick=!!dft.blank; S.manualTplPick=dft.tplPick||0; S._photoBox=cp(dft.photoBox); S._elements=cp(dft.elements); S._createExtra=(dft.extra&&Object.keys(dft.extra).length)?cp(dft.extra):null;
     var _img=S._uploadedImageUrl||S._aiImageUrl;
     if(_img){ var _p=document.getElementById("imgPreview"),_f=document.getElementById("imgRepoFrame"),_u=document.getElementById("imgUploadArea"); if(_p&&_f){ _p.src=_img; _f.style.display="block"; if(_u)_u.style.display="none"; var _ec2=document.getElementById("imgEditControls"); if(_ec2)_ec2.style.display="flex"; var _rm=document.getElementById("imgRemoveBtn"); if(_rm)_rm.style.display="inline-flex"; var _z=document.getElementById("imgZoom"); if(_z&&S._imgPos&&S._imgPos.zoom)_z.value=S._imgPos.zoom; if(typeof applyImgPreviewTransform==="function")applyImgPreviewTransform(); } }
     if(dft.proposals&&Object.keys(dft.proposals).length){ window._allChannelProposals=dft.proposals; window._selectedProposalPerChannel=dft.selected||{}; var chs=Object.keys(dft.proposals); if(typeof renderMultiChannelProposals==="function")renderMultiChannelProposals(dft.proposals,(dft.channels&&dft.channels.length)?dft.channels:chs); window._selectedProposalPerChannel=dft.selected||window._selectedProposalPerChannel||{}; var _tab=(dft.activeTab&&dft.proposals[dft.activeTab])?dft.activeTab:window._activeProposalTab; if(_tab&&typeof switchProposalTab==="function"){ try{ switchProposalTab(_tab); }catch(e){} } if(c)c.value=dft.content||""; S.manualTags=(dft.tags||[]).slice(); if(typeof renderManualTags==="function")renderManualTags(); if(typeof updateManualPreview==="function")updateManualPreview(); }
@@ -2755,7 +2766,7 @@ function renderProposalCards(ch) {
     proposals.slice(0,_tplCount(ch)).map((p, i) => {
       const cardLayouts = _cardLayoutsForWs();
       const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [] }; Object.assign(mockPost, _createExtra()); mockPost.tplIdx = _tplIdxFor(ch, i); _tplStrip(mockPost);
-      const dim = i!==selectedIdx;
+      const dim = i!==selectedIdx || !!S._blankPick;
       return `<div class="ai-prop-card ${i===selectedIdx?'selected':''}" onclick="openProposalEditor('${ch}',${i})" style="${dim ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
         <div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(ch)}">
           ${getPostImageHTML(mockPost)}
@@ -2768,10 +2779,11 @@ function renderProposalCards(ch) {
           <div class="ai-prop-hint">${(p.content||'').slice(0,55)}…</div>
         </div>
       </div>`;
-    }).join('') + `</div>`;
+    }).join('') + (function(){ const sp = proposals[selectedIdx] || proposals[0] || {}; const bp = { channel: ch, title: sp.title || '', content: sp.content || '', hashtags: (sp.hashtags||[]).map(t=>t.replace(/^#/,'')), elements: [] }; return _blankCardHTML(bp, "S._blankPick=true;renderProposalCards('" + ch + "')", !!S._blankPick); })() + `</div>`;
 }
 
 function selectProposalCard(ch, i) {
+  S._blankPick = false;
   window._selectedProposalPerChannel[ch] = i;
   const p = (window._allChannelProposals[ch]||[])[i];
   if (p) fillFormFromProposal(p);
@@ -2826,17 +2838,17 @@ function updateManualPreview() {
   if (panelTitle) panelTitle.textContent = 'Förhandsvisning';
   // Manuellt läge: visa ett kort per mallbild för kanalen. Klick väljer mallen och öppnar editorn.
   const _nT = _tplsForCh(S.manualChannel).length;
-  if (_nT > 1) {
-    const _pick = Math.min(S.manualTplPick || 0, _nT - 1);
+  if (_nT >= 1) {
+    const _pick = S._blankPick ? -1 : Math.min(S.manualTplPick || 0, _nT - 1);
     body.innerHTML = `<div class="ai-proposals" style="width:100%">` + Array.from({ length: _nT }, function(_, i){
       const mp = Object.assign({}, mockPost, { elements: (S._elements || []).slice() }); mp.tplIdx = _tplIdxFor(S.manualChannel, i); _tplStrip(mp);
       const ct = TEMPLATES[mp.tplIdx] || {};
-      return `<div class="ai-prop-card ${i === _pick ? 'selected' : ''}" onclick="S.manualTplPick=${i};updateManualPreview();openCreateEditor()" style="${i !== _pick ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
+      return `<div class="ai-prop-card ${i === _pick ? 'selected' : ''}" onclick="S.manualTplPick=${i};S._blankPick=false;updateManualPreview();openCreateEditor()" style="${i !== _pick ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
         <div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(mp.channel, mp)}">${getPostImageHTML(mp)}
-          <button class="prop-zoom-btn" title="Välj denna mall" onclick="event.stopPropagation();S.manualTplPick=${i};updateManualPreview()" style="${i === _pick ? 'opacity:1;background:#b31e59' : ''}">${i === _pick ? '✓' : '○'}</button></div>
+          <button class="prop-zoom-btn" title="Välj denna mall" onclick="event.stopPropagation();S.manualTplPick=${i};S._blankPick=false;updateManualPreview()" style="${i === _pick ? 'opacity:1;background:#b31e59' : ''}">${i === _pick ? '✓' : '○'}</button></div>
         <div class="ai-prop-meta"><div class="ai-prop-num">Mall ${i + 1}${i === _pick ? ' · ✓ Vald' : ''}</div><div class="ai-prop-title">${String(ct.label || '').replace(/</g, '&lt;')}</div></div>
       </div>`;
-    }).join('') + `</div><div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:8px">${CH_LABEL[S.manualChannel]}</div>`;
+    }).join('') + _blankCardHTML(mockPost, 'S._blankPick=true;updateManualPreview()', !!S._blankPick) + `</div><div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:8px">${CH_LABEL[S.manualChannel]}</div>`;
     updateTimestamp();
     return;
   }
@@ -2875,7 +2887,7 @@ function addManualToReview() {
         brief: document.getElementById('briefInput')?.value || 'spot. content studio',
         channel: ch, title: p.title, content: p.content,
         hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')),
-        layout: cardLayouts[idx] || 'gradient', tplIdx: _tplIdxFor(ch, idx),
+        layout: cardLayouts[idx] || 'gradient', tplIdx: _tplIdxFor(ch, idx), blank: !!S._blankPick,
         author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
         channels: [ch],
         status: 'review', createdAt: new Date().toISOString(),
@@ -2899,7 +2911,7 @@ function addManualToReview() {
         id: 'pm-' + Date.now() + '-' + ch + '-' + Math.random().toString(36).slice(2,5),
         brief: 'spot. content studio',
         channel: ch, title, content,
-        hashtags: [...S.manualTags], layout: _manualLayout(), tplIdx: _currentTplIdx(),
+        hashtags: [...S.manualTags], layout: _manualLayout(), tplIdx: _currentTplIdx(), blank: !!S._blankPick,
         blocks: ((document.getElementById('m-include-brand')||{}).checked ? ['brand','content','hashtags'] : ['content','hashtags']),
         author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
         channels: [...(S.manualChannels||[S.manualChannel])],
@@ -3948,7 +3960,7 @@ function openCreateEditor() {
     layout: _currentCreateLayout(),
     blocks: _defaultBlocks,
   };
-  Object.assign(tempPost, _createExtra()); tempPost.tplIdx = _currentTplIdx();
+  Object.assign(tempPost, _createExtra()); tempPost.tplIdx = _currentTplIdx(); tempPost.blank = !!S._blankPick;
   S._editIsCreateMode = true;
   openEditorModal(tempPost);
 }
