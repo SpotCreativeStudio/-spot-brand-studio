@@ -1446,8 +1446,17 @@ function _imgZoomCss(post){ var t = _imgTransform(post); return t ? ('transform:
 // Teamets mallbild från Varumärke → Mallbilder (en per kanal). Läses från varumärket, så varje team får sin egen.
 function _teamTpl(post){
   if (typeof TEMPLATES === 'undefined' || !Array.isArray(TEMPLATES) || !post) return null;
+  if (post.tplIdx != null) { var _pt = TEMPLATES[post.tplIdx]; if (_pt && _pt.src && _pt.channel === post.channel) return _pt; }
   return TEMPLATES.filter(function(t){ return t && t.src && t.channel === post.channel; })[0] || null;
 }
+// Alla mallbilder (index i TEMPLATES) som är kopplade till en kanal i Varumärke
+function _tplsForCh(ch){ var o = []; if (typeof TEMPLATES !== 'undefined' && Array.isArray(TEMPLATES)) TEMPLATES.forEach(function(t, i){ if (t && t.src && t.channel === ch) o.push(i); }); return o; }
+// Förslag nr i i en kanal använder kanalens mall nr i – ett inlägg per mall
+function _tplIdxFor(ch, i){ var l = _tplsForCh(ch); return l.length ? l[(i || 0) % l.length] : null; }
+function _tplCount(ch){ return _tplsForCh(ch).length || 3; }
+function _currentTplIdx(){ var ch = S.manualChannel || (S.manualChannels && S.manualChannels[0]) || 'linkedin'; var i = (window._allChannelProposals && (window._allChannelProposals[ch] || []).length) ? ((window._selectedProposalPerChannel || {})[ch] || 0) : 0; return _tplIdxFor(ch, i); }
+// Inläggets egna mall-element hör till en viss mall – visas inte på kort med en annan mall
+function _tplStrip(post){ var ct = _teamTpl(post); if (post.tplSeed && (!ct || ct.editSrc !== post.tplSeed)) { post.elements = (post.elements || []).filter(function(e){ return !e.fromTpl; }); delete post.tplSeed; } return post; }
 function _tplBase(post){ var t = _teamTpl(post); return t ? t.src : null; }
 // Mallbilden ligger alltid underst, den egna bilden ovanpå i en ruta som är lite mindre än inlägget
 // ── Redigerbar mall: AI hittar texter och logga i mallbilden, de lyfts ut och blir egna element ──
@@ -2581,7 +2590,7 @@ function renderDraftsPanel(){
 }
 function toggleDrafts(){ var el=document.getElementById("draftsPanel"); if(!el)return; var open=el.style.display==="block"; var bd=document.getElementById("draftsBackdrop"); if(open){ el.style.display="none"; if(bd)bd.remove(); return; } if(!bd){ bd=document.createElement("div"); bd.id="draftsBackdrop"; bd.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99998"; bd.onclick=function(){ el.style.display="none"; bd.remove(); }; document.body.appendChild(bd); } el.style.cssText="display:block;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,92vw);max-height:75vh;overflow-y:auto;background:#fff;border:1px solid #eee;border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.35);z-index:99999"; document.body.appendChild(el); renderDraftsPanel(); }
 function startOverCreatePost(){S.manualTags=[];renderManualTags();var sc=document.getElementById("m-schedule");if(sc)sc.value="";resetCreateForm();updateManualPreview();if(typeof showToast==="function")showToast("Börjar om – tomt formulär");}
-async function generateFromPost(){var title=(document.getElementById("m-title").value||"").trim();var content=(document.getElementById("m-content").value||"").trim();var channels=[...document.querySelectorAll("#manualChGrid .ch-pill.active")].map(function(t){return t.dataset.ch;});if(!channels.length){if(typeof showToast==="function")showToast("Välj minst en kanal först");return;}var brief=((title?("Titel: "+title+". "):"")+(content?("Innehåll: "+content):"")).trim();if(!brief){if(typeof showToast==="function")showToast("Fyll i prompt eller innehåll först");return;}if((S._regenCount||0)>=5){startOverCreatePost();return;}S._lastGenPrompt=title;S._regenCount=(S._regenCount||0)+1;var btn=document.getElementById("genFromPostBtn");if(btn){btn.disabled=true;if(!btn.dataset.ot)btn.dataset.ot=btn.textContent;btn.textContent="✨ Genererar...";}try{var brand=(typeof getBrandProfile==="function")?getBrandProfile():undefined;var res=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({brief:brief,channels:channels,brand:brand})});var data=await res.json();if(!res.ok)throw new Error(data.error||"API-fel");var hasAny=channels.some(function(ch){return (data.proposals[ch]||[]).length>0;});if(hasAny){S.manualChannels=channels;S.manualChannel=channels[0];S._lastBrief=brief;renderMultiChannelProposals(data.proposals,channels);if(!S._uploadedImageUrl)generateBrandImage(brief);if(typeof showToast==="function")showToast("✨ Förslag klara!");}else{if(typeof showToast==="function")showToast("Inga förslag genererades. Försök igen.");}}catch(e){if(typeof showToast==="function")showToast("Fel: "+e.message);}if(btn){var _rc=S._regenCount||0;btn.disabled=false;btn.textContent=_rc<=0?(btn.dataset.ot||"✨ Generera med AI"):(_rc>=5?"🔄 Börja om":("🔁 Reprompt ("+(5-_rc)+" kvar)"))}}
+async function generateFromPost(){var title=(document.getElementById("m-title").value||"").trim();var content=(document.getElementById("m-content").value||"").trim();var channels=[...document.querySelectorAll("#manualChGrid .ch-pill.active")].map(function(t){return t.dataset.ch;});if(!channels.length){if(typeof showToast==="function")showToast("Välj minst en kanal först");return;}var brief=((title?("Titel: "+title+". "):"")+(content?("Innehåll: "+content):"")).trim();if(!brief){if(typeof showToast==="function")showToast("Fyll i prompt eller innehåll först");return;}if((S._regenCount||0)>=5){startOverCreatePost();return;}S._lastGenPrompt=title;S._regenCount=(S._regenCount||0)+1;var btn=document.getElementById("genFromPostBtn");if(btn){btn.disabled=true;if(!btn.dataset.ot)btn.dataset.ot=btn.textContent;btn.textContent="✨ Genererar...";}try{var brand=(typeof getBrandProfile==="function")?getBrandProfile():undefined;var res=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({brief:brief,channels:channels,brand:brand,count:Math.min(6,Math.max.apply(null,channels.map(_tplCount)))})});var data=await res.json();if(!res.ok)throw new Error(data.error||"API-fel");var hasAny=channels.some(function(ch){return (data.proposals[ch]||[]).length>0;});if(hasAny){S.manualChannels=channels;S.manualChannel=channels[0];S._lastBrief=brief;renderMultiChannelProposals(data.proposals,channels);if(!S._uploadedImageUrl)generateBrandImage(brief);if(typeof showToast==="function")showToast("✨ Förslag klara!");}else{if(typeof showToast==="function")showToast("Inga förslag genererades. Försök igen.");}}catch(e){if(typeof showToast==="function")showToast("Fel: "+e.message);}if(btn){var _rc=S._regenCount||0;btn.disabled=false;btn.textContent=_rc<=0?(btn.dataset.ot||"✨ Generera med AI"):(_rc>=5?"🔄 Börja om":("🔁 Reprompt ("+(5-_rc)+" kvar)"))}}
 function onTitlePromptInput(){/* regen counter persists across text edits by design */}
 
 async function generateAndFill() {
@@ -2713,9 +2722,9 @@ function renderProposalCards(ch) {
   if (!body) return;
   const selectedIdx = (window._selectedProposalPerChannel || {})[ch] ?? 0;
   body.innerHTML = `<div class="ai-proposals" style="width:100%">` +
-    proposals.slice(0,3).map((p, i) => {
+    proposals.slice(0,_tplCount(ch)).map((p, i) => {
       const cardLayouts = _cardLayoutsForWs();
-      const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [] }; Object.assign(mockPost, _createExtra());
+      const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [] }; Object.assign(mockPost, _createExtra()); mockPost.tplIdx = _tplIdxFor(ch, i); _tplStrip(mockPost);
       const dim = i!==selectedIdx;
       return `<div class="ai-prop-card ${i===selectedIdx?'selected':''}" onclick="openProposalEditor('${ch}',${i})" style="${dim ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
         <div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(ch)}">
@@ -2780,7 +2789,7 @@ function updateManualPreview() {
   if (window._aiProposals) return;
   const title   = document.getElementById('m-title')?.value   || '';
   const content = document.getElementById('m-content')?.value || '';
-  const mockPost = { channel: S.manualChannel, layout: _manualLayout(), title, content, hashtags: S.manualTags, imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [], blocks: ((document.getElementById('m-include-brand')||{}).checked ? ['brand','content','hashtags'] : ['content','hashtags']) }; Object.assign(mockPost, _createExtra());
+  const mockPost = { channel: S.manualChannel, layout: _manualLayout(), title, content, hashtags: S.manualTags, imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [], blocks: ((document.getElementById('m-include-brand')||{}).checked ? ['brand','content','hashtags'] : ['content','hashtags']) }; Object.assign(mockPost, _createExtra()); mockPost.tplIdx = _currentTplIdx(); _tplStrip(mockPost);
   const body = document.getElementById('prevBody');
   if (!body) return;
   const panelTitle = document.getElementById('prevPanelTitle');
@@ -2820,7 +2829,7 @@ function addManualToReview() {
         brief: document.getElementById('briefInput')?.value || 'spot. content studio',
         channel: ch, title: p.title, content: p.content,
         hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')),
-        layout: cardLayouts[idx] || 'gradient',
+        layout: cardLayouts[idx] || 'gradient', tplIdx: _tplIdxFor(ch, idx),
         author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
         channels: [ch],
         status: 'review', createdAt: new Date().toISOString(),
@@ -3893,7 +3902,7 @@ function openCreateEditor() {
     layout: _currentCreateLayout(),
     blocks: _defaultBlocks,
   };
-  Object.assign(tempPost, _createExtra());
+  Object.assign(tempPost, _createExtra()); tempPost.tplIdx = _currentTplIdx();
   S._editIsCreateMode = true;
   openEditorModal(tempPost);
 }
