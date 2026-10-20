@@ -1487,7 +1487,7 @@ function _blankCardHTML(post, onPick, on){
   var bp = Object.assign({}, post, { blank: true, tplIdx: null });
   return '<div class="ai-prop-card ' + (on ? 'selected' : '') + '" onclick="' + onPick + ';openCreateEditor()" style="' + (on ? '' : 'opacity:.55;filter:grayscale(.3)') + ';transition:opacity .15s,filter .15s">' +
     _liTop(post) + '<div class="ai-prop-thumb" style="position:relative;aspect-ratio:' + _arFor(post.channel, post) + ';background:#fff;border:1px dashed #d1d5db;box-sizing:border-box">' + getPostImageHTML(bp) +
-    '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px;font-weight:600;pointer-events:none">+ Tomt inlägg</div>' +
+    ((bp.imageUrl || bp.aiImageUrl) ? '' : '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px;font-weight:600;pointer-events:none">+ Tomt inlägg</div>') +
     '<button class="prop-zoom-btn" title="Välj tomt inlägg" onclick="event.stopPropagation();' + onPick + '" style="' + (on ? 'opacity:1;background:#b31e59' : '') + '">' + (on ? '✓' : '○') + '</button></div>' +
     _liFoot() + '<div class="ai-prop-meta"><div class="ai-prop-num">Tomt' + (on ? ' · ✓ Vald' : '') + '</div><div class="ai-prop-title">Börja från en vit yta</div></div></div>';
 }
@@ -1675,7 +1675,7 @@ function _truncateCaption(str, maxChars) {
 }
 function _getPostImageHTMLRaw(post, size='card') {
   // Tomt inlägg: vit yta att bygga från grunden i editorn
-  if (post.blank) return '<div style="width:100%;height:100%;background:#fff"></div>';
+  if (post.blank) return '<div style="width:100%;height:100%;background:#fff;position:relative;overflow:hidden">' + ((post.imageUrl || post.aiImageUrl) ? _imgOrGray(post) : '') + '</div>'; // med uppladdad/AI-bild fyller bilden ytan
   const layout = post.layout || 'gradient';
   const _blocks = post.blocks || ['content','hashtags'];
   const t    = _blocks.includes('title')   ? ((post.imgTitle !== undefined && post.imgTitle !== null) ? post.imgTitle : (post.title || '')) : '';
@@ -2812,7 +2812,7 @@ function renderProposalCards(ch) {
           <div class="ai-prop-hint">${(p.content||'').slice(0,55)}…</div>
         </div>
       </div>`;
-    }).join('') + (function(){ const sp = proposals[selectedIdx] || proposals[0] || {}; const bp = { channel: ch, title: sp.title || '', content: sp.content || '', hashtags: (sp.hashtags||[]).map(t=>t.replace(/^#/,'')), elements: [] }; return _blankCardHTML(bp, "S._blankPick=true;renderProposalCards('" + ch + "')", !!S._blankPick); })() + `</div>`;
+    }).join('') + (function(){ const sp = proposals[selectedIdx] || proposals[0] || {}; const bp = { channel: ch, imageUrl: activeImageUrl(), imgPos: S._imgPos, imageStyle: S.imageStyle, title: sp.title || '', content: sp.content || '', hashtags: (sp.hashtags||[]).map(t=>t.replace(/^#/,'')), elements: [] }; return _blankCardHTML(bp, "S._blankPick=true;renderProposalCards('" + ch + "')", !!S._blankPick); })() + `</div>`;
 }
 
 function selectProposalCard(ch, i) {
