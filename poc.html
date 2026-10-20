@@ -1449,14 +1449,47 @@ function _teamTpl(post){
   if (post.tplIdx != null) { var _pt = TEMPLATES[post.tplIdx]; if (_pt && _pt.src && _pt.channel === post.channel) return _pt; }
   return TEMPLATES.filter(function(t){ return t && t.src && t.channel === post.channel; })[0] || null;
 }
+// ── LinkedIn-ram: inlägget visas som det kommer se ut i LinkedIns flöde ──
+function _liCss(){
+  if (typeof document === 'undefined' || document.getElementById('liCss')) return;
+  var st = document.createElement('style'); st.id = 'liCss';
+  st.textContent = '.li-post{background:#fff;font-family:-apple-system,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:rgba(0,0,0,.9);font-size:11px;text-align:left;cursor:inherit}' +
+    '.li-head{display:flex;gap:.7em;align-items:flex-start;padding:.9em .9em .55em}' +
+    '.li-av{width:3.6em;height:3.6em;border-radius:.25em;background:#b31e59;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1em;flex-shrink:0;overflow:hidden}' +
+    '.li-av img{width:100%;height:100%;object-fit:contain;background:#fff}' +
+    '.li-who{min-width:0;flex:1}.li-nm{font-weight:600;font-size:1.05em;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.li-sub{color:rgba(0,0,0,.6);font-size:.88em;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.li-fol{color:#0a66c2;font-weight:600;font-size:1em;white-space:nowrap;padding-top:.2em}' +
+    '.li-txt{padding:0 .9em;font-size:1em;line-height:1.43;white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}' +
+    '.li-more{color:rgba(0,0,0,.6);padding:0 .9em;text-align:right;font-size:1em;line-height:1.43}' +
+    '.li-gap{height:.7em}.li-tag{color:#0a66c2;font-weight:600}' +
+    '.li-act{display:flex;justify-content:space-between;padding:.2em .5em;border-top:1px solid #e8e8e8;color:rgba(0,0,0,.6);font-weight:600;font-size:.92em}' +
+    '.li-act span{padding:.75em .35em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+  document.head.appendChild(st);
+}
+function _liEsc(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+// Överdelen: avsändare + inläggstext (med hashtags och "…se mer" som i LinkedIn)
+function _liTop(post){
+  _liCss();
+  var nm = (typeof BRAND_NAME !== 'undefined' && BRAND_NAME) || 'spot.';
+  var logo = (typeof BRAND_LOGO === 'string' && BRAND_LOGO) ? '<img src="' + _liEsc(BRAND_LOGO) + '" alt="">' : _liEsc(String(nm).charAt(0).toUpperCase());
+  var sub = (typeof BRAND_TAGLINE !== 'undefined' && BRAND_TAGLINE) ? BRAND_TAGLINE : 'Företagssida';
+  var body = String((post && post.content) || '').trim(), tags = ((post && post.hashtags) || []).map(function(h){ return '#' + String(h).replace(/^#/, ''); });
+  var txt = _liEsc(body) + (tags.length ? (body ? '\n\n' : '') + tags.map(function(h){ return '<span class="li-tag">' + _liEsc(h) + '</span>'; }).join(' ') : '');
+  var long = (body.length + tags.join(' ').length) > 140 || (body.match(/\n/g) || []).length >= 2;
+  return '<div class="li-post"><div class="li-head"><div class="li-av">' + logo + '</div><div class="li-who"><div class="li-nm">' + _liEsc(nm) + '</div><div class="li-sub">' + _liEsc(sub) + '</div><div class="li-sub">Nu · 🌐</div></div><div class="li-fol">+ Följ</div></div>' +
+    (txt ? '<div class="li-txt">' + txt + '</div>' + (long ? '<div class="li-more">…se mer</div>' : '') : '') + '<div class="li-gap"></div></div>';
+}
+// Underdelen: LinkedIns knapprad
+function _liFoot(){ _liCss(); return '<div class="li-post"><div class="li-act"><span>👍 Gilla</span><span>💬 Kommentera</span><span>🔁 Återpublicera</span><span>➤ Skicka</span></div></div>'; }
 // Kort för ett tomt (vitt) inlägg i förhandsvisningen
 function _blankCardHTML(post, onPick, on){
   var bp = Object.assign({}, post, { blank: true, tplIdx: null });
   return '<div class="ai-prop-card ' + (on ? 'selected' : '') + '" onclick="' + onPick + ';openCreateEditor()" style="' + (on ? '' : 'opacity:.55;filter:grayscale(.3)') + ';transition:opacity .15s,filter .15s">' +
-    '<div class="ai-prop-thumb" style="position:relative;aspect-ratio:' + _arFor(post.channel, post) + ';background:#fff;border:1px dashed #d1d5db;box-sizing:border-box">' + getPostImageHTML(bp) +
+    _liTop(post) + '<div class="ai-prop-thumb" style="position:relative;aspect-ratio:' + _arFor(post.channel, post) + ';background:#fff;border:1px dashed #d1d5db;box-sizing:border-box">' + getPostImageHTML(bp) +
     '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px;font-weight:600;pointer-events:none">+ Tomt inlägg</div>' +
     '<button class="prop-zoom-btn" title="Välj tomt inlägg" onclick="event.stopPropagation();' + onPick + '" style="' + (on ? 'opacity:1;background:#b31e59' : '') + '">' + (on ? '✓' : '○') + '</button></div>' +
-    '<div class="ai-prop-meta"><div class="ai-prop-num">Tomt' + (on ? ' · ✓ Vald' : '') + '</div><div class="ai-prop-title">Börja från en vit yta</div></div></div>';
+    _liFoot() + '<div class="ai-prop-meta"><div class="ai-prop-num">Tomt' + (on ? ' · ✓ Vald' : '') + '</div><div class="ai-prop-title">Börja från en vit yta</div></div></div>';
 }
 // Alla mallbilder (index i TEMPLATES) som är kopplade till en kanal i Varumärke
 function _tplsForCh(ch){ var o = []; if (typeof TEMPLATES !== 'undefined' && Array.isArray(TEMPLATES)) TEMPLATES.forEach(function(t, i){ if (t && t.src && t.channel === ch) o.push(i); }); return o; }
@@ -2768,11 +2801,11 @@ function renderProposalCards(ch) {
       const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [] }; Object.assign(mockPost, _createExtra()); mockPost.tplIdx = _tplIdxFor(ch, i); _tplStrip(mockPost);
       const dim = i!==selectedIdx || !!S._blankPick;
       return `<div class="ai-prop-card ${i===selectedIdx?'selected':''}" onclick="openProposalEditor('${ch}',${i})" style="${dim ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
-        <div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(ch)}">
+        ${_liTop(mockPost)}<div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(ch)}">
           ${getPostImageHTML(mockPost)}
           ${S._aiImageLoading ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;z-index:5"><div style="width:22px;height:22px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite"></div><div style="font-size:9px;color:#fff;font-weight:600">Skapar bild…</div></div>` : ''}
           <button class="prop-zoom-btn" title="Välj som denna" onclick="event.stopPropagation();selectProposalCard('${ch}',${i})" style="${i===selectedIdx?'opacity:1;background:#b31e59':''}">${i===selectedIdx?'✓':'○'}</button>
-        </div>
+        </div>${_liFoot()}
         <div class="ai-prop-meta">
           <div class="ai-prop-num">Förslag ${i+1}${i===selectedIdx?' · ✓ Vald':''}</div>
           <div class="ai-prop-title">${p.title||''}</div>
@@ -2844,9 +2877,9 @@ function updateManualPreview() {
       const mp = Object.assign({}, mockPost, { elements: (S._elements || []).slice() }); mp.tplIdx = _tplIdxFor(S.manualChannel, i); _tplStrip(mp);
       const ct = TEMPLATES[mp.tplIdx] || {};
       return `<div class="ai-prop-card ${i === _pick ? 'selected' : ''}" onclick="S.manualTplPick=${i};S._blankPick=false;updateManualPreview();openCreateEditor()" style="${i !== _pick ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
-        <div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(mp.channel, mp)}">${getPostImageHTML(mp)}
+        ${_liTop(mp)}<div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(mp.channel, mp)}">${getPostImageHTML(mp)}
           <button class="prop-zoom-btn" title="Välj denna mall" onclick="event.stopPropagation();S.manualTplPick=${i};S._blankPick=false;updateManualPreview()" style="${i === _pick ? 'opacity:1;background:#b31e59' : ''}">${i === _pick ? '✓' : '○'}</button></div>
-        <div class="ai-prop-meta"><div class="ai-prop-num">Mall ${i + 1}${i === _pick ? ' · ✓ Vald' : ''}</div><div class="ai-prop-title">${String(ct.label || '').replace(/</g, '&lt;')}</div></div>
+        ${_liFoot()}<div class="ai-prop-meta"><div class="ai-prop-num">Mall ${i + 1}${i === _pick ? ' · ✓ Vald' : ''}</div><div class="ai-prop-title">${String(ct.label || '').replace(/</g, '&lt;')}</div></div>
       </div>`;
     }).join('') + _blankCardHTML(mockPost, 'S._blankPick=true;updateManualPreview()', !!S._blankPick) + `</div><div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:8px">${CH_LABEL[S.manualChannel]}</div>`;
     updateTimestamp();
@@ -2854,9 +2887,9 @@ function updateManualPreview() {
   }
   body.innerHTML = `
     <div style="width:100%">
-      <div onclick="openCreateEditor()" style="cursor:pointer;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.15);aspect-ratio:${_arFor(mockPost.channel,mockPost)}">
+      <div onclick="openCreateEditor()" style="cursor:pointer;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.15);background:#fff">${_liTop(mockPost)}<div style="position:relative;aspect-ratio:${_arFor(mockPost.channel,mockPost)}">
         ${getPostImageHTML(mockPost)}
-      </div>
+      </div>${_liFoot()}</div>
       <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:8px">${CH_LABEL[S.manualChannel]}</div>
     </div>`;
   updateTimestamp();
@@ -2975,11 +3008,11 @@ function renderReview() {
     if (c.isValid && !c.warnings.length) badges = quickActions;
     else badges = quickActions + '<div style="margin-top:6px">' + [...c.issues.map(i => `<span class="rule-err">✗ ${i}</span>`), ...c.warnings.map(w => `<span class="rule-warn">⚠ ${w}</span>`)].join('') + '</div>';
     return `<div class="review-card ${S.selectedReviewId === post.id ? 'selected' : ''}" onclick="selectReview('${post.id}')">
-      <div class="rc-thumb" style="aspect-ratio:${_arFor(post.channel,post)};position:relative;overflow:hidden;" onclick="event.stopPropagation();openLightbox(${idx})">
+      ${_liTop(post)}<div class="rc-thumb" style="aspect-ratio:${_arFor(post.channel,post)};position:relative;overflow:hidden;" onclick="event.stopPropagation();openLightbox(${idx})">
         ${getPostImageHTML(post)}
         <button class="rc-layout-btn" onclick="event.stopPropagation();openLayoutPicker('${post.id}')">🎨 Layout</button>
         <div class="rc-ch-badge" style="background:rgba(255,255,255,.9);color:${CH_TC[post.channel]}">${CH_LABEL[post.channel]}</div>
-      </div>
+      </div>${_liFoot()}
       <div class="rc-body">
         <div class="rc-title">${post.title}</div>
         <div class="rc-text">${post.content}</div>
@@ -3244,6 +3277,13 @@ function emRenderPreview() {
   setTimeout(_emFitPreview, 0);
   // Render the post card with contenteditable regions
   card.innerHTML = getPostImageHTML(post);
+  // LinkedIn-ram runt arbetsytan: avsändare och text ovanför, knapprad under
+  var _lt = document.getElementById('emLiTop'), _lf = document.getElementById('emLiFoot');
+  if (!_lt) { _lt = document.createElement('div'); _lt.id = 'emLiTop'; _lt.style.cssText = 'flex-shrink:0;border-radius:10px 10px 0 0;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.06)'; }
+  if (!_lf) { _lf = document.createElement('div'); _lf.id = 'emLiFoot'; _lf.style.cssText = 'flex-shrink:0;border-radius:0 0 10px 10px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.06)'; }
+  if (_lt.nextSibling !== card) card.parentNode.insertBefore(_lt, card);
+  if (card.nextSibling !== _lf) card.parentNode.insertBefore(_lf, card.nextSibling);
+  _lt.innerHTML = _liTop(post); _lf.innerHTML = _liFoot();
   post.textPos = post.textPos || {};
   post.textScale = post.textScale || {};
   // Find widgets by matching their rendered text against the post data (templates use plain divs)
@@ -3514,6 +3554,7 @@ function _emFitPreview(){
   card.style.transform = 'scale(' + scale.toFixed(3) + ')';
   card.style.margin = ((baseH * scale - baseH) / 2).toFixed(1) + 'px ' + ((baseW * scale - baseW) / 2).toFixed(1) + 'px';
   card.dataset.previewScale = scale;
+  ['emLiTop', 'emLiFoot'].forEach(function(id){ var x = document.getElementById(id); if (x) { x.style.width = (baseW * scale).toFixed(1) + 'px'; x.style.fontSize = (11 * Math.max(0.8, Math.min(1.6, scale))).toFixed(1) + 'px'; } });
 }
 if (!window.__emFitBound) {
   window.__emFitBound = true;
