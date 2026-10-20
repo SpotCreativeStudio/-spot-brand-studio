@@ -5958,13 +5958,22 @@ function _cvWire(post, card){
   layer.appendChild(gV); layer.appendChild(gH);
   function rectPct(){ var r = card.getBoundingClientRect(); return { r: r, w: Math.max(1, r.width), h: Math.max(1, r.height) }; }
   function apply(node, e){ node.style.left = e.x + '%'; node.style.top = e.y + '%'; node.style.width = e.w + '%'; node.style.height = e.h + '%'; node.style.transform = 'rotate(' + (e.rot || 0) + 'deg)' + ((e.flipX || e.flipY) ? ' scale(' + (e.flipX ? -1 : 1) + ',' + (e.flipY ? -1 : 1) + ')' : ''); }
+  // Synlig ram (tar hänsyn till rotation och kortets proportioner) – används för snäppning
+  function vbox(o){
+    var r = card.getBoundingClientRect(), W = Math.max(1, r.width), H = Math.max(1, r.height);
+    var a = ((o.rot || 0) % 360) * Math.PI / 180, c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
+    var wp = o.w * W / 100, hp = o.h * H / 100, vw = (wp * c + hp * s) / W * 100, vh = (wp * s + hp * c) / H * 100;
+    var cx = o.x + o.w / 2, cy = o.y + o.h / 2;
+    return { x: cx - vw / 2, y: cy - vh / 2, w: vw, h: vh };
+  }
   function snapMove(e){
-    var others = (post.elements || []).filter(function(o){ return o.id !== e.id; });
+    var others = (post.elements || []).filter(function(o){ return o.id !== e.id && o.role !== 'pagebg'; });
     var xs = [0, 50, 100], ys = [0, 50, 100];
-    others.forEach(function(o){ xs.push(o.x, o.x + o.w / 2, o.x + o.w); ys.push(o.y, o.y + o.h / 2, o.y + o.h); });
-    var T = 0.8, gx = null, gy = null;
-    [[e.x, 0], [e.x + e.w / 2, e.w / 2], [e.x + e.w, e.w]].some(function(c){ return xs.some(function(t){ if (Math.abs(c[0] - t) < T) { e.x = t - c[1]; gx = t; return true; } return false; }); });
-    [[e.y, 0], [e.y + e.h / 2, e.h / 2], [e.y + e.h, e.h]].some(function(c){ return ys.some(function(t){ if (Math.abs(c[0] - t) < T) { e.y = t - c[1]; gy = t; return true; } return false; }); });
+    others.forEach(function(o){ var b = vbox(o); xs.push(b.x, b.x + b.w / 2, b.x + b.w); ys.push(b.y, b.y + b.h / 2, b.y + b.h); });
+    var v = vbox(e), T = 0.8, gx = null, gy = null, ox = 0, oy = 0;
+    [[v.x, 0], [v.x + v.w / 2, v.w / 2], [v.x + v.w, v.w]].some(function(c){ return xs.some(function(t){ if (Math.abs(c[0] - t) < T) { ox = t - c[1] - v.x; gx = t; return true; } return false; }); });
+    [[v.y, 0], [v.y + v.h / 2, v.h / 2], [v.y + v.h, v.h]].some(function(c){ return ys.some(function(t){ if (Math.abs(c[0] - t) < T) { oy = t - c[1] - v.y; gy = t; return true; } return false; }); });
+    e.x += ox; e.y += oy;
     gV.style.display = gx == null ? 'none' : 'block'; if (gx != null) gV.style.left = gx + '%';
     gH.style.display = gy == null ? 'none' : 'block'; if (gy != null) gH.style.top = gy + '%';
   }
