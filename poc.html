@@ -2806,13 +2806,13 @@ function _rpModeHTML(){
 }
 function _rpSetMode(k){ S._rpKeep = k; document.querySelectorAll('[data-rpmode]').forEach(function(el){ var w = document.createElement('div'); w.innerHTML = _rpModeHTML(); el.replaceWith(w.firstChild); }); }
 function _rpBusy(id, on, label){ var b = document.getElementById(id); if (b) { b.disabled = on; b.textContent = label; } }
-function _rpBrief(ed){ var p = ed && S._editPost; return S._lastBrief || (p ? ((p.brief && p.brief !== 'spot. content studio' ? p.brief + '. ' : '') + (p.content || p.title || '')) : ''); }
+function _rpBrief(ed){ var p = ed && S._editPost; var pr = ed ? String((document.getElementById('em-title') || {}).value || '').trim() : ''; if (pr) return 'Uppdrag (prompt, inte rubrik): ' + pr + '.'; return S._lastBrief || (p ? ((p.brief && p.brief !== 'spot. content studio' ? p.brief + '. ' : '') + (p.content || '')) : ''); }
 // Ny text: bilden behålls
 async function rpNewText(ed){
   var brief = _rpBrief(ed); if (!brief) { showToast('Skriv en prompt eller ett innehåll först'); return; }
   var post = ed && S._editPost, chs = post ? [post.channel] : ((window._allChannelProposals && Object.keys(window._allChannelProposals)) || [S.manualChannel]);
   if (!post && window._allChannelProposals) chs = Object.keys(window._allChannelProposals);
-  var ins = String(S._rpTxt || '').trim(), bid = 'rpTxtBtn' + (ed ? 'Ed' : '');
+  var ins = ed ? '' : String(S._rpTxt || '').trim(), bid = 'rpTxtBtn' + (ed ? 'Ed' : ''); // i editorn är prompten själva instruktionen
   _rpBusy(bid, true, '⏳ Skriver…');
   try {
     var allCh = (window._allChannelProposals && !post) ? Object.keys(window._allChannelProposals) : chs;
@@ -2821,7 +2821,9 @@ async function rpNewText(ed){
     if (post) {
       // Editorn: inlägget får texten från förslaget som hör till samma mall
       var ch = post.channel, list = data.proposals[ch] || [], k = Math.max(0, _tplsForCh(ch).indexOf(post.tplIdx)), np = list[k] || list[0];
-      if (np) { post.content = np.content || ''; post.hashtags = (np.hashtags || []).map(function(t){ return String(t).replace(/^#/, ''); }); post.aiTitle = np.title || post.aiTitle; post.title = np.title || post.title; delete post.imgContent; }
+      if (np) { post.content = np.content || ''; post.hashtags = (np.hashtags || []).map(function(t){ return String(t).replace(/^#/, ''); }); var _oldAi = post.aiTitle; post.aiTitle = np.title || post.aiTitle; delete post.imgContent;
+        // Utan AI-förslag (manuellt läge) sparas rubriken som bildtext – men bara om man inte skrivit en egen
+        if (!window._allChannelProposals && (post.imgTitle == null || post.imgTitle === '' || post.imgTitle === _oldAi)) post.imgTitle = post.aiTitle; }
       if (S._editIsCreateMode && window._allChannelProposals) { window._allChannelProposals = data.proposals; }
       openEditorModal(post);
     } else {
@@ -2832,7 +2834,7 @@ async function rpNewText(ed){
     }
     showToast('✨ Ny text klar – bilden är kvar');
   } catch (e) { showToast('Fel: ' + e.message); }
-  _rpBusy(bid, false, '🔁 Ny text');
+  _rpBusy(bid, false, ed ? '✨ Ny caption' : '🔁 Ny text');
 }
 async function _rpToB64(url){
   var bl = await fetch(url).then(function(r){ return r.blob(); });
@@ -3261,7 +3263,11 @@ function openEditorModal(post) {
   left.innerHTML = `
     <div>
       <div class="em-field-label">Prompt</div>
-      <input id="em-title" class="em-input" value="${(post.title||'').replace(/"/g,'&quot;')}" placeholder="Prompt..." onfocus="emSnapshotText()" oninput="emSyncFromForm()">
+      <div style="display:flex;gap:6px">
+        <input id="em-title" class="em-input" style="flex:1" value="${(post.title||'').replace(/"/g,'&quot;')}" placeholder="Prompt – vad inlägget ska handla om..." onfocus="emSnapshotText()" oninput="emSyncFromForm()" onkeydown="if(event.key==='Enter')rpNewText('ed')">
+        <button id="rpTxtBtnEd" onclick="rpNewText('ed')" title="Skriv en ny caption utifrån prompten. Bilden behålls." style="padding:8px 12px;background:var(--m);color:#fff;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;border:none;white-space:nowrap">✨ Ny caption</button>
+      </div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:4px">Prompten styr bara captionen. Rubriken i bilden hämtas från captionen.</div>
     </div>
     <div>
       <div class="em-field-label">Innehåll</div>
@@ -3279,7 +3285,7 @@ function openEditorModal(post) {
     </div>
     <div style="background:#f9fafb;border:1px solid #f0f0f0;border-radius:10px;padding:12px;margin-bottom:4px">
       <div class="em-field-label" style="display:flex;align-items:center;justify-content:space-between">🖼️ Text i bilden <button onclick="emResetImgText()" style="font-size:11px;font-weight:600;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:3px 8px;cursor:pointer">↺ Samma som inlägget</button></div>
-      <input id="em-img-title" class="em-input" value="${(((post.imgTitle!==undefined&&post.imgTitle!==null)?post.imgTitle:(post.title||''))+'').replace(/"/g,'&quot;')}" placeholder="Rubrik i bilden..." onfocus="emSnapshotText()" oninput="emSyncImgText()" style="margin-bottom:6px">
+      <input id="em-img-title" class="em-input" value="${(((post.imgTitle!==undefined&&post.imgTitle!==null)?post.imgTitle:(post.aiTitle||''))+'').replace(/"/g,'&quot;')}" placeholder="Rubrik i bilden – hämtas från captionen, eller skriv fritt" onfocus="emSnapshotText()" oninput="emSyncImgText()" style="margin-bottom:6px">
       <textarea id="em-img-content" class="em-input em-textarea" rows="3" placeholder="Text i bilden..." onfocus="emSnapshotText()" oninput="emSyncImgText()">${((post.imgContent!==undefined&&post.imgContent!==null)?post.imgContent:(post.content||''))}</textarea>
       <div style="font-size:11px;color:#9ca3af;margin-top:4px">Påverkar bara texten i bilden — inte inläggstexten ovan.</div>
     </div>
@@ -3426,7 +3432,7 @@ function emRenderPreview() {
     });
     return best;
   }
-  var _imgT = (post.imgTitle !== undefined && post.imgTitle !== null) ? post.imgTitle : (post.title||'');
+  var _imgT = (post.imgTitle !== undefined && post.imgTitle !== null) ? post.imgTitle : (post.aiTitle||''); // aldrig prompten
   var _imgC = (post.imgContent !== undefined && post.imgContent !== null) ? post.imgContent : (post.content||'');
   var _tagStr = (post.hashtags||[]).slice(0,3).map(function(h){ return '#'+String(h).replace(/^#/,''); }).join(' ');
   const h1 = _findLeaf(_imgT);
@@ -3897,7 +3903,7 @@ function emResetImgText(){
   post.imgContent = null;
   const it = document.getElementById('em-img-title');
   const ic = document.getElementById('em-img-content');
-  if (it) it.value = post.title || '';
+  if (it) it.value = post.aiTitle || '';
   if (ic) ic.value = post.content || '';
   emRenderPreview();
   if (typeof showToast==='function') showToast('↺ Bildtexten följer inlägget igen');
@@ -3919,7 +3925,7 @@ function emUndoText(){
   post.imgTitle = last.imgTitle;
   post.imgContent = last.imgContent;
   if (typeof emSyncToForm === 'function') { emSyncToForm('title', post.title||''); emSyncToForm('content', post.content||''); }
-  var _it = document.getElementById('em-img-title'); if (_it) _it.value = (post.imgTitle!==undefined&&post.imgTitle!==null) ? post.imgTitle : (post.title||'');
+  var _it = document.getElementById('em-img-title'); if (_it) _it.value = (post.imgTitle!==undefined&&post.imgTitle!==null) ? post.imgTitle : (post.aiTitle||'');
   var _ic = document.getElementById('em-img-content'); if (_ic) _ic.value = (post.imgContent!==undefined&&post.imgContent!==null) ? post.imgContent : (post.content||'');
   const container = document.getElementById('em-tags');
   if (container) container.innerHTML = (post.hashtags||[]).map(function(t){ return '<span class="tag-edit">#' + t.replace(/^#/,'') + '<span class="tag-rm" onclick="emRmTag(\'' + t.replace(/^#/,'') + '\')">✕</span></span>'; }).join('');
@@ -6244,7 +6250,7 @@ function _cvRenderToolbar(card){
     left.insertBefore(pr, left.firstChild);
   }
   if (pr) { pr.innerHTML = parts[1] ? '<div style="font-size:11px;font-weight:700;color:#b31e59;margin-bottom:6px">✏️ Markerat element</div>' + parts[1] : ''; pr.style.display = parts[1] ? '' : 'none'; }
-  _cvRenderLayers(); _rpEditorMount();
+  _cvRenderLayers();
   if (typeof _emFitPreview === 'function') setTimeout(_emFitPreview, 0);
 }
 
