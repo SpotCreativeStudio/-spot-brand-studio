@@ -599,7 +599,7 @@ body.brand-ro #v-brand :is(input,select,textarea){background:#f9fafb!important}
               <div id="imgDragHint" style="background:rgba(0,0,0,.5);color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;backdrop-filter:blur(4px)">✥ Dra för att justera</div>
             </div>
           </div>
-          <div id="imgEditControls" style="display:none;flex-direction:column;gap:6px;margin-top:8px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:#6b7280;font-weight:600">Zoom</span><input type="range" id="imgZoom" min="0.3" max="4" step="0.05" value="1" oninput="setImgZoom(this.value)" style="flex:1"></div><div id="imgRepromptRow" style="display:flex;flex-direction:column;gap:6px;margin-top:8px;width:100%"><input id="imgReprompt" placeholder="Beskriv en ändring av bilden (valfritt)..." style="width:100%;box-sizing:border-box;font-size:12px;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-family:inherit"><button onclick="repromptImage()" style="width:100%;box-sizing:border-box;font-size:12px;font-weight:600;padding:8px 12px;border-radius:8px;border:none;background:var(--m);color:#fff;cursor:pointer">🎨 Ny bild</button></div></div>
+          <div id="imgEditControls" style="display:none;flex-direction:column;gap:6px;margin-top:8px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:#6b7280;font-weight:600">Zoom</span><input type="range" id="imgZoom" min="0.3" max="4" step="0.05" value="1" oninput="setImgZoom(this.value)" style="flex:1"></div><div id="imgRepromptRow" style="display:flex;flex-direction:column;gap:6px;margin-top:8px;width:100%"><input id="imgReprompt" placeholder="Beskriv en ändring av bilden (valfritt)..." style="width:100%;box-sizing:border-box;font-size:12px;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-family:inherit"><div id="imgModeSlot"></div><button onclick="repromptImage()" style="width:100%;box-sizing:border-box;font-size:12px;font-weight:600;padding:8px 12px;border-radius:8px;border:none;background:var(--m);color:#fff;cursor:pointer">🎨 Ny bild</button></div></div>
           <input type="file" id="imgFileInput" accept="image/*" style="display:none" onchange="handleImgSelect(event)">
           <div style="display:flex;gap:8px;flex-wrap:wrap;width:100%"><button onclick="openLibraryPicker()" style="flex:1 1 auto;min-width:110px;font-size:12px;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer;white-space:nowrap;text-align:center">📚 Bibliotek</button><button id="imgSwapBtn" onclick="document.getElementById('imgFileInput').click()" style="display:none;flex:1 1 auto;min-width:110px;font-size:12px;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer;white-space:nowrap;text-align:center">🔄 Byt bild</button><button id="imgRemoveBtn" onclick="removeImg()" style="display:none;flex:1 1 auto;min-width:110px;font-size:12px;color:#ef4444;border:1.5px solid #fecaca;border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer;white-space:nowrap;text-align:center">✕ Ta bort</button></div>
         </div>
@@ -1382,7 +1382,13 @@ function _panCrop(img, st, dx, dy){
 }
 function applyImgPreviewTransform(){var _fr=document.getElementById("imgRepoFrame");if(_fr&&typeof _arFor==="function"){try{_fr.style.aspectRatio=_arFor(S.manualChannel||(S.manualChannels&&S.manualChannels[0])||"linkedin");}catch(e){}}var pv=document.getElementById("imgPreview");if(!pv)return;var p=S._imgPos||{x:0,y:0,zoom:1};var z0=(p.zoom||1);var z=z0<=1?z0*1.06:z0;var mx=Math.max(0,(1-1/z)*50*z);var x=Math.max(-mx,Math.min(mx,p.x||0));var y=Math.max(-mx,Math.min(mx,p.y||0));pv.style.objectPosition=((p.ox==null?50:p.ox)+'% '+(p.oy==null?50:p.oy)+'%');pv.style.transform="scale("+z.toFixed(3)+") translate("+(x/z).toFixed(2)+"%,"+(y/z).toFixed(2)+"%)";}
 function setImgZoom(v){if(!S._imgPos)S._imgPos={x:0,y:0,zoom:1};S._imgPos.zoom=parseFloat(v)||1;applyImgPreviewTransform();if(window._aiProposals&&window._allChannelProposals){renderProposalCards(window._activeProposalTab||S.manualChannel);}else{updateManualPreview();}}
-function repromptImage(){var t=document.getElementById("imgReprompt");var extra=t?t.value.trim():"";var base=S._aiImageBrief||S._lastBrief||"";if(!base&&!extra){showToast("Skriv en beskrivning av ändringen.");return;}var brief=extra?(base?(base+". Ändring: "+extra):extra):base;S._uploadedImageUrl=null;generateBrandImage(brief,true);}
+async function repromptImage(){var t=document.getElementById("imgReprompt");var extra=t?t.value.trim():"";var base=S._lastBrief||S._aiImageBrief||"";if(!base&&!extra){showToast("Skriv en beskrivning av ändringen.");return;}var brief=(extra?(base?(base+". Ändring: "+extra):extra):base)+" (variant "+(Date.now()%10000)+")";
+  // Växeln: Samma bild = AI:n ändrar nuvarande bild (även en uppladdad), Helt ny bild = börjar om
+  var cur=S._uploadedImageUrl||S._aiImageUrl, keep=S._rpKeep!==false&&!!cur;
+  try{ if(keep){ var pv=await _rpToB64(cur); if(pv){S._aiImageMime=pv.mime;S._aiImageBase64=pv.b64;} } else { S._aiImageBase64=null; } }catch(e){}
+  S._uploadedImageUrl=null;generateBrandImage(brief,true);}
+// Visa växeln i bildfältet när det finns en bild
+setInterval(function(){ var sl=document.getElementById('imgModeSlot'); if(!sl) return; var has=!!(S._uploadedImageUrl||S._aiImageUrl); if(has&&!sl.firstChild){ sl.innerHTML=_rpModeHTML(); } else if(!has&&sl.firstChild){ sl.innerHTML=''; } }, 800);
 function _imgObjPos(post) {
   const p = (post && post.imgPos) ? post.imgPos : (S._imgPos || { x: 0, y: 0, zoom: 1 });
   return ((p.ox == null ? 50 : p.ox) + '% ' + (p.oy == null ? 50 : p.oy) + '%') + ';' + (_imgZoomCss({ imgPos: p }) || 'transform:none;');
@@ -2768,6 +2774,97 @@ function regenerateImage() {
 }
 
 // Ritar om förslagskorten för aktiv flik (om proposals-läget är aktivt)
+// ── Prompta om text eller bild var för sig (i förhandsvisningen och i editorn) ──
+function _rpEsc(t){ return String(t || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+function _rpBarHTML(ed){
+  var x = ed ? 'Ed' : '', a = ed ? "'ed'" : '';
+  var hasImg = ed ? !!(S._editPost && (S._editPost.imageUrl || S._editPost.aiImageUrl)) : !!(S._aiImageUrl && !S._uploadedImageUrl), keep = S._rpKeep !== false;
+  var inp = 'flex:1;min-width:0;font-size:12px;padding:7px 9px;border:1px solid #e5e7eb;border-radius:8px;outline:none';
+  var bt = 'flex-shrink:0;font-size:12px;font-weight:600;padding:7px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;border:1.5px solid var(--m);';
+  return '<div id="rpBar' + x + '" style="' + (ed ? 'margin-bottom:10px;' : 'margin:0 12px 2px;') + 'padding:10px;border:1px solid #f3d3de;background:#fff7fa;border-radius:12px;display:flex;flex-direction:column;gap:7px">' +
+    '<div style="font-size:11px;font-weight:700;color:#b31e59">' + (ed ? 'Gör om bara texten (bilden behålls)' : 'Gör om bara texten eller bara bilden') + '</div>' +
+    '<div style="display:flex;gap:6px"><input id="rpTxt' + x + '" value="' + _rpEsc(S._rpTxt) + '" oninput="S._rpTxt=this.value" onkeydown="if(event.key===\'Enter\')rpNewText(' + a + ')" placeholder="Text: t.ex. kortare, mer personlig ton" style="' + inp + '"><button id="rpTxtBtn' + x + '" onclick="rpNewText(' + a + ')" style="' + bt + 'background:#fff;color:var(--m)">🔁 Ny text</button></div>' +
+    (ed ? '' : '<div style="display:flex;gap:6px"><input id="rpImg' + x + '" value="' + _rpEsc(S._rpImg) + '" oninput="S._rpImg=this.value" onkeydown="if(event.key===\'Enter\')rpNewImage(' + a + ')" placeholder="Bild: t.ex. ljusare, fler människor" style="' + inp + '"><button id="rpImgBtn' + x + '" onclick="rpNewImage(' + a + ')" style="' + bt + 'background:var(--m);color:#fff">🎨 Ny bild</button></div>') +
+    (hasImg && !ed ? _rpModeHTML() : '') +
+    '</div>';
+}
+// Lägger fältet överst i editorns vänsterpanel (under lager-panelen)
+function _rpEditorMount(){
+  var left = document.getElementById('emLeft'); if (!left || !S._editPost) return;
+  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE === 'granskare') return;
+  var old = document.getElementById('rpBarEd'), keepVals = old && old.contains(document.activeElement);
+  if (keepVals) return;
+  var w = document.createElement('div'); w.innerHTML = _rpBarHTML(true); var bar = w.firstChild;
+  if (old) old.replaceWith(bar); else { var ly = document.getElementById('cvLayers'); left.insertBefore(bar, ly ? ly.nextSibling : left.firstChild); }
+}
+// Växel: utgå från samma bild eller skapa en helt ny (gäller alla "Ny bild"-knappar)
+function _rpModeHTML(){
+  var k = S._rpKeep !== false, b = 'flex:1;font-size:11px;font-weight:600;padding:6px 8px;border:none;cursor:pointer;';
+  return '<div data-rpmode style="display:flex;border:1.5px solid #e5e7eb;border-radius:8px;overflow:hidden;width:100%;box-sizing:border-box">' +
+    '<button type="button" onclick="_rpSetMode(true)" title="AI:n ändrar nuvarande bild" style="' + b + (k ? 'background:var(--m);color:#fff' : 'background:#fff;color:#6b7280') + '">↻ Samma bild</button>' +
+    '<button type="button" onclick="_rpSetMode(false)" title="AI:n skapar en helt ny bild" style="' + b + (!k ? 'background:var(--m);color:#fff' : 'background:#fff;color:#6b7280') + '">✦ Helt ny bild</button></div>';
+}
+function _rpSetMode(k){ S._rpKeep = k; document.querySelectorAll('[data-rpmode]').forEach(function(el){ var w = document.createElement('div'); w.innerHTML = _rpModeHTML(); el.replaceWith(w.firstChild); }); }
+function _rpBusy(id, on, label){ var b = document.getElementById(id); if (b) { b.disabled = on; b.textContent = label; } }
+function _rpBrief(ed){ var p = ed && S._editPost; return S._lastBrief || (p ? ((p.brief && p.brief !== 'spot. content studio' ? p.brief + '. ' : '') + (p.content || p.title || '')) : ''); }
+// Ny text: bilden behålls
+async function rpNewText(ed){
+  var brief = _rpBrief(ed); if (!brief) { showToast('Skriv en prompt eller ett innehåll först'); return; }
+  var post = ed && S._editPost, chs = post ? [post.channel] : ((window._allChannelProposals && Object.keys(window._allChannelProposals)) || [S.manualChannel]);
+  if (!post && window._allChannelProposals) chs = Object.keys(window._allChannelProposals);
+  var ins = String(S._rpTxt || '').trim(), bid = 'rpTxtBtn' + (ed ? 'Ed' : '');
+  _rpBusy(bid, true, '⏳ Skriver…');
+  try {
+    var allCh = (window._allChannelProposals && !post) ? Object.keys(window._allChannelProposals) : chs;
+    var res = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brief: brief + (ins ? ' Skriv nya förslag. Ändring jämfört med förra: ' + ins : ' Skriv nya, annorlunda förslag.'), channels: allCh, brand: (typeof getBrandProfile === 'function' ? getBrandProfile() : undefined), count: Math.min(6, Math.max.apply(null, allCh.map(_tplCount))) }) });
+    var data = await res.json(); if (!res.ok || !data.proposals) throw new Error(data.error || 'API-fel');
+    if (post) {
+      // Editorn: inlägget får texten från förslaget som hör till samma mall
+      var ch = post.channel, list = data.proposals[ch] || [], k = Math.max(0, _tplsForCh(ch).indexOf(post.tplIdx)), np = list[k] || list[0];
+      if (np) { post.content = np.content || ''; post.hashtags = (np.hashtags || []).map(function(t){ return String(t).replace(/^#/, ''); }); post.aiTitle = np.title || post.aiTitle; post.title = np.title || post.title; delete post.imgContent; }
+      if (S._editIsCreateMode && window._allChannelProposals) { window._allChannelProposals = data.proposals; }
+      openEditorModal(post);
+    } else {
+      var sel = Object.assign({}, window._selectedProposalPerChannel || {}), tab = window._activeProposalTab || chs[0];
+      window._allChannelProposals = data.proposals; window._selectedProposalPerChannel = sel;
+      var p = (data.proposals[tab] || [])[sel[tab] || 0]; if (p) fillFormFromProposal(p);
+      renderProposalCards(tab);
+    }
+    showToast('✨ Ny text klar – bilden är kvar');
+  } catch (e) { showToast('Fel: ' + e.message); }
+  _rpBusy(bid, false, '🔁 Ny text');
+}
+async function _rpToB64(url){
+  var bl = await fetch(url).then(function(r){ return r.blob(); });
+  var du = await new Promise(function(ok){ var fr = new FileReader(); fr.onload = function(){ ok(fr.result); }; fr.readAsDataURL(bl); });
+  var m = /^data:([^;]+);base64,([\s\S]*)$/.exec(du); return m ? { mime: m[1], b64: m[2] } : null;
+}
+// Ny bild: texten behålls. Antingen ändras nuvarande bild eller så skapas en helt ny.
+async function rpNewImage(ed){
+  var post = ed && S._editPost, bid = 'rpImgBtn' + (ed ? 'Ed' : '');
+  if (!post && S._uploadedImageUrl) { showToast('Du har en uppladdad bild. Ta bort den för att använda AI-bild.'); return; }
+  var base = _rpBrief(ed); if (!base) { showToast('Skriv en prompt eller ett innehåll först'); return; }
+  var cur = post ? (post.imageUrl || post.aiImageUrl) : S._aiImageUrl;
+  var ins = String(S._rpImg || '').trim(), keep = S._rpKeep !== false && !!cur;
+  _rpBusy(bid, true, '⏳ Skapar…');
+  try {
+    var brief = base + (ins ? ' Bildändring: ' + ins : '') + ' (variant ' + Date.now() % 10000 + ')';
+    if (post) {
+      var prev = keep ? await _rpToB64(cur) : null, ib = document.getElementById('m-include-brand');
+      var res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brief: brief, style: S.imageStyle, brand: (typeof getBrandProfile === 'function' ? getBrandProfile() : undefined), includeBrand: ib ? ib.checked : false, previousImageBase64: prev ? prev.b64 : undefined, previousImageMimeType: prev ? prev.mime : undefined }) });
+      var data = await res.json(); if (!res.ok || !data.imageUrl) throw new Error(data.error || 'Bild misslyckades');
+      if (typeof _cvSnap === 'function') _cvSnap();
+      post.imageUrl = data.imageUrl; post.aiImageUrl = data.imageUrl;
+      if (S._editIsCreateMode) { S._aiImageUrl = data.imageUrl; S._uploadedImageUrl = null; S._aiImageBase64 = null; S._aiImageBrief = brief; }
+      emRenderPreview(); showToast('🖼️ Ny bild klar – texten är kvar');
+    } else {
+      if (keep && !S._aiImageBase64) { var pv = await _rpToB64(cur); if (pv) { S._aiImageMime = pv.mime; S._aiImageBase64 = pv.b64; } }
+      if (!keep) S._aiImageBase64 = null;
+      await generateBrandImage(brief, true);
+    }
+  } catch (e) { showToast('Fel: ' + e.message); }
+  _rpBusy(bid, false, '🎨 Ny bild');
+}
 function refreshActiveProposalCards() {
   if (window._aiProposals && window._activeProposalTab) {
     renderProposalCards(window._activeProposalTab);
@@ -2819,7 +2916,7 @@ function renderProposalCards(ch) {
   const body = document.getElementById('prevBody');
   if (!body) return;
   const selectedIdx = (window._selectedProposalPerChannel || {})[ch] ?? 0;
-  body.innerHTML = `<div class="ai-proposals" style="width:100%">` +
+  body.innerHTML = '<div style="width:100%;display:flex;flex-direction:column">' + _rpBarHTML() + `<div class="ai-proposals" style="width:100%">` +
     proposals.slice(0,_tplCount(ch)).map((p, i) => {
       const cardLayouts = _cardLayoutsForWs();
       const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', aiTitle: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [] }; Object.assign(mockPost, _createExtra()); mockPost.tplIdx = _tplIdxFor(ch, i); _tplStrip(mockPost);
@@ -2836,7 +2933,7 @@ function renderProposalCards(ch) {
           <div class="ai-prop-hint">${(p.content||'').slice(0,55)}…</div>
         </div>
       </div>`;
-    }).join('') + (function(){ const sp = proposals[selectedIdx] || proposals[0] || {}; const bp = { channel: ch, imageUrl: activeImageUrl(), imgPos: S._imgPos, imageStyle: S.imageStyle, title: sp.title || '', content: sp.content || '', hashtags: (sp.hashtags||[]).map(t=>t.replace(/^#/,'')), elements: [] }; return _blankCardHTML(bp, "S._blankPick=true;renderProposalCards('" + ch + "')", !!S._blankPick); })() + `</div>`;
+    }).join('') + (function(){ const sp = proposals[selectedIdx] || proposals[0] || {}; const bp = { channel: ch, imageUrl: activeImageUrl(), imgPos: S._imgPos, imageStyle: S.imageStyle, title: sp.title || '', content: sp.content || '', hashtags: (sp.hashtags||[]).map(t=>t.replace(/^#/,'')), elements: [] }; return _blankCardHTML(bp, "S._blankPick=true;renderProposalCards('" + ch + "')", !!S._blankPick); })() + `</div></div>`;
 }
 
 function selectProposalCard(ch, i) {
@@ -3223,7 +3320,8 @@ function openEditorModal(post) {
         <button onclick="openLibraryPicker('editor')" style="flex:1 1 auto;min-width:120px;font-size:12px;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer">📚 Från bibliotek</button>
         <label style="flex:1 1 auto;min-width:120px;font-size:12px;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer;text-align:center">📤 Ladda upp<input type="file" accept="image/*" style="display:none" onchange="emUploadImage(this)"></label>
       </div>
-      <div style="display:flex;gap:6px;margin-bottom:6px">
+      ${_rpModeHTML()}
+      <div style="display:flex;gap:6px;margin:6px 0">
         <input id="em-img-reprompt" class="em-input" style="flex:1" placeholder="Beskriv en ändring av bilden...">
         <button onclick="emRepromptImage()" style="padding:8px 12px;background:var(--m);color:#fff;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;border:none;white-space:nowrap">Ny bild</button>
       </div>
@@ -3730,15 +3828,18 @@ async function emRepromptImage(){
   if (!post) return;
   const inp = document.getElementById('em-img-reprompt');
   const extra = inp ? inp.value.trim() : '';
-  const base = post.title || post.content || '';
+  const base = _rpBrief('ed');
   if (!base && !extra) { if (typeof showToast==='function') showToast('Skriv en beskrivning av ändringen.'); return; }
-  const brief = extra ? (base ? (base + '. Ändring: ' + extra) : extra) : base;
+  const brief = (extra ? (base ? (base + '. Ändring: ' + extra) : extra) : base) + ' (variant ' + (Date.now() % 10000) + ')';
   const btn = event && event.target;
   const oldText = btn ? btn.textContent : null;
   if (btn) { btn.textContent = 'Skapar...'; btn.disabled = true; }
   try {
+    // Växeln: Samma bild = AI:n ändrar nuvarande bild, Helt ny bild = börjar om
+    const cur = post.imageUrl || post.aiImageUrl; let prev = null;
+    try { if (S._rpKeep !== false && cur) prev = await _rpToB64(cur); } catch (e) {}
     const brand = (typeof getBrandProfile==='function') ? getBrandProfile() : undefined;
-    const includeBrand = !(post.blocks) || post.blocks.includes('brand'); const res = await fetch('/api/generate-image', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ brief, style: S.imageStyle, brand, includeBrand }) });
+    const includeBrand = !(post.blocks) || post.blocks.includes('brand'); const res = await fetch('/api/generate-image', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ brief, style: S.imageStyle, brand, includeBrand, previousImageBase64: prev ? prev.b64 : undefined, previousImageMimeType: prev ? prev.mime : undefined }) });
     const data = await res.json();
     if (!res.ok || !data.imageUrl) throw new Error(data.error || 'Bild misslyckades');
     S._editImgUndoStack = S._editImgUndoStack || [];
@@ -6143,7 +6244,7 @@ function _cvRenderToolbar(card){
     left.insertBefore(pr, left.firstChild);
   }
   if (pr) { pr.innerHTML = parts[1] ? '<div style="font-size:11px;font-weight:700;color:#b31e59;margin-bottom:6px">✏️ Markerat element</div>' + parts[1] : ''; pr.style.display = parts[1] ? '' : 'none'; }
-  _cvRenderLayers();
+  _cvRenderLayers(); _rpEditorMount();
   if (typeof _emFitPreview === 'function') setTimeout(_emFitPreview, 0);
 }
 
