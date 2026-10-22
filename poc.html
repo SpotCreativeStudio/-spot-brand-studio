@@ -1624,15 +1624,16 @@ function tplMakeEditable(i, btn, silent){
     .then(function(r){ return r.json(); })
     .then(function(d){ if (!d || !Array.isArray(d.elements)) throw new Error((d && d.error) || 'Ingen analys'); if (!d.elements.length) throw new Error('Hittade ingen text i mallen'); return _tplBuildLayers(ct, d.elements); })
     .then(function(){ saveBrandSettings(); renderTemplates(); _tplRefreshViews(); if (!silent && typeof showToast === 'function') showToast('Mallen är redigerbar – texter och logga går att ändra i editorn'); })
-    .catch(function(e){ ct.autoFailed = ct.src; renderTemplates(); if (!silent && typeof showToast === 'function') showToast('Kunde inte göra mallen redigerbar: ' + e.message); });
+    .catch(function(e){ ct.autoFailed = ct.src; if (silent) saveBrandSettings(); /* sparas i varumärket så att den inte försöks igen vid varje laddning */ renderTemplates(); if (!silent && typeof showToast === 'function') showToast('Kunde inte göra mallen redigerbar: ' + e.message); });
 }
 // Alla mallbilder görs redigerbara automatiskt: texten i bilden tas bort och blir flyttbar text i editorn
-var _tplAutoBusy = false;
+var _tplAutoBusy = false, _tplAutoTried = {};
 function _tplAutoEditable(){
   if (_tplAutoBusy || typeof TEMPLATES === 'undefined' || !Array.isArray(TEMPLATES)) return;
   if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE && CURRENT_ROLE !== 'admin') return;
-  var i = TEMPLATES.findIndex(function(t){ return t && t.src && !_tplReady(t) && t.autoFailed !== t.src; });
+  var i = TEMPLATES.findIndex(function(t){ return t && t.src && !_tplReady(t) && t.autoFailed !== t.src && !_tplAutoTried[t.src] && (String(t.src).indexOf('/assets/tpl-') !== 0 || t.channel === 'linkedin'); });
   if (i < 0) return;
+  _tplAutoTried[TEMPLATES[i].src] = true; // högst ett försök per mall och sidladdning
   _tplAutoBusy = true;
   tplMakeEditable(i, null, true).then(function(){ _tplAutoBusy = false; setTimeout(_tplAutoEditable, 300); }, function(){ _tplAutoBusy = false; });
 }
@@ -1648,7 +1649,7 @@ function _tplComposeHTML(post, src, t, c, tags){
   var own = post.imageUrl || post.aiImageUrl;
   var _ct = _teamTpl(post), _lay = _tplReady(_ct);
   if (_lay) src = _ct.editSrc;
-  else if (_ct) { if (_ct.cleanSrc && _ct.cleanFor === _ct.src) src = _ct.cleanSrc; else { _cleanTemplate(_ct); _tplAutoEditable(); } }
+  else if (_ct && _ct.cleanSrc && _ct.cleanFor === _ct.src) src = _ct.cleanSrc; // att rita kortet startar aldrig AI-arbete (kostar pengar)
   var tt = (post.imgTitle !== undefined && post.imgTitle !== null && post.imgTitle !== '') ? post.imgTitle : t;
   // Texterna kan flyttas, skalas och få eget typsnitt i editorn (sparas i inlägget, inte i varumärket)
   function tw(key, base, txt){
