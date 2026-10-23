@@ -438,8 +438,8 @@ app.post('/forgot', async (req, res) => {
     const link = 'https://' + req.get('host') + '/reset?token=' + t
     const ok = await sendAppMail({
       to: targetEmail,
-      subject: 'spot. - Aterstall losenord',
-      text: 'Nagon har begart att aterstalla losenordet for spot. Brand Studio.\n\nKlicka pa lanken nedan for att valja ett nytt losenord (giltig i 30 minuter):\n' + link + '\n\nOm det inte var du kan du ignorera detta mail.',
+      subject: 'spot. – Återställ lösenord',
+      text: 'Någon har begärt att återställa lösenordet för spot. Brand Studio.\n\nKlicka på länken nedan för att välja ett nytt lösenord (giltig i 30 minuter):\n' + link + '\n\nOm det inte var du kan du ignorera detta mail.',
       html: '<p>Någon har begärt att återställa lösenordet för <strong>spot. Brand Studio</strong>.</p><p><a href="' + link + '">Klicka här för att välja ett nytt lösenord</a> (giltig i 30 minuter).</p><p>Om det inte var du kan du ignorera detta mail.</p>'
     })
     if (!ok) return res.redirect('/forgot?err=1')
