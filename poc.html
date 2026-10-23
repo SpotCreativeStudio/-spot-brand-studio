@@ -349,6 +349,10 @@ body.brand-ro #v-brand :is(input,select,textarea){background:#f9fafb!important}
 /* ── FULLSCREEN EDITOR MODAL ── */
 #editorModal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;display:none;align-items:center;justify-content:center}
 #editorModal.open{display:flex}
+/* Scroll i editorn stannar i editorn: sidan bakom rör sig inte medan editorn är öppen */
+html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
+#editorModal{overscroll-behavior:contain}
+#editorModal .em-left,#editorModal #cvScroll,#editorModal .em-right{overscroll-behavior:contain}
 .em-box{background:#f5f5f7;border-radius:20px;width:min(920px,96vw);height:min(660px,92vh);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.25)}
 .em-header{background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .em-title{font-size:15px;font-weight:700;color:#111}
