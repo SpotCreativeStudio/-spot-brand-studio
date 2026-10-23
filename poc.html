@@ -6038,6 +6038,55 @@ function _cvCtx(x, y){
   setTimeout(function(){ document.addEventListener('mousedown', function h(ev){ if (!m.contains(ev.target)) { _cvCloseCtx(); document.removeEventListener('mousedown', h, true); } }, true); }, 0);
 }
 function _cvPost(){ return S._editPost || null; }
+// ── Ny AI-bild i en enskild bildram (t.ex. mallar med två eller fler foton) ──
+function _cvImgAiHTML(){
+  var post = S._editPost, e = post && _cvFind(post, _cvSel);
+  if (!e || e.type !== 'image' || (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE === 'granskare')) return '';
+  var n = (post.elements || []).filter(function(x){ return x.role === 'tplPhoto'; }).length;
+  var inp = 'flex:1;min-width:0;font-size:12px;padding:7px 9px;border:1px solid #e5e7eb;border-radius:8px;outline:none';
+  var bt = 'flex-shrink:0;font-size:12px;font-weight:600;padding:7px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;border:1.5px solid var(--m);';
+  return '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f3d3de;display:flex;flex-direction:column;gap:7px">' +
+    '<div style="font-size:11px;font-weight:700;color:#b31e59">🎨 Ny AI-bild i den här ramen</div>' +
+    '<div style="display:flex;gap:6px"><input id="cvImgAiTxt" value="' + _rpEsc(S._rpImgEl) + '" oninput="S._rpImgEl=this.value" onkeydown="if(event.key===\'Enter\')cvImgAi()" placeholder="Bild: t.ex. närbild, annat motiv" style="' + inp + '"><button id="cvImgAiBtn" onclick="cvImgAi()" style="' + bt + 'background:var(--m);color:#fff">🎨 Ny bild</button></div>' +
+    _rpModeHTML() +
+    (n >= 2 ? '<button id="cvImgAiAllBtn" onclick="cvImgAiAll()" style="' + bt + 'background:#fff;color:var(--m)">🖼️ Olika bilder i alla ' + n + ' ramar</button>' : '') +
+    '</div>';
+}
+// Bilden som syns i ramen just nu
+function _cvShownSrc(post, e){ return (e.role === 'tplPhoto' && !e.ownSrc && (post.imageUrl || post.aiImageUrl)) || e.src || ''; }
+async function _cvGenFrame(post, id, ins, keep, other){
+  var e = _cvFind(post, id); if (!e) return;
+  var cur = _cvShownSrc(post, e); keep = keep && !!cur;
+  var base = _rpBrief(true) || ins; if (!base) throw new Error('Skriv en prompt eller vad bilden ska visa');
+  var brief = base + (ins ? ' Bildändring: ' + ins : '') + (other ? ' Visa ett annat motiv eller en annan vinkel än inläggets andra bilder.' : '') + ' (variant ' + Date.now() % 10000 + ')';
+  var prev = keep ? await _rpToB64(cur) : null, ib = document.getElementById('m-include-brand');
+  var res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brief: brief, style: S.imageStyle, brand: (typeof getBrandProfile === 'function' ? getBrandProfile() : undefined), includeBrand: ib ? ib.checked : false, previousImageBase64: prev ? prev.b64 : undefined, previousImageMimeType: prev ? prev.mime : undefined }) });
+  var data = await res.json(); if (!res.ok || !data.imageUrl) throw new Error(data.error || 'Bild misslyckades');
+  e = _cvFind(post, id); if (!e) return;
+  if (typeof _cvSnap === 'function') _cvSnap();
+  e.src = data.imageUrl; e.ownSrc = true; e.ix = 0; e.iy = 0; e.iz = 1;
+  _cvRerender();
+}
+async function cvImgAi(){
+  var post = S._editPost, id = _cvSel; if (!post || !id) return;
+  _rpBusy('cvImgAiBtn', true, '⏳ Skapar…');
+  try { await _cvGenFrame(post, id, String(S._rpImgEl || '').trim(), S._rpKeep !== false, false); showToast('🖼️ Ny bild i ramen'); }
+  catch (err) { showToast('Fel: ' + err.message); }
+  _rpBusy('cvImgAiBtn', false, '🎨 Ny bild');
+}
+// Fyller mallens övriga fotoramar med egna bilder (första ramen behåller inläggets bild)
+async function cvImgAiAll(){
+  var post = S._editPost; if (!post) return;
+  var fr = (post.elements || []).filter(function(x){ return x.role === 'tplPhoto'; }).slice(1);
+  if (!fr.length) return;
+  var ins = String(S._rpImgEl || '').trim(), done = 0;
+  for (var k = 0; k < fr.length; k++) {
+    _rpBusy('cvImgAiAllBtn', true, '⏳ Bild ' + (k + 1) + ' av ' + fr.length + '…');
+    try { await _cvGenFrame(post, fr[k].id, ins, false, true); done++; } catch (err) { showToast('Fel: ' + err.message); break; }
+  }
+  _rpBusy('cvImgAiAllBtn', false, '🖼️ Olika bilder i alla ' + (fr.length + 1) + ' ramar');
+  if (done) showToast('🖼️ ' + done + ' nya bilder i ramarna');
+}
 function _cvFind(post, id){ return ((post && post.elements) || []).find(function(e){ return e.id === id; }) || null; }
 function _cvSnap(){ var p = _cvPost(); if (!p) return; _cvUndo.push(JSON.stringify({ el: p.elements || [], pb: p.photoBox || null, ip: p.imgPos || null })); if (_cvUndo.length > 60) _cvUndo.shift(); }
 function _cvUndoLast(){ var p = _cvPost(); if (!p || !_cvUndo.length) return false; var s = JSON.parse(_cvUndo.pop()); p.elements = s.el; p.photoBox = s.pb; p.imgPos = s.ip; _cvRerender(); return true; }
@@ -6251,7 +6300,7 @@ function _cvRenderToolbar(card){
     pr.style.cssText = 'position:sticky;top:0;z-index:5;background:#fff7fa;border:1.5px solid #f3d3de;border-radius:10px;padding:10px;margin-bottom:10px;box-shadow:0 4px 12px rgba(0,0,0,.06)';
     left.insertBefore(pr, left.firstChild);
   }
-  if (pr) { pr.innerHTML = parts[1] ? '<div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;color:#b31e59;margin-bottom:6px"><span>✏️ Markerat element</span><button type="button" title="Avmarkera" onclick="_cvSel = null; _cvMulti = []; _cvRerender();" style="border:1px solid #f3d3de;background:#fff;color:#b31e59;border-radius:6px;width:24px;height:24px;line-height:20px;padding:0;cursor:pointer;font-size:14px">✕</button></div>' + parts[1] : ''; pr.style.display = parts[1] ? '' : 'none'; }
+  if (pr) { pr.innerHTML = parts[1] ? '<div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;color:#b31e59;margin-bottom:6px"><span>✏️ Markerat element</span><button type="button" title="Avmarkera" onclick="_cvSel = null; _cvMulti = []; _cvRerender();" style="border:1px solid #f3d3de;background:#fff;color:#b31e59;border-radius:6px;width:24px;height:24px;line-height:20px;padding:0;cursor:pointer;font-size:14px">✕</button></div>' + parts[1] + _cvImgAiHTML() : ''; pr.style.display = parts[1] ? '' : 'none'; }
   _cvRenderLayers();
   if (typeof _emFitPreview === 'function') setTimeout(_emFitPreview, 0);
 }
