@@ -3413,6 +3413,7 @@ function emRenderPreview() {
   if (_lt.nextSibling !== card) card.parentNode.insertBefore(_lt, card);
   if (card.nextSibling !== _lf) card.parentNode.insertBefore(_lf, card.nextSibling);
   _lt.innerHTML = _liTop(post); _lf.innerHTML = _liFoot();
+  _lt.style.display = 'none'; _lf.style.display = 'none'; // i editorn syns bara bilden; LinkedIn-ramen visas i zoom och i övriga steg
   // Förstoringsglas uppe till höger i förhandsvisningen
   var _zb = document.getElementById('emZoomBtn'), _sc = card.parentNode, _pane = _sc && _sc.parentNode;
   if (!_zb) { _zb = document.createElement('button'); _zb.id = 'emZoomBtn'; _zb.title = 'Förstora: se inlägget som i LinkedIn'; _zb.textContent = '🔍'; _zb.onclick = function(){ _liZoomPost(); };
