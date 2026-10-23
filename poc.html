@@ -6302,10 +6302,12 @@ function _cvRenderToolbar(card){
   var left = document.getElementById('emLeft'), pr = document.getElementById('cvProps');
   if (left && (!pr || pr.parentNode !== left)) {
     pr = document.createElement('div'); pr.id = 'cvProps';
-    pr.style.cssText = 'position:sticky;top:0;z-index:5;background:#fff7fa;border:1.5px solid #f3d3de;border-radius:10px;padding:10px;margin-bottom:10px;box-shadow:0 4px 12px rgba(0,0,0,.06)';
+    pr.style.cssText = 'position:relative;z-index:5;background:#fff7fa;border:1.5px solid #f3d3de;border-radius:10px;padding:10px;margin-bottom:10px;box-shadow:0 4px 12px rgba(0,0,0,.06)';
     left.insertBefore(pr, left.firstChild);
   }
   if (pr) { pr.innerHTML = parts[1] ? '<div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;color:#b31e59;margin-bottom:6px"><span>✏️ Markerat element</span><button type="button" title="Avmarkera" onclick="_cvSel = null; _cvMulti = []; _cvRerender();" style="border:1px solid #f3d3de;background:#fff;color:#b31e59;border-radius:6px;width:24px;height:24px;line-height:20px;padding:0;cursor:pointer;font-size:14px">✕</button></div>' + parts[1] + _cvImgAiHTML() : ''; pr.style.display = parts[1] ? '' : 'none'; }
+  // Ny markering: visa panelen överst (den ligger inte längre fast, så resten av panelen scrollar inte in under den)
+  if (left && parts[1] && window._cvPrSel !== _cvSel) { window._cvPrSel = _cvSel; left.scrollTop = 0; } else if (!parts[1]) window._cvPrSel = null;
   _cvRenderLayers();
   if (typeof _emFitPreview === 'function') setTimeout(_emFitPreview, 0);
 }
