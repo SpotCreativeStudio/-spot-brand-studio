@@ -6250,7 +6250,7 @@ function _cvRenderToolbar(card){
     pr.style.cssText = 'position:sticky;top:0;z-index:5;background:#fff7fa;border:1.5px solid #f3d3de;border-radius:10px;padding:10px;margin-bottom:10px;box-shadow:0 4px 12px rgba(0,0,0,.06)';
     left.insertBefore(pr, left.firstChild);
   }
-  if (pr) { pr.innerHTML = parts[1] ? '<div style="font-size:11px;font-weight:700;color:#b31e59;margin-bottom:6px">✏️ Markerat element</div>' + parts[1] : ''; pr.style.display = parts[1] ? '' : 'none'; }
+  if (pr) { pr.innerHTML = parts[1] ? '<div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;color:#b31e59;margin-bottom:6px"><span>✏️ Markerat element</span><button type="button" title="Avmarkera" onclick="_cvSel = null; _cvMulti = []; _cvRerender();" style="border:1px solid #f3d3de;background:#fff;color:#b31e59;border-radius:6px;width:24px;height:24px;line-height:20px;padding:0;cursor:pointer;font-size:14px">✕</button></div>' + parts[1] : ''; pr.style.display = parts[1] ? '' : 'none'; }
   _cvRenderLayers();
   if (typeof _emFitPreview === 'function') setTimeout(_emFitPreview, 0);
 }
