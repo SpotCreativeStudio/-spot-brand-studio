@@ -6057,11 +6057,14 @@ function _cvShownSrc(post, e){ return (e.role === 'tplPhoto' && !e.ownSrc && (po
 async function _cvGenFrame(post, id, ins, keep, other){
   var e = _cvFind(post, id); if (!e) return;
   var cur = _cvShownSrc(post, e); keep = keep && !!cur;
-  var base = _rpBrief(true) || ins; if (!base) throw new Error('Skriv en prompt eller vad bilden ska visa');
+  var base = _rpBrief(true) || ins || post.aiTitle || post.title || String(post.content || '').slice(0, 300); if (!base) throw new Error('Skriv en prompt eller vad bilden ska visa');
   var brief = base + (ins ? ' Bildändring: ' + ins : '') + (other ? ' Visa ett annat motiv eller en annan vinkel än inläggets andra bilder.' : '') + ' (variant ' + Date.now() % 10000 + ')';
   var prev = keep ? await _rpToB64(cur) : null, ib = document.getElementById('m-include-brand');
-  var res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brief: brief, style: S.imageStyle, brand: (typeof getBrandProfile === 'function' ? getBrandProfile() : undefined), includeBrand: ib ? ib.checked : false, previousImageBase64: prev ? prev.b64 : undefined, previousImageMimeType: prev ? prev.mime : undefined }) });
-  var data = await res.json(); if (!res.ok || !data.imageUrl) throw new Error(data.error || 'Bild misslyckades');
+  var send = function(pv){ return fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brief: brief, style: S.imageStyle, brand: (typeof getBrandProfile === 'function' ? getBrandProfile() : undefined), includeBrand: ib ? ib.checked : false, previousImageBase64: pv ? pv.b64 : undefined, previousImageMimeType: pv ? pv.mime : undefined }) }).then(function(r){ return r.json().then(function(j){ j._ok = r.ok; return j; }); }); };
+  var data = await send(prev);
+  // Riktiga foton (t.ex. mallens egna bilder med människor eller konstverk) får AI:n ofta inte ändra – då skapas en helt ny bild i stället
+  if (prev && (!data._ok || !data.imageUrl) && /IMAGE_SAFETY|PROHIBITED|SAFETY|OTHER/.test(String(data.error || ''))) { showToast('Den bilden får AI:n inte ändra – skapar en helt ny i stället'); data = await send(null); }
+  if (!data._ok || !data.imageUrl) throw new Error(/IMAGE_SAFETY|SAFETY/.test(String(data.error || '')) ? 'AI:n stoppade bilden av säkerhetsskäl – prova en annan beskrivning' : (data.error || 'Bild misslyckades'));
   e = _cvFind(post, id); if (!e) return;
   if (typeof _cvSnap === 'function') _cvSnap();
   e.src = data.imageUrl; e.ownSrc = true; e.ix = 0; e.iy = 0; e.iz = 1;
