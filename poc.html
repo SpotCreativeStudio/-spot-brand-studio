@@ -5939,6 +5939,10 @@ function _cvElementsHTML(post){
         var _right = 100; els.forEach(function(f){ if (f.role === 'tplPhoto' && f.x > e.x && f.y < e.y + e.h && f.y + f.h > e.y) _right = Math.min(_right, f.x); });
         if (e.nowrap) st += 'white-space:pre-line;overflow-wrap:break-word;';
         if (e.x + e.w > _right - 1.5) st += 'width:' + Math.max(10, _right - 1.5 - e.x) + '%;';
+      } else if (!e.curve) {
+        // Lodrät text: bryts i stället för att gå utanför bilden upptill/nedtill (längden begränsas till bildens höjd runt textens mitt)
+        var _cy = e.y + e.h / 2, _av = Math.max(10, 2 * Math.min(_cy, 100 - _cy) - 3), _cx = e.x + e.w / 2;
+        st += 'white-space:pre-line;overflow-wrap:break-word;width:min(' + e.w + '%,' + _av + 'cqh);left:calc(' + _cx + '% - min(' + (e.w / 2) + '%,' + (_av / 2) + 'cqh));';
       }
       if (e.curve) {
         var fsU = (e.fs || 6) * 200 / Math.max(1, e.w), k = e.curve / 100, y0 = k > 0 ? 80 : 20, cy = y0 - 120 * k;
