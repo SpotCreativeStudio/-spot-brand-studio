@@ -3680,7 +3680,8 @@ function _emZoomBar(host){
     var bs = 'width:28px;height:28px;border:none;background:none;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;color:#374151';
     bar.innerHTML = '<button type="button" title="Zooma ut" style="' + bs + '" onclick="_emZoomSet((window._emZoom||1)/1.2)">−</button>' +
       '<button type="button" id="emZoomPct" title="Anpassa till ytan (100 %)" onclick="_emZoomSet(1)" style="border:none;background:none;cursor:pointer;min-width:46px;font-weight:600;color:#374151;font-size:12px">100%</button>' +
-      '<button type="button" title="Zooma in (eller Ctrl + scroll)" style="' + bs + '" onclick="_emZoomSet((window._emZoom||1)*1.2)">+</button>';
+      '<button type="button" title="Zooma in (eller Ctrl + scroll)" style="' + bs + '" onclick="_emZoomSet((window._emZoom||1)*1.2)">+</button>' +
+      '<span style="width:1px;height:18px;background:#e5e7eb;margin:0 2px"></span><button type="button" title="Återställ zoom" style="' + bs + ';font-size:14px" onclick="_emZoomSet(1)">↺</button>';
     if (getComputedStyle(pp).position === 'static') pp.style.position = 'relative';
     pp.appendChild(bar);
   }
