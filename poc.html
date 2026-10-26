@@ -2760,18 +2760,16 @@ function _tplFrameSrc(post, e){
   return _tplExtraFor(post, k) || main;
 }
 async function _genExtraImgs(brief, main){
-  var n = _tplPhotoMax() - 1; if (n < 1 || !main || S._uploadedImageUrl) return;
-  S._aiImageExtra = []; S._aiImageExtraFor = main;
+  var n = _tplPhotoMax() - 1; if (n < 1 || !main || S._uploadedImageUrl) return [];
+  // Alla extra bilder skapas samtidigt och visas tillsammans med huvudbilden
   var m = /^data:([^;]+);base64,([\s\S]*)$/.exec(main), ib = document.getElementById('m-include-brand');
-  for (var k = 0; k < n; k++) {
-    if (S._aiImageUrl !== main) return; // en ny huvudbild har skapats – sluta
-    try {
-      var res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brief: brief + ' Bild ' + (k + 2) + ' i ett collage: samma stil, ljus och färger som referensbilden men ett annat motiv, utsnitt eller vinkel.', style: S.imageStyle, brand: (typeof getBrandProfile === 'function' ? getBrandProfile() : undefined), includeBrand: ib ? ib.checked : false, previousImageBase64: m ? m[2] : undefined, previousImageMimeType: m ? m[1] : undefined }) });
-      var d = await res.json(); if (!res.ok || !d.imageUrl) throw new Error(d.error || 'Bild misslyckades');
-      if (S._aiImageUrl !== main) return;
-      S._aiImageExtra[k] = d.imageUrl; refreshActiveProposalCards();
-    } catch (e) { showToast('⚠️ Extra bild ' + (k + 2) + ' kunde inte skapas: ' + e.message); return; }
-  }
+  var jobs = [];
+  for (var k = 0; k < n; k++) jobs.push((function(k){
+    return fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brief: brief + ' Bild ' + (k + 2) + ' i ett collage: samma stil, ljus och färger som referensbilden men ett annat motiv, utsnitt eller vinkel.', style: S.imageStyle, brand: (typeof getBrandProfile === 'function' ? getBrandProfile() : undefined), includeBrand: ib ? ib.checked : false, previousImageBase64: m ? m[2] : undefined, previousImageMimeType: m ? m[1] : undefined }) })
+      .then(function(r){ return r.json().then(function(d){ if (!r.ok || !d.imageUrl) throw new Error(d.error || 'Bild misslyckades'); return d.imageUrl; }); })
+      .catch(function(err){ showToast('⚠️ Extra bild ' + (k + 2) + ' kunde inte skapas: ' + err.message); return ''; });
+  })(k));
+  return Promise.all(jobs);
 }
 async function generateBrandImage(brief, force) {
   if (!brief) return;
@@ -2787,12 +2785,12 @@ async function generateBrandImage(brief, force) {
     });
     const data = await res.json();
     if (!res.ok || !data.imageUrl) throw new Error(data.error || 'Bild misslyckades');
-    S._aiImageUrl = data.imageUrl;
+    var _extras = await _genExtraImgs(brief, data.imageUrl); // väntar in mallens övriga ramar så att allt visas samtidigt
+    S._aiImageUrl = data.imageUrl; S._aiImageExtra = _extras; S._aiImageExtraFor = data.imageUrl;
     try { var _m = /^data:([^;]+);base64,([\s\S]*)$/.exec(data.imageUrl); if (_m) { S._aiImageMime = _m[1]; S._aiImageBase64 = _m[2]; } } catch(_e) {}
     S._aiImageBrief = brief;
     S._aiImageStyle = S.imageStyle;if(!S._uploadedImageUrl){var _p=document.getElementById("imgPreview"),_f=document.getElementById("imgRepoFrame"),_u=document.getElementById("imgUploadArea");if(_p&&_f){_p.src=data.imageUrl;if(!S._imgPos)S._imgPos={x:50,y:50};_p.style.objectPosition=S._imgPos.x+"% "+S._imgPos.y+"%";_f.style.display="block";if(_u)_u.style.display="none";var _ec=document.getElementById("imgEditControls");if(_ec)_ec.style.display="flex";var _zz=document.getElementById("imgZoom");if(_zz)_zz.value=((S._imgPos&&S._imgPos.zoom)||1);applyImgPreviewTransform();var _h=document.getElementById("imgDragHint");if(_h){_h.style.opacity="1";_h.textContent="Dra för att flytta bilden";}}var _b=document.getElementById("regenImgBtn");if(_b)_b.textContent="🎨 Ny bild";var _rb2=document.getElementById("imgRemoveBtn"),_sw2=document.getElementById("imgSwapBtn");if(_rb2)_rb2.style.display="inline-flex";if(_sw2)_sw2.style.display="inline-flex";}
     showToast('🖼️ Varumärkesbild klar!');
-    _genExtraImgs(brief, data.imageUrl);
   } catch (e) {
     showToast('⚠️ Kunde inte skapa bild: ' + e.message);
   } finally {
