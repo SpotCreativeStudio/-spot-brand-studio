@@ -6251,6 +6251,31 @@ function _cvCol(prop, val, title){ return '<input type="color" value="' + _cvAtt
 function _cvRng(label, prop, min, max, step, val, w){ return '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px;white-space:nowrap">' + label + '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '" oninput="cvLive(\'' + prop + '\', parseFloat(this.value))" style="width:' + (w || 64) + 'px"></label>'; }
 function _cvNum(label, prop, val){ return '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:3px;white-space:nowrap">' + label + '<input type="number" step="0.5" value="' + (Math.round((val || 0) * 10) / 10) + '" onchange="cvSet(\'' + prop + '\', parseFloat(this.value) || 0)" style="width:54px;font-size:12px;padding:4px;border:1.5px solid #e5e7eb;border-radius:6px"></label>'; }
 // Färgval som i "Bakgrund": varumärkets färger som rutor + valfri färg
+// Varumärkets färgpalett i verktygsraden: hovra för namn och kod, klicka för att använda färgen
+function _cvPalCss(){
+  if (document.getElementById('cvPalCss')) return;
+  var s = document.createElement('style'); s.id = 'cvPalCss';
+  s.textContent = '.cv-pal{display:flex;flex-wrap:wrap;gap:5px;align-items:center;flex-basis:100%;margin-top:2px}' +
+    '.cv-pal-sw{display:inline-flex;align-items:center;height:28px;max-width:28px;box-sizing:border-box;border:1px solid #e5e7eb;border-radius:999px;padding:3px;background:#fff;cursor:pointer;overflow:hidden;white-space:nowrap;transition:max-width .2s ease,box-shadow .2s ease}' +
+    '.cv-pal-sw i{width:20px;height:20px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}' +
+    '.cv-pal-sw b{font-size:11px;font-weight:600;color:#374151;padding:0 9px 0 7px;opacity:0;transition:opacity .2s ease}' +
+    '.cv-pal-sw em{font-style:normal;font-weight:500;color:#9ca3af;margin-left:4px}' +
+    '.cv-pal-sw:hover{max-width:240px;box-shadow:0 2px 10px rgba(0,0,0,.12)}.cv-pal-sw:hover b{opacity:1}';
+  document.head.appendChild(s);
+}
+function _cvPaletteHTML(){
+  var cols = []; try { cols = (typeof COLORS !== 'undefined' && Array.isArray(COLORS) ? COLORS : []).filter(function(c){ return c && /^#[0-9a-f]{6}$/i.test(c.hex || ''); }); } catch (e) {}
+  if (!cols.length) return '';
+  _cvPalCss();
+  return '<div class="cv-pal">' + cols.map(function(c){ var h = String(c.hex).toUpperCase(); return '<span class="cv-pal-sw" onclick="cvPalPick(\'' + h + '\')" title="Klicka: använd färgen (på markerat element, annars som bakgrund)"><i style="background:' + h + '"></i><b>' + _cvEsc(c.name || '') + '<em>' + h + '</em></b></span>'; }).join('') + '</div>';
+}
+function cvPalPick(hex){
+  var p = _cvPost(), e = p && _cvFind(p, _cvSel);
+  if (!e) { cvPageBg(hex); return; }
+  if (e.type === 'text') cvSet('color', hex);
+  else if (e.type === 'image') cvSet('tint', hex);
+  else cvSet('fill', hex);
+}
 function _cvSw(prop, val, title, clearable){
   var cols = []; try { cols = (typeof COLORS !== 'undefined' && Array.isArray(COLORS) ? COLORS : []).map(function(c){ return c && c.hex; }).filter(Boolean); } catch (e) {}
   cols = cols.concat(['#ffffff', '#000000']).filter(function(v, i, a){ return a.indexOf(String(v).toLowerCase()) === i || a.indexOf(v) === i; }).slice(0, 10);
@@ -6276,6 +6301,7 @@ function _cvToolbarHTML(){
     (window._cvPen ? '<input type="color" value="' + _cvAttr(window._cvPenColor || '#b31e59') + '" oninput="window._cvPenColor=this.value" title="Pennans färg" style="width:30px;height:28px;border:none;background:none;padding:0"><label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Tjocklek<input type="range" min="1" max="14" step="1" value="' + (window._cvPenW || 3) + '" oninput="window._cvPenW=parseFloat(this.value)" style="width:60px"></label>' : '') +
     '<label title="Färgbakgrund (täcker mallen)" style="display:flex;align-items:center;flex:none"><input type="color" value="' + _cvAttr((bgEl && bgEl.fill) || '#ffffff') + '" onchange="cvPageBg(this.value)" style="width:30px;height:28px;border:none;background:none;padding:0"></label>' + (bgEl ? _cvBtn('✕', 'cvPageBg(null)', 'Ta bort färgbakgrunden') : '') +
     _cvBtn('↺', 'cvResetImage()', 'Återställ huvudbildens position och zoom') +
+    _cvPaletteHTML() +
     _cvBtn('?', 'cvShowHelp()', 'Visa kortkommandon och tips. Klicka för att markera, Shift+klick markerar flera, Ctrl+A markerar allt, högerklick ger fler val. Dubbelklicka på text för att skriva. Delete tar bort, Ctrl+D duplicerar, Ctrl+G grupperar, piltangenter flyttar, Ctrl+Z ångrar.') +
     '</div><div id="cvImgPop" style="display:none;position:absolute;top:46px;left:60px;z-index:60;width:260px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px"></div>';
   var alignBtns = _cvBtn('⇤', "cvAlign('left')", 'Vänster kant') + _cvBtn('↔', "cvAlign('hcenter')", 'Centrera vågrätt') + _cvBtn('⇥', "cvAlign('right')", 'Höger kant') + _cvBtn('⤒', "cvAlign('top')", 'Överkant') + _cvBtn('↕', "cvAlign('vcenter')", 'Centrera lodrätt') + _cvBtn('⤓', "cvAlign('bottom')", 'Nederkant');
