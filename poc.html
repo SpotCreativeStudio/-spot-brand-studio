@@ -6291,7 +6291,11 @@ function cvAlign(where){
   });
   _cvRerender();
 }
-function cvResetImage(){ var p = _cvPost(); if (!p) return; _cvSnap(); p.imgPos = { x:0, y:0, zoom:1 }; if (p.photoBox) delete p.photoBox; _cvRerender(); var zs = document.getElementById('emZoomSlider'); if (zs) zs.value = 1; }
+function cvResetImage(){ var p = _cvPost(); if (!p) return; _cvSnap(); p.imgPos = { x:0, y:0, zoom:1 }; if (p.photoBox) delete p.photoBox;
+  // Bilderna i ramarna (t.ex. mallens foton) återställs också: den markerade bilden, annars alla ramar
+  var _sel = _cvFind(p, _cvSel), _ims = (_sel && _sel.type === 'image') ? [_sel] : (p.elements || []).filter(function(e){ return e.type === 'image'; });
+  _ims.forEach(function(e){ e.ix = 0; e.iy = 0; e.iz = 1; });
+  _cvRerender(); showToast(_sel && _sel.type === 'image' ? '↺ Bilden är återställd i ramen' : '↺ Bildernas placering och zoom är återställd'); var zs = document.getElementById('emZoomSlider'); if (zs) zs.value = 1; }
 
 function _cvBtn(label, onclick, title, active){ return '<button type="button" title="' + _cvAttr(title || label) + '" onclick="' + onclick + '" style="font-size:12px;font-weight:600;padding:6px 9px;border-radius:8px;border:1.5px solid ' + (active ? '#b31e59' : '#e5e7eb') + ';background:' + (active ? '#fdf0f6' : '#fff') + ';color:#111;cursor:pointer;white-space:nowrap">' + label + '</button>'; }
 function _cvDd(onchange, opts, cur, title){ return '<select title="' + _cvAttr(title || '') + '" onchange="' + onchange + '" style="font-size:12px;padding:5px;border:1.5px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer">' + opts.map(function(o){ return '<option value="' + _cvAttr(o[0]) + '"' + (String(cur == null ? '' : cur) === String(o[0]) ? ' selected' : '') + '>' + _cvEsc(o[1]) + '</option>'; }).join('') + '</select>'; }
@@ -6364,7 +6368,7 @@ function _cvToolbarHTML(){
     (window._cvPen ? '<input type="color" value="' + _cvAttr(window._cvPenColor || '#b31e59') + '" oninput="window._cvPenColor=this.value" title="Pennans färg" style="width:30px;height:28px;border:none;background:none;padding:0"><label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Tjocklek<input type="range" min="1" max="14" step="1" value="' + (window._cvPenW || 3) + '" oninput="window._cvPenW=parseFloat(this.value)" style="width:60px"></label>' : '') +
     '<label title="Färgbakgrund (täcker mallen)" style="display:flex;align-items:center;flex:none"><input type="color" value="' + _cvAttr((bgEl && bgEl.fill) || '#ffffff') + '" onchange="cvPageBg(this.value)" style="width:30px;height:28px;border:none;background:none;padding:0"></label>' + (bgEl ? _cvBtn('✕', 'cvPageBg(null)', 'Ta bort färgbakgrunden') : '') +
     '<span style="display:inline-flex;gap:6px;flex:none">' + _cvBtn('↶', '_cvUndoLast()', 'Ångra (Ctrl + Z)') + _cvBtn('↷', '_cvRedoLast()', 'Gör om (Ctrl + Y)') +
-    _cvBtn('↺', 'cvResetImage()', 'Återställ huvudbildens position och zoom') + '</span>' +
+    _cvBtn('↺', 'cvResetImage()', 'Återställ bildens placering och zoom (markerad bild, annars alla)') + '</span>' +
     _cvPaletteHTML() +
     _cvBtn('?', 'cvShowHelp()', 'Visa kortkommandon och tips. Klicka för att markera, Shift+klick markerar flera, Ctrl+A markerar allt, högerklick ger fler val. Dubbelklicka på text för att skriva. Delete tar bort, Ctrl+D duplicerar, Ctrl+G grupperar, piltangenter flyttar, Ctrl+Z ångrar.') +
     '</div><div id="cvImgPop" style="display:none;position:absolute;top:46px;left:60px;z-index:60;width:260px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px"></div>';
