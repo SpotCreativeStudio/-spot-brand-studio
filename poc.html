@@ -5933,8 +5933,12 @@ function _cvElementsHTML(post){
       if (e.nowrap && !e.curve) st += 'white-space:pre;overflow:visible;';
       // Utbytt rubrik: får radbrytas i rutan och krymper om den är längre än mallens text
       if (txt !== (e.text || '') && !e.curve) { var _r = Math.max(1, String(e.text || '').length) / Math.max(1, txt.length), _v = ((e.rot || 0) % 180) === 90; var _k = _v ? Math.max(0.25, Math.min(1, _r * 0.8)) : Math.max(0.45, Math.min(1, Math.sqrt(_r))); st += 'font-size:' + Math.round((e.fs || 6) * _k * 100) / 100 + 'cqw;' + (_v ? 'white-space:pre;' : 'white-space:normal;overflow-wrap:break-word;');
-        // Rubriken får inte gå in under mallens foton: rutan slutar där första fotot till höger börjar, och texten bryts i stället
-        if (!_v) { var _right = 100; els.forEach(function(f){ if (f.role === 'tplPhoto' && f.x > e.x && f.y < e.y + e.h && f.y + f.h > e.y) _right = Math.min(_right, f.x); }); if (e.x + e.w > _right - 1.5) st += 'width:' + Math.max(10, _right - 1.5 - e.x) + '%;'; }
+      }
+      // Vågrät text (mallens och egen) bryts i stället för att gå in under mallens foton eller utanför bilden
+      if (!e.curve && ((e.rot || 0) % 180) !== 90) {
+        var _right = 100; els.forEach(function(f){ if (f.role === 'tplPhoto' && f.x > e.x && f.y < e.y + e.h && f.y + f.h > e.y) _right = Math.min(_right, f.x); });
+        if (e.nowrap) st += 'white-space:pre-line;overflow-wrap:break-word;';
+        if (e.x + e.w > _right - 1.5) st += 'width:' + Math.max(10, _right - 1.5 - e.x) + '%;';
       }
       if (e.curve) {
         var fsU = (e.fs || 6) * 200 / Math.max(1, e.w), k = e.curve / 100, y0 = k > 0 ? 80 : 20, cy = y0 - 120 * k;
