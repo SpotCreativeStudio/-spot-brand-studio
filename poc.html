@@ -6363,8 +6363,8 @@ function _cvToolbarHTML(){
     _cvBtn(window._cvPen ? '✏️ Sluta rita' : '✏️', 'cvTogglePen()', 'Rita fritt i inlägget', window._cvPen) +
     (window._cvPen ? '<input type="color" value="' + _cvAttr(window._cvPenColor || '#b31e59') + '" oninput="window._cvPenColor=this.value" title="Pennans färg" style="width:30px;height:28px;border:none;background:none;padding:0"><label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Tjocklek<input type="range" min="1" max="14" step="1" value="' + (window._cvPenW || 3) + '" oninput="window._cvPenW=parseFloat(this.value)" style="width:60px"></label>' : '') +
     '<label title="Färgbakgrund (täcker mallen)" style="display:flex;align-items:center;flex:none"><input type="color" value="' + _cvAttr((bgEl && bgEl.fill) || '#ffffff') + '" onchange="cvPageBg(this.value)" style="width:30px;height:28px;border:none;background:none;padding:0"></label>' + (bgEl ? _cvBtn('✕', 'cvPageBg(null)', 'Ta bort färgbakgrunden') : '') +
-    _cvBtn('↶', '_cvUndoLast()', 'Ångra (Ctrl + Z)') + _cvBtn('↷', '_cvRedoLast()', 'Gör om (Ctrl + Y)') +
-    _cvBtn('↺', 'cvResetImage()', 'Återställ huvudbildens position och zoom') +
+    '<span style="display:inline-flex;gap:6px;flex:none">' + _cvBtn('↶', '_cvUndoLast()', 'Ångra (Ctrl + Z)') + _cvBtn('↷', '_cvRedoLast()', 'Gör om (Ctrl + Y)') +
+    _cvBtn('↺', 'cvResetImage()', 'Återställ huvudbildens position och zoom') + '</span>' +
     _cvPaletteHTML() +
     _cvBtn('?', 'cvShowHelp()', 'Visa kortkommandon och tips. Klicka för att markera, Shift+klick markerar flera, Ctrl+A markerar allt, högerklick ger fler val. Dubbelklicka på text för att skriva. Delete tar bort, Ctrl+D duplicerar, Ctrl+G grupperar, piltangenter flyttar, Ctrl+Z ångrar.') +
     '</div><div id="cvImgPop" style="display:none;position:absolute;top:46px;left:60px;z-index:60;width:260px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px"></div>';
