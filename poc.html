@@ -3282,6 +3282,7 @@ function openEditorModal(post) {
   post.blocks = post.blocks.filter(function(b){ return b !== 'cta' && b !== 'title'; });
   const _isSamePost = S._editPost === post;
   S._editPost = post; // working copy reference
+  setTimeout(function(){ _emDraftOffer(post); }, 60);
   // Inlägg utan mall får arbetsytans mall (som i manuellt läge) i stället för Gradient
   if (!post.layout && typeof _manualLayout === 'function') post.layout = _manualLayout();
   // Redigerbar mall: lägg mallens texter och logga som egna element i inlägget (första gången)
@@ -3898,6 +3899,7 @@ function emSetZoom(v){
 }
 
 function emSyncFromForm() {
+  _emAutosave();
   const post = S._editPost;
   if (!post) return;
   const t  = document.getElementById('em-title');
@@ -3964,6 +3966,7 @@ function emUndoRemoveBlock(){
   if (typeof showToast==='function') showToast('↶ Blockändring återställd');
 }
 function emSyncImgText(){
+  _emAutosave();
   const post = S._editPost;
   if (!post) return;
   const it = document.getElementById('em-img-title');
@@ -4120,6 +4123,7 @@ function closeEditorModal() {
 function saveEditorModal() {
   const post = S._editPost;
   if (!post) return;
+  _emDraftClear(post); clearTimeout(window._emAsT); // sparat på riktigt – utkastet behövs inte längre
   // Final sync from form
   const t  = document.getElementById('em-title');
   const c  = document.getElementById('em-content');
@@ -5993,7 +5997,7 @@ function _cvElementsHTML(post){
 }
 
 
-var _cvSel = null, _cvUndo = [], _cvClip = null;
+var _cvSel = null, _cvUndo = [], _cvRedo = [], _cvClip = null;
 var _cvMulti = [], _cvStyleClip = null, _cvLiveT = 0;
 function _cvSelIds(){ return [_cvSel].concat(_cvMulti || []).filter(function(v, i, a){ return v && a.indexOf(v) === i; }); }
 function _cvSelEls(){ var p = _cvPost(); return _cvSelIds().map(function(id){ return _cvFind(p, id); }).filter(Boolean); }
@@ -6175,9 +6179,42 @@ async function cvImgAiAll(){
   if (done) showToast('🖼️ ' + done + ' nya bilder i ramarna');
 }
 function _cvFind(post, id){ return ((post && post.elements) || []).find(function(e){ return e.id === id; }) || null; }
-function _cvSnap(){ var p = _cvPost(); if (!p) return; _cvUndo.push(JSON.stringify({ el: p.elements || [], pb: p.photoBox || null, ip: p.imgPos || null })); if (_cvUndo.length > 60) _cvUndo.shift(); }
-function _cvUndoLast(){ var p = _cvPost(); if (!p || !_cvUndo.length) return false; var s = JSON.parse(_cvUndo.pop()); p.elements = s.el; p.photoBox = s.pb; p.imgPos = s.ip; _cvRerender(); return true; }
-function _cvRerender(){ if (typeof emRenderPreview === 'function') emRenderPreview(); }
+function _cvState(p){ return JSON.stringify({ el: p.elements || [], pb: p.photoBox || null, ip: p.imgPos || null }); }
+function _cvSnap(){ var p = _cvPost(); if (!p) return; _cvUndo.push(_cvState(p)); if (_cvUndo.length > 60) _cvUndo.shift(); _cvRedo = []; }
+// Gör om (Ctrl + Y eller Ctrl + Shift + Z): tar tillbaka det som ångrades
+function _cvRedoLast(){ var p = _cvPost(); if (!p || !_cvRedo.length) return false; _cvUndo.push(_cvState(p)); var s = JSON.parse(_cvRedo.pop()); p.elements = s.el; p.photoBox = s.pb; p.imgPos = s.ip; _cvRerender(); return true; }
+function _cvUndoLast(){ var p = _cvPost(); if (!p || !_cvUndo.length) return false; _cvRedo.push(_cvState(p)); var s = JSON.parse(_cvUndo.pop()); p.elements = s.el; p.photoBox = s.pb; p.imgPos = s.ip; _cvRerender(); return true; }
+function _cvRerender(){ if (typeof emRenderPreview === 'function') emRenderPreview(); _emAutosave(); }
+// ── Autospara i editorn: ändringar sparas löpande som utkast (i webbläsaren), så att inget försvinner om fliken stängs ──
+function _emDraftKey(p){ return 'spotEditDraft:' + (typeof CURRENT_WORKSPACE !== 'undefined' ? CURRENT_WORKSPACE || '' : '') + ':' + (S._editIsCreateMode ? 'create' : ((p && p.id) || 'x')); }
+function _emAutosave(){ clearTimeout(window._emAsT); window._emAsT = setTimeout(_emAutosaveNow, 1200); }
+function _emAutosaveNow(){
+  var p = S._editPost; if (!p) return; var key = _emDraftKey(p), ok = false;
+  try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), post: p })); ok = true; } catch (e) {
+    // För stort (t.ex. inbäddade bilder): spara utan bilddata
+    try { var q = JSON.parse(JSON.stringify(p)); ['imageUrl', 'aiImageUrl'].forEach(function(k){ if (String(q[k] || '').indexOf('data:') === 0) delete q[k]; }); (q.elements || []).forEach(function(el){ if (String(el.src || '').indexOf('data:') === 0) delete el.src; }); localStorage.setItem(key, JSON.stringify({ ts: Date.now(), post: q })); ok = true; } catch (e2) {}
+  }
+  if (!S._editIsCreateMode && typeof _saveAppState === 'function') _saveAppState();
+  var ind = document.getElementById('emAutosave'), cl = document.querySelector('#editorModal .em-close');
+  if (!ind && cl) { ind = document.createElement('span'); ind.id = 'emAutosave'; ind.style.cssText = 'margin-left:auto;margin-right:12px;font-size:11px;color:#6b7280;white-space:nowrap'; cl.parentNode.insertBefore(ind, cl); }
+  if (ind) ind.textContent = ok ? '✓ Utkast sparat ' + new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }) : '';
+}
+function _emDraftClear(p){ try { localStorage.removeItem(_emDraftKey(p)); } catch (e) {} var ind = document.getElementById('emAutosave'); if (ind) ind.textContent = ''; }
+// När editorn öppnas: finns ett osparat utkast för samma inlägg erbjuds det tillbaka
+function _emDraftOffer(post){
+  var d = null; try { d = JSON.parse(localStorage.getItem(_emDraftKey(post)) || 'null'); } catch (e) {}
+  if (!d || !d.post || Date.now() - d.ts > 86400000 || S._editPost !== post) return;
+  if (JSON.stringify(d.post.elements || []) === JSON.stringify(post.elements || []) && (d.post.title || '') === (post.title || '') && (d.post.content || '') === (post.content || '')) return;
+  var left = document.getElementById('emLeft'); if (!left || document.getElementById('emDraftBar')) return;
+  var b = document.createElement('div'); b.id = 'emDraftBar';
+  b.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border:1.5px solid #f3d3de;background:#fff7fa;border-radius:10px;font-size:12px;color:#374151';
+  b.innerHTML = '<span style="flex:1;min-width:150px">💾 Osparade ändringar från ' + new Date(d.ts).toLocaleString('sv-SE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + '</span>' +
+    '<button type="button" id="emDraftYes" style="font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;border:none;background:var(--m);color:#fff;cursor:pointer">Återställ</button>' +
+    '<button type="button" id="emDraftNo" style="font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer">Släng</button>';
+  left.insertBefore(b, left.firstChild);
+  b.querySelector('#emDraftYes').onclick = function(){ Object.keys(d.post).forEach(function(k){ if (k !== 'id' && d.post[k] !== undefined) post[k] = d.post[k]; }); b.remove(); openEditorModal(post); showToast('💾 Utkastet är återställt'); };
+  b.querySelector('#emDraftNo').onclick = function(){ _emDraftClear(post); b.remove(); };
+}
 function _cvNewId(){ return 'el' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function _cvTopZ(post){ return ((post.elements || []).reduce(function(m, e){ return Math.max(m, e.z || 0); }, 0)) + 1; }
 function _cvBrandColor(){ try { var p = (typeof _brandPalette === 'function') ? _brandPalette() : null; return (p && p.main) || '#b31e59'; } catch (e) { return '#b31e59'; } }
@@ -6326,6 +6363,7 @@ function _cvToolbarHTML(){
     _cvBtn(window._cvPen ? '✏️ Sluta rita' : '✏️', 'cvTogglePen()', 'Rita fritt i inlägget', window._cvPen) +
     (window._cvPen ? '<input type="color" value="' + _cvAttr(window._cvPenColor || '#b31e59') + '" oninput="window._cvPenColor=this.value" title="Pennans färg" style="width:30px;height:28px;border:none;background:none;padding:0"><label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">Tjocklek<input type="range" min="1" max="14" step="1" value="' + (window._cvPenW || 3) + '" oninput="window._cvPenW=parseFloat(this.value)" style="width:60px"></label>' : '') +
     '<label title="Färgbakgrund (täcker mallen)" style="display:flex;align-items:center;flex:none"><input type="color" value="' + _cvAttr((bgEl && bgEl.fill) || '#ffffff') + '" onchange="cvPageBg(this.value)" style="width:30px;height:28px;border:none;background:none;padding:0"></label>' + (bgEl ? _cvBtn('✕', 'cvPageBg(null)', 'Ta bort färgbakgrunden') : '') +
+    _cvBtn('↶', '_cvUndoLast()', 'Ångra (Ctrl + Z)') + _cvBtn('↷', '_cvRedoLast()', 'Gör om (Ctrl + Y)') +
     _cvBtn('↺', 'cvResetImage()', 'Återställ huvudbildens position och zoom') +
     _cvPaletteHTML() +
     _cvBtn('?', 'cvShowHelp()', 'Visa kortkommandon och tips. Klicka för att markera, Shift+klick markerar flera, Ctrl+A markerar allt, högerklick ger fler val. Dubbelklicka på text för att skriva. Delete tar bort, Ctrl+D duplicerar, Ctrl+G grupperar, piltangenter flyttar, Ctrl+Z ångrar.') +
@@ -6437,14 +6475,14 @@ function _cvRenderToolbar(card){
 
 // Kopplar ihop elementen i editorns förhandsvisning: markera, flytta, ändra storlek, rotera, snäppa
 function _cvWire(post, card){
-  if (card.dataset.cvPost !== String(post.id || '')) { card.dataset.cvPost = String(post.id || ''); _cvUndo = []; _cvSel = null; _cvMulti = []; window._cvPen = false; }
+  if (card.dataset.cvPost !== String(post.id || '')) { card.dataset.cvPost = String(post.id || ''); _cvUndo = []; _cvRedo = []; _cvSel = null; _cvMulti = []; window._cvPen = false; }
   _cvRenderToolbar(card);
   if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE === 'granskare') return;
   var layer = card.querySelector('.cv-layer');
   if (!layer) { if (_cvSel && !_cvFind(post, _cvSel)) _cvSel = null; return; }
   var gV = document.createElement('div'), gH = document.createElement('div');
-  gV.style.cssText = 'position:absolute;top:0;bottom:0;width:0;border-left:1px dashed #ff2d87;display:none;z-index:50;pointer-events:none';
-  gH.style.cssText = 'position:absolute;left:0;right:0;height:0;border-top:1px dashed #ff2d87;display:none;z-index:50;pointer-events:none';
+  gV.style.cssText = 'position:absolute;top:0;bottom:0;width:0;border-left:1px solid #ff2d87;box-shadow:0 0 0 .5px rgba(255,45,135,.35);display:none;z-index:50;pointer-events:none';
+  gH.style.cssText = 'position:absolute;left:0;right:0;height:0;border-top:1px solid #ff2d87;box-shadow:0 0 0 .5px rgba(255,45,135,.35);display:none;z-index:50;pointer-events:none';
   layer.appendChild(gV); layer.appendChild(gH);
   function rectPct(){ var r = card.getBoundingClientRect(); return { r: r, w: Math.max(1, r.width), h: Math.max(1, r.height) }; }
   function apply(node, e){ node.style.left = e.x + '%'; node.style.top = e.y + '%'; node.style.width = e.w + '%'; node.style.height = e.h + '%'; node.style.transform = 'rotate(' + (e.rot || 0) + 'deg)' + ((e.flipX || e.flipY) ? ' scale(' + (e.flipX ? -1 : 1) + ',' + (e.flipY ? -1 : 1) + ')' : ''); }
@@ -6456,8 +6494,8 @@ function _cvWire(post, card){
     var cx = o.x + o.w / 2, cy = o.y + o.h / 2;
     return { x: cx - vw / 2, y: cy - vh / 2, w: vw, h: vh };
   }
-  function snapMove(e){
-    var others = (post.elements || []).filter(function(o){ return o.id !== e.id && o.role !== 'pagebg'; });
+  function snapMove(e, skip){
+    var others = (post.elements || []).filter(function(o){ return o.id !== e.id && o.role !== 'pagebg' && !(skip && skip.indexOf(o.id) >= 0); });
     var xs = [0, 50, 100], ys = [0, 50, 100];
     others.forEach(function(o){ var b = vbox(o); xs.push(b.x, b.x + b.w / 2, b.x + b.w); ys.push(b.y, b.y + b.h / 2, b.y + b.h); });
     var v = vbox(e), T = 0.8, gx = null, gy = null, ox = 0, oy = 0;
@@ -6522,6 +6560,10 @@ function _cvWire(post, card){
         if (!moved) { _cvSnap(); moved = true; }
         pm.e.x = pm.x0 + dx; pm.e.y = pm.y0 + dy;
         if (!m.altKey && mov.length === 1) snapMove(pm.e);
+        else if (!m.altKey) { // flera markerade: hela gruppen fäster mot mitten, kanter och andra element
+          var _bb = { id: '__grp', x: minX + (pm.e.x - pm.x0), y: minY + (pm.e.y - pm.y0), w: maxX - minX, h: maxY - minY, rot: 0 }, _bx = _bb.x, _by = _bb.y;
+          snapMove(_bb, mov.map(function(o){ return o.e.id; })); pm.e.x += _bb.x - _bx; pm.e.y += _bb.y - _by;
+        }
         var ddx = pm.e.x - pm.x0, ddy = pm.e.y - pm.y0; // fritt som i Canva, ingen gräns
         mov.forEach(function(o){ o.e.x = Math.round((o.x0 + ddx) * 10) / 10; o.e.y = Math.round((o.y0 + ddy) * 10) / 10; if (o.n) apply(o.n, o.e); });
         placeSel();
@@ -6645,6 +6687,7 @@ document.addEventListener('keydown', function(ev){
   var p = _cvPost(); if (!p) return;
   var mod = ev.ctrlKey || ev.metaKey, k = ev.key;
   if (mod && (k === 'z' || k === 'Z') && !ev.shiftKey) { if (_cvUndoLast()) ev.preventDefault(); return; }
+  if (mod && (k === 'y' || k === 'Y' || ((k === 'z' || k === 'Z') && ev.shiftKey))) { if (_cvRedoLast()) ev.preventDefault(); return; }
   if (mod && (k === 'a' || k === 'A')) { ev.preventDefault(); cvSelectAll(); return; }
   if (mod && (k === 'v' || k === 'V') && _cvClip) { ev.preventDefault(); cvPaste(); return; }
   if ((k === 'Escape' || k === 'Enter') && window._cvCrop) { ev.preventDefault(); window._cvCrop = null; _cvRerender(); return; }
