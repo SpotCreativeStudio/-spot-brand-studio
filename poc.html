@@ -6266,11 +6266,16 @@ function _cvPaletteHTML(){
   var cols = []; try { cols = (typeof COLORS !== 'undefined' && Array.isArray(COLORS) ? COLORS : []).filter(function(c){ return c && /^#[0-9a-f]{6}$/i.test(c.hex || ''); }); } catch (e) {}
   if (!cols.length) return '';
   _cvPalCss();
-  return '<div class="cv-pal">' + cols.map(function(c){
+  return '<div style="display:flex;align-items:center;gap:6px;flex-basis:100%;min-width:0"><div class="cv-pal" style="flex:1 1 auto;margin-top:0">' + cols.map(function(c){
     var h = String(c.hex).toUpperCase(), r = parseInt(h.substr(1, 2), 16), g = parseInt(h.substr(3, 2), 16), b = parseInt(h.substr(5, 2), 16);
     var ink = (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#111' : '#fff'; // läsbar text på ljusa och mörka färger
     return '<span class="cv-pal-sw" onclick="cvPalPick(\'' + h + '\')" title="Klicka: använd färgen (på markerat element, annars som bakgrund)" style="background:' + h + ';color:' + ink + '"><b>' + _cvEsc(c.name || '') + '<em>' + h + '</em></b></span>';
-  }).join('') + '</div>';
+  }).join('') + '</div><button type="button" onclick="cvPalClear()" title="Ta bort färgen (från markerat element, annars bakgrunden)" style="flex:none;width:30px;height:30px;border:1.5px solid #e5e7eb;border-radius:8px;background:#fff;color:#6b7280;cursor:pointer;font-size:13px">✕</button></div>';
+}
+function cvPalClear(){
+  var p = _cvPost(), e = p && _cvFind(p, _cvSel);
+  if (!e) { cvPageBg(null); return; }
+  if (e.type === 'image') cvSet('tint', ''); else cvSet('fill', '');
 }
 function cvPalPick(hex){
   var p = _cvPost(), e = p && _cvFind(p, _cvSel);
