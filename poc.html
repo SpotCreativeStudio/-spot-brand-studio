@@ -2742,6 +2742,37 @@ async function generateAndFill() {
 }
 
 // Genererar en on-brand bild (gråskala/duotone etc.) från briefen och applicerar på alla förslag
+// ── Mallar med flera fotoramar: varje ram får en egen AI-bild ──
+// Ram 1 visar inläggets bild, ram 2, 3 … får extra bilder i samma stil men med andra motiv.
+function _tplPhotoMax(){
+  try { return Math.min(4, (TEMPLATES || []).reduce(function(m, t){ return _tplReady(t) ? Math.max(m, t.layers.filter(function(l){ return l.role === 'tplPhoto'; }).length) : m; }, 0)); } catch (e) { return 0; }
+}
+function _tplExtraFor(post, k){
+  if (!post || k < 1) return '';
+  if (post.extraImages && post.extraImages[k - 1]) return post.extraImages[k - 1];
+  var m = post.imageUrl || post.aiImageUrl;
+  if (m && m === S._aiImageUrl && S._aiImageExtraFor === m && S._aiImageExtra) return S._aiImageExtra[k - 1] || '';
+  return '';
+}
+function _tplFrameSrc(post, e){
+  var main = post && (post.imageUrl || post.aiImageUrl); if (!main) return '';
+  var k = (post.elements || []).filter(function(x){ return x.role === 'tplPhoto'; }).indexOf(e);
+  return _tplExtraFor(post, k) || main;
+}
+async function _genExtraImgs(brief, main){
+  var n = _tplPhotoMax() - 1; if (n < 1 || !main || S._uploadedImageUrl) return;
+  S._aiImageExtra = []; S._aiImageExtraFor = main;
+  var m = /^data:([^;]+);base64,([\s\S]*)$/.exec(main), ib = document.getElementById('m-include-brand');
+  for (var k = 0; k < n; k++) {
+    if (S._aiImageUrl !== main) return; // en ny huvudbild har skapats – sluta
+    try {
+      var res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brief: brief + ' Bild ' + (k + 2) + ' i ett collage: samma stil, ljus och färger som referensbilden men ett annat motiv, utsnitt eller vinkel.', style: S.imageStyle, brand: (typeof getBrandProfile === 'function' ? getBrandProfile() : undefined), includeBrand: ib ? ib.checked : false, previousImageBase64: m ? m[2] : undefined, previousImageMimeType: m ? m[1] : undefined }) });
+      var d = await res.json(); if (!res.ok || !d.imageUrl) throw new Error(d.error || 'Bild misslyckades');
+      if (S._aiImageUrl !== main) return;
+      S._aiImageExtra[k] = d.imageUrl; refreshActiveProposalCards();
+    } catch (e) { showToast('⚠️ Extra bild ' + (k + 2) + ' kunde inte skapas: ' + e.message); return; }
+  }
+}
 async function generateBrandImage(brief, force) {
   if (!brief) return;
   if (!force && S._aiImageUrl && S._aiImageBrief === brief && S._aiImageStyle === S.imageStyle) return;
@@ -2761,6 +2792,7 @@ async function generateBrandImage(brief, force) {
     S._aiImageBrief = brief;
     S._aiImageStyle = S.imageStyle;if(!S._uploadedImageUrl){var _p=document.getElementById("imgPreview"),_f=document.getElementById("imgRepoFrame"),_u=document.getElementById("imgUploadArea");if(_p&&_f){_p.src=data.imageUrl;if(!S._imgPos)S._imgPos={x:50,y:50};_p.style.objectPosition=S._imgPos.x+"% "+S._imgPos.y+"%";_f.style.display="block";if(_u)_u.style.display="none";var _ec=document.getElementById("imgEditControls");if(_ec)_ec.style.display="flex";var _zz=document.getElementById("imgZoom");if(_zz)_zz.value=((S._imgPos&&S._imgPos.zoom)||1);applyImgPreviewTransform();var _h=document.getElementById("imgDragHint");if(_h){_h.style.opacity="1";_h.textContent="Dra för att flytta bilden";}}var _b=document.getElementById("regenImgBtn");if(_b)_b.textContent="🎨 Ny bild";var _rb2=document.getElementById("imgRemoveBtn"),_sw2=document.getElementById("imgSwapBtn");if(_rb2)_rb2.style.display="inline-flex";if(_sw2)_sw2.style.display="inline-flex";}
     showToast('🖼️ Varumärkesbild klar!');
+    _genExtraImgs(brief, data.imageUrl);
   } catch (e) {
     showToast('⚠️ Kunde inte skapa bild: ' + e.message);
   } finally {
@@ -3255,7 +3287,7 @@ function openEditorModal(post) {
   // Inlägg utan mall får arbetsytans mall (som i manuellt läge) i stället för Gradient
   if (!post.layout && typeof _manualLayout === 'function') post.layout = _manualLayout();
   // Redigerbar mall: lägg mallens texter och logga som egna element i inlägget (första gången)
-  try { var _ct0 = _teamTpl(post); if (_tplReady(_ct0) && post.tplSeed !== _ct0.editSrc) { var _base = _tplLayerEls(_ct0).map(function(e){ e.id = _cvNewId(); e.z = (e.z || 1) - 1000; return e; }); post.elements = _base.concat((post.elements || []).filter(function(e){ return !e.fromTpl; })); post.elements.forEach(function(e){ if (_base.indexOf(e) >= 0) { e.fromTpl = true; e.tplSrc = _ct0.editSrc; } }); post.tplSeed = _ct0.editSrc; } } catch (e) {}
+  try { var _ct0 = _teamTpl(post); if (_tplReady(_ct0) && post.tplSeed !== _ct0.editSrc) { var _base = _tplLayerEls(_ct0).map(function(e){ e.id = _cvNewId(); e.z = (e.z || 1) - 1000; return e; }); post.elements = _base.concat((post.elements || []).filter(function(e){ return !e.fromTpl; })); post.elements.forEach(function(e){ if (_base.indexOf(e) >= 0) { e.fromTpl = true; e.tplSrc = _ct0.editSrc; } }); post.tplSeed = _ct0.editSrc; post.elements.filter(function(e){ return e.fromTpl && e.role === 'tplPhoto'; }).forEach(function(e, k){ var x = _tplExtraFor(post, k); if (x) { e.src = x; e.ownSrc = true; } }); } } catch (e) {}
   if (!_isSamePost) {
     S._editImgUndoStack = [];
     S._editBlockUndoStack = [];
@@ -5909,7 +5941,7 @@ function _cvElementsHTML(post){
       } else inner = _cvEsc(txt);
     } else if (e.type === 'image' || e.type === 'logo') {
       // Mallens fotoramar fylls med inläggets bild (t.ex. AI-genererad) tills man själv byter bild i ramen
-      var src = e.type === 'logo' ? ((typeof BRAND_LOGO === 'string' && BRAND_LOGO) || e.src || '') : ((e.role === 'tplPhoto' && !e.ownSrc && post && (post.imageUrl || post.aiImageUrl)) || e.src);
+      var src = e.type === 'logo' ? ((typeof BRAND_LOGO === 'string' && BRAND_LOGO) || e.src || '') : ((e.role === 'tplPhoto' && !e.ownSrc && post && _tplFrameSrc(post, e)) || e.src);
       inner = src ? '<img src="' + _cvAttr(src) + '" alt="" draggable="false" style="width:100%;height:100%;object-fit:' + (e.fit || 'contain') + ';display:block;pointer-events:none;border-radius:' + (e.radius || 0) + 'cqw;' + ((e.ix || e.iy || (e.iz && e.iz !== 1)) ? 'transform:translate(' + (e.ix || 0) + '%,' + (e.iy || 0) + '%) scale(' + (e.iz || 1) + ');' : '') + '">' : (e.type === 'logo' ? '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:5cqw">' + _cvEsc((typeof BRAND_NAME !== 'undefined' && BRAND_NAME) || 'Logga') + '</div>' : '<div style="width:100%;height:100%;background:repeating-linear-gradient(45deg,#d1d5db 0 2cqw,#e5e7eb 2cqw 4cqw);display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:3.5cqw;font-weight:700">Välj bild</div>');
       if (e.type === 'logo' && e.tint && src) inner = '<div style="width:100%;height:100%;background:' + _cvAttr(e.tint) + ';-webkit-mask:url(\'' + _cvAttr(src) + '\') center/contain no-repeat;mask:url(\'' + _cvAttr(src) + '\') center/contain no-repeat"></div>';
       if (e.type === 'image' && e.tint) inner += '<div style="position:absolute;inset:0;pointer-events:none;background:' + _cvAttr(e.tint) + ';opacity:' + (e.tintOp == null ? 0.35 : e.tintOp) + '"></div>';
