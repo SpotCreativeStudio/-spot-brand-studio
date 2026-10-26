@@ -3670,6 +3670,38 @@ function emResetWidgetPos(){
   var sv = document.getElementById('emTextSizeLabel'); if (sv) sv.textContent = '100%';
   emRenderPreview();
 }
+// ── Zoom i editorn ──
+function _emZoomBar(host){
+  var bar = document.getElementById('emZoomBar'), pp = host.parentElement; if (!pp) return;
+  if (!bar || bar.parentNode !== pp) {
+    if (bar) bar.remove();
+    bar = document.createElement('div'); bar.id = 'emZoomBar';
+    bar.style.cssText = 'position:absolute;right:14px;bottom:14px;z-index:20;display:flex;align-items:center;gap:2px;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:3px;box-shadow:0 2px 8px rgba(0,0,0,.12)';
+    var bs = 'width:28px;height:28px;border:none;background:none;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;color:#374151';
+    bar.innerHTML = '<button type="button" title="Zooma ut" style="' + bs + '" onclick="_emZoomSet((window._emZoom||1)/1.2)">−</button>' +
+      '<button type="button" id="emZoomPct" title="Anpassa till ytan (100 %)" onclick="_emZoomSet(1)" style="border:none;background:none;cursor:pointer;min-width:46px;font-weight:600;color:#374151;font-size:12px">100%</button>' +
+      '<button type="button" title="Zooma in (eller Ctrl + scroll)" style="' + bs + '" onclick="_emZoomSet((window._emZoom||1)*1.2)">+</button>';
+    if (getComputedStyle(pp).position === 'static') pp.style.position = 'relative';
+    pp.appendChild(bar);
+  }
+  if (!host._zoomWired) {
+    host._zoomWired = true;
+    // Ctrl + scroll (och nyp på styrplattan) zoomar mjukt runt muspekaren; vanlig scroll scrollar som vanligt
+    host.addEventListener('wheel', function(ev){ if (!(ev.ctrlKey || ev.metaKey)) return; ev.preventDefault(); var d = Math.max(-60, Math.min(60, ev.deltaY)); _emZoomSet((window._emZoom || 1) * Math.exp(-d * 0.003), ev.clientX, ev.clientY); }, { passive: false });
+  }
+  _emZoomLbl();
+}
+function _emZoomLbl(){ var l = document.getElementById('emZoomPct'); if (l) l.textContent = Math.round((window._emZoom || 1) * 100) + '%'; }
+function _emZoomSet(z, ax, ay){
+  var host = document.getElementById('cvScroll'), old = window._emZoom || 1;
+  z = Math.max(0.5, Math.min(4, z)); if (Math.abs(z - old) < 0.001) return;
+  var px = 0, py = 0, fx = 0.5, fy = 0.5;
+  if (host) { var r = host.getBoundingClientRect(); px = ax == null ? r.width / 2 : ax - r.left; py = ay == null ? r.height / 2 : ay - r.top; fx = (host.scrollLeft + px) / Math.max(1, host.scrollWidth); fy = (host.scrollTop + py) / Math.max(1, host.scrollHeight); }
+  window._emZoom = z; _emFitPreview();
+  // Punkten under muspekaren stannar kvar när man zoomar
+  if (host) { host.scrollLeft = fx * host.scrollWidth - px; host.scrollTop = fy * host.scrollHeight - py; }
+  _emZoomLbl();
+}
 function _emFitPreview(){
   var card = document.getElementById('emPreviewCard');
   if (!card) return;
@@ -3690,6 +3722,14 @@ function _emFitPreview(){
   var baseH = baseW / ratio;
   var scale = Math.min(availW / baseW, availH / baseH);
   scale = Math.max(0.25, Math.min(2.2, scale));
+  // Live-zoom i editorn (knapparna nere till höger eller Ctrl + scroll). 100 % = kortet fyller ytan.
+  if (host.id === 'cvScroll') {
+    if (!card._zoomInit) { card._zoomInit = true; window._emZoom = 1; }
+    scale = scale * (window._emZoom || 1);
+    host.style.overflowX = (window._emZoom || 1) > 1.001 ? 'auto' : 'hidden';
+    host.style.alignItems = 'safe center';
+    _emZoomBar(host);
+  }
   card.style.transform = 'scale(' + scale.toFixed(3) + ')';
   card.style.margin = ((baseH * scale - baseH) / 2).toFixed(1) + 'px ' + ((baseW * scale - baseW) / 2).toFixed(1) + 'px';
   card.dataset.previewScale = scale;
