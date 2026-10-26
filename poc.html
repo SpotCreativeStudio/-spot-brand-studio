@@ -6250,7 +6250,6 @@ function _cvDd(onchange, opts, cur, title){ return '<select title="' + _cvAttr(t
 function _cvCol(prop, val, title){ return '<input type="color" value="' + _cvAttr(/^#[0-9a-f]{6}$/i.test(val || '') ? val : '#ffffff') + '" oninput="cvLive(\'' + prop + '\', this.value)" title="' + _cvAttr(title || '') + '" style="width:30px;height:28px;border:none;background:none;cursor:pointer;padding:0;flex:none">'; }
 function _cvRng(label, prop, min, max, step, val, w){ return '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px;white-space:nowrap">' + label + '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '" oninput="cvLive(\'' + prop + '\', parseFloat(this.value))" style="width:' + (w || 64) + 'px"></label>'; }
 function _cvNum(label, prop, val){ return '<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:3px;white-space:nowrap">' + label + '<input type="number" step="0.5" value="' + (Math.round((val || 0) * 10) / 10) + '" onchange="cvSet(\'' + prop + '\', parseFloat(this.value) || 0)" style="width:54px;font-size:12px;padding:4px;border:1.5px solid #e5e7eb;border-radius:6px"></label>'; }
-// Färgval som i "Bakgrund": varumärkets färger som rutor + valfri färg
 // Varumärkets färgpalett i verktygsraden: hovra för namn och kod, klicka för att använda färgen
 function _cvPalCss(){
   if (document.getElementById('cvPalCss')) return;
@@ -6280,12 +6279,19 @@ function cvPalPick(hex){
   else if (e.type === 'image') cvSet('tint', hex);
   else cvSet('fill', hex);
 }
+function _cvInk(h){ var r = parseInt(h.substr(1, 2), 16), g = parseInt(h.substr(3, 2), 16), b = parseInt(h.substr(5, 2), 16); return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#111' : '#fff'; }
+// Färgval i "Markerat element": varumärkets färger som en remsa (som Squarespace) + valfri färg
 function _cvSw(prop, val, title, clearable){
-  var cols = []; try { cols = (typeof COLORS !== 'undefined' && Array.isArray(COLORS) ? COLORS : []).map(function(c){ return c && c.hex; }).filter(Boolean); } catch (e) {}
-  cols = cols.concat(['#ffffff', '#000000']).filter(function(v, i, a){ return a.indexOf(String(v).toLowerCase()) === i || a.indexOf(v) === i; }).slice(0, 10);
-  return '<span title="' + _cvAttr(title || '') + '" style="display:inline-flex;align-items:center;gap:3px;flex-wrap:wrap">' + cols.map(function(c){ return '<span onclick="cvSet(\'' + prop + '\', \'' + c + '\')" title="' + c + '" style="width:18px;height:18px;border-radius:50%;background:' + c + ';border:2px solid ' + (String(val || '').toLowerCase() === String(c).toLowerCase() ? '#b31e59' : '#e5e7eb') + ';cursor:pointer;display:inline-block;box-sizing:border-box"></span>'; }).join('') +
-    '<input type="color" value="' + _cvAttr(/^#[0-9a-f]{6}$/i.test(val || '') ? val : '#ffffff') + '" oninput="cvLive(\'' + prop + '\', this.value)" title="Valfri färg" style="width:26px;height:24px;border:none;background:none;cursor:pointer;padding:0">' +
-    (clearable && val ? '<span onclick="cvSet(\'' + prop + '\', \'\')" title="Ta bort färgen" style="cursor:pointer;color:#6b7280;font-size:13px;padding:0 3px">✕</span>' : '') + '</span>';
+  var cols = []; try { cols = (typeof COLORS !== 'undefined' && Array.isArray(COLORS) ? COLORS : []).filter(function(c){ return c && /^#[0-9a-f]{6}$/i.test(c.hex || ''); }).map(function(c){ return { hex: String(c.hex).toUpperCase(), name: c.name || '' }; }); } catch (e) {}
+  [['#FFFFFF', 'Vit'], ['#000000', 'Svart']].forEach(function(x){ if (!cols.some(function(c){ return c.hex === x[0]; })) cols.push({ hex: x[0], name: x[1] }); });
+  cols = cols.slice(0, 10); _cvPalCss();
+  var cur = String(val || '').toUpperCase();
+  return '<span title="' + _cvAttr(title || '') + '" style="display:flex;align-items:center;gap:6px;flex:1 1 200px;min-width:0"><span class="cv-pal" style="flex:1 1 auto;margin-top:0;height:34px">' + cols.map(function(c){
+      var ink = _cvInk(c.hex);
+      return '<span class="cv-pal-sw" onclick="cvSet(\'' + prop + '\', \'' + c.hex + '\')" title="' + _cvAttr((c.name ? c.name + ' ' : '') + c.hex) + '" style="background:' + c.hex + ';color:' + ink + (cur === c.hex ? ';box-shadow:inset 0 0 0 2px ' + ink + ',inset 0 0 0 4px ' + c.hex : '') + '"><b>' + _cvEsc(c.name) + '<em>' + c.hex + '</em></b></span>';
+    }).join('') + '</span>' +
+    '<input type="color" value="' + _cvAttr(/^#[0-9a-f]{6}$/i.test(val || '') ? val : '#ffffff') + '" oninput="cvLive(\'' + prop + '\', this.value)" title="Valfri färg" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;flex:none">' +
+    (clearable && val ? '<span onclick="cvSet(\'' + prop + '\', \'\')" title="Ta bort färgen" style="cursor:pointer;color:#6b7280;font-size:13px;padding:0 3px;flex:none">✕</span>' : '') + '</span>';
 }
 function _cvTa(onchange, val, w){ return '<textarea rows="1" onchange="' + onchange + '" style="min-width:' + (w || 170) + 'px;font-size:12px;padding:5px;border:1.5px solid #e5e7eb;border-radius:8px;resize:both;font-family:inherit">' + _cvEsc(val || '') + '</textarea>'; }
 var _CV_ROW = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px">';
