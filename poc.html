@@ -6255,19 +6255,23 @@ function _cvNum(label, prop, val){ return '<label style="font-size:11px;color:#6
 function _cvPalCss(){
   if (document.getElementById('cvPalCss')) return;
   var s = document.createElement('style'); s.id = 'cvPalCss';
-  s.textContent = '.cv-pal{display:flex;flex-wrap:wrap;gap:5px;align-items:center;flex-basis:100%;margin-top:2px}' +
-    '.cv-pal-sw{display:inline-flex;align-items:center;height:28px;max-width:28px;box-sizing:border-box;border:1px solid #e5e7eb;border-radius:999px;padding:3px;background:#fff;cursor:pointer;overflow:hidden;white-space:nowrap;transition:max-width .2s ease,box-shadow .2s ease}' +
-    '.cv-pal-sw i{width:20px;height:20px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}' +
-    '.cv-pal-sw b{font-size:11px;font-weight:600;color:#374151;padding:0 9px 0 7px;opacity:0;transition:opacity .2s ease}' +
-    '.cv-pal-sw em{font-style:normal;font-weight:500;color:#9ca3af;margin-left:4px}' +
-    '.cv-pal-sw:hover{max-width:240px;box-shadow:0 2px 10px rgba(0,0,0,.12)}.cv-pal-sw:hover b{opacity:1}';
+  // Som Squarespace: färgerna sitter ihop i en remsa; den man hovrar över blir bredare och visar namn och kod
+  s.textContent = '.cv-pal{display:flex;flex-basis:100%;height:40px;margin-top:4px;border-radius:10px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.08)}' +
+    '.cv-pal-sw{flex:1 1 0;min-width:30px;display:flex;flex-direction:column;justify-content:flex-end;padding:0 8px 5px;box-sizing:border-box;cursor:pointer;overflow:hidden;white-space:nowrap;transition:flex-grow .25s ease}' +
+    '.cv-pal-sw b{font-size:11px;font-weight:600;line-height:1.2;opacity:0;transition:opacity .2s ease}' +
+    '.cv-pal-sw em{display:block;font-style:normal;font-weight:500;font-size:10px;opacity:.75;letter-spacing:.02em}' +
+    '.cv-pal:hover .cv-pal-sw{flex-grow:.6}.cv-pal .cv-pal-sw:hover{flex-grow:3.2}.cv-pal-sw:hover b{opacity:1}';
   document.head.appendChild(s);
 }
 function _cvPaletteHTML(){
   var cols = []; try { cols = (typeof COLORS !== 'undefined' && Array.isArray(COLORS) ? COLORS : []).filter(function(c){ return c && /^#[0-9a-f]{6}$/i.test(c.hex || ''); }); } catch (e) {}
   if (!cols.length) return '';
   _cvPalCss();
-  return '<div class="cv-pal">' + cols.map(function(c){ var h = String(c.hex).toUpperCase(); return '<span class="cv-pal-sw" onclick="cvPalPick(\'' + h + '\')" title="Klicka: använd färgen (på markerat element, annars som bakgrund)"><i style="background:' + h + '"></i><b>' + _cvEsc(c.name || '') + '<em>' + h + '</em></b></span>'; }).join('') + '</div>';
+  return '<div class="cv-pal">' + cols.map(function(c){
+    var h = String(c.hex).toUpperCase(), r = parseInt(h.substr(1, 2), 16), g = parseInt(h.substr(3, 2), 16), b = parseInt(h.substr(5, 2), 16);
+    var ink = (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#111' : '#fff'; // läsbar text på ljusa och mörka färger
+    return '<span class="cv-pal-sw" onclick="cvPalPick(\'' + h + '\')" title="Klicka: använd färgen (på markerat element, annars som bakgrund)" style="background:' + h + ';color:' + ink + '"><b>' + _cvEsc(c.name || '') + '<em>' + h + '</em></b></span>';
+  }).join('') + '</div>';
 }
 function cvPalPick(hex){
   var p = _cvPost(), e = p && _cvFind(p, _cvSel);
