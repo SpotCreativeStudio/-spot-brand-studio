@@ -6195,11 +6195,15 @@ function _emPresenceStart(post){
     if (S._editPost !== post) { clearInterval(window._emPresT); return; }
     _emPresenceSend(post).then(function(j){ if (S._editPost === post) _emPresenceShow((j && j.others) || []); });
   };
-  tick(); window._emPresT = setInterval(tick, 25000);
+  // Uppdateras var 5:e sekund, och direkt när man kommer tillbaka till fliken
+  tick(); window._emPresT = setInterval(tick, 5000); window._emPresTick = tick;
+  if (!window._emPresVis) { window._emPresVis = true; document.addEventListener('visibilitychange', function(){ if (!document.hidden && window._emPresTick && window._emPresPost) window._emPresTick(); }); window.addEventListener('focus', function(){ if (window._emPresTick && window._emPresPost) window._emPresTick(); }); }
+  // Stängs fliken meddelas servern direkt, så att varningen försvinner hos de andra
+  if (!window._emPresUnload) { window._emPresUnload = true; window.addEventListener('pagehide', function(){ var p = window._emPresPost; if (p && navigator.sendBeacon) navigator.sendBeacon('/api/edit-presence', new Blob([JSON.stringify({ key: _emServerKey(p), leave: true, tab: window._emTabId })], { type: 'application/json' })); }); }
 }
 function _emPresenceLeave(){
   clearInterval(window._emPresT); var p = window._emPresPost; window._emPresPost = null;
-  if (p) _emPresenceSend(p, true);
+  if (p) _emPresenceSend(p, true); window._emPresTick = null;
   var b = document.getElementById('emPresenceBar'); if (b) b.remove();
 }
 function _emPresenceShow(others){
