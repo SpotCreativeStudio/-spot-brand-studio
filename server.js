@@ -609,7 +609,7 @@ app.delete('/api/edit-draft', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
-// Vilka som har samma inlägg öppet i editorn just nu (i minnet, rensas automatiskt efter ~25 s utan livstecken)
+// Vilka som har samma inlägg öppet i editorn just nu (i minnet, rensas efter ~90 s utan livstecken – webbläsare skickar bara livstecken ungefär en gång i minuten från flikar i bakgrunden. Stängda flikar meddelar servern direkt)
 const _editPresence = {}
 app.post('/api/edit-presence', auth, (req, res) => {
   const s = sessions[getToken(req)] || {}, ws = s.workspace || 'spot'
@@ -618,7 +618,7 @@ app.post('/api/edit-presence', auth, (req, res) => {
   // Varje flik räknas för sig, så att varningen även syns om samma person har inlägget öppet i två flikar
   const k = ws + '|' + draftKey(s, key), now = Date.now(), m = _editPresence[k] = _editPresence[k] || {}, me = s.u + '#' + String(tab || '').slice(0, 40)
   if (leave) delete m[me]; else m[me] = { u: s.u, name: [s.firstName, s.lastName].filter(Boolean).join(' ') || s.u, ts: now }
-  Object.keys(m).forEach(x => { if (now - m[x].ts > 25000) delete m[x] })
+  Object.keys(m).forEach(x => { if (now - m[x].ts > 90000) delete m[x] })
   if (!Object.keys(m).length) delete _editPresence[k]
   res.json({ others: Object.keys(m).filter(x => x !== me).map(x => m[x].u === s.u ? 'Du (i en annan flik)' : m[x].name).filter((n, i, a) => a.indexOf(n) === i) })
 })
