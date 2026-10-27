@@ -812,6 +812,7 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
           <div class="cal-week-label" id="calWeekLabel"></div>
           <button class="cal-nav-btn" onclick="calShift(1)">›</button>
           <button onclick="calGoToday()" style="padding:5px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;font-weight:500;color:#374151;cursor:pointer">Idag</button>
+          <div id="calViewSw" style="display:flex;border:1.5px solid #e5e7eb;border-radius:8px;overflow:hidden"><button type="button" data-v="week" onclick="calSetView('week')" style="padding:5px 12px;border:none;font-size:12px;font-weight:600;cursor:pointer">Vecka</button><button type="button" data-v="month" onclick="calSetView('month')" style="padding:5px 12px;border:none;font-size:12px;font-weight:600;cursor:pointer">Månad</button></div>
         </div>
         <div class="cal-grid" id="calGrid">
           <div class="cal-day-head">Mån</div>
@@ -823,6 +824,7 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
           <div class="cal-day-head" style="color:#b31e59">Sön</div>
           <div id="calDays" style="display:contents"></div>
         </div>
+        <div id="calWeek" style="display:none"></div>
       </div>
       <div class="card" id="upcomingCard">
         <div class="card-header">Kommande Inlägg</div>
@@ -5569,7 +5571,7 @@ document.addEventListener('dragend', function(){
   _calDragId = null;
   document.querySelectorAll('.cal-day.cal-drop').forEach(function(c){ c.classList.remove('cal-drop'); });
 });
-async function calDropOn(key){
+async function calDropOn(key, hour){
   var id = _calDragId; _calDragId = null;
   if (!id) return;
   var lists = [S.reviewQueue, S.publishedPosts, (typeof TEAM_POSTS !== 'undefined' ? TEAM_POSTS : [])];
@@ -5579,8 +5581,8 @@ async function calDropOn(key){
   var p = copies[0];
   var old = new Date(p.scheduledAt);
   var parts = key.split('-');
-  var nd = new Date(+parts[0], +parts[1] - 1, +parts[2], old.getHours(), old.getMinutes());
-  if (nd.toDateString() === old.toDateString()) return;
+  var nd = new Date(+parts[0], +parts[1] - 1, +parts[2], hour != null ? hour : old.getHours(), old.getMinutes()); // i veckovyn byts även timmen
+  if (nd.getTime() === old.getTime()) return;
   if (nd < new Date()) { showToast('Kan inte flytta till en tid som redan har passerat', 'warn'); return; }
   var prev = { scheduledAt: p.scheduledAt, expiresAt: p.expiresAt };
   var iso = nd.toISOString();
@@ -5672,6 +5674,11 @@ function renderSchema() {
     calDays.appendChild(cell);
   }
 
+  // Vecka eller månad
+  var _wk = _calView() === 'week'; document.getElementById('calGrid').style.display = _wk ? 'none' : ''; var _cw = document.getElementById('calWeek'); if (_cw) _cw.style.display = _wk ? '' : 'none';
+  document.querySelectorAll('#calViewSw button').forEach(function(b){ var on = b.dataset.v === _calView(); b.style.background = on ? 'var(--m)' : '#fff'; b.style.color = on ? '#fff' : '#374151'; });
+  if (_wk) _renderCalWeek(posts, today);
+
   // Kommande inlägg — all scheduled posts in the future, sorted
   const upcoming = posts
     .filter(p => p.scheduledAt && new Date(p.scheduledAt) >= today)
@@ -5720,8 +5727,51 @@ function deleteScheduledPost(id){
   fetch('/api/delete-post', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: id }) })
     .then(function(){ finish(); }).catch(function(){ finish(); });
 }
-function calShift(dir) { _calMonthOffset += dir; renderSchema(); }
-function calGoToday() { _calMonthOffset = 0; renderSchema(); }
+function calShift(dir) { if (_calView() === 'week') _calWeekOffset += dir; else _calMonthOffset += dir; renderSchema(); }
+function calGoToday() { _calMonthOffset = 0; _calWeekOffset = 0; window._calWeekScrolled = false; renderSchema(); }
+// ── Vecka / Månad ──
+var _calWeekOffset = 0;
+function _calView(){ if (!window._calViewSel) { try { window._calViewSel = localStorage.getItem('spotCalView') || 'month'; } catch (e) { window._calViewSel = 'month'; } } return window._calViewSel; }
+function calSetView(v){ window._calViewSel = v; try { localStorage.setItem('spotCalView', v); } catch (e) {} window._calWeekScrolled = false; renderSchema(); }
+function _calKey(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function _calWeekNo(d){ var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); var day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); var y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y0) / 86400000 + 1) / 7); }
+// Veckovy: en rad per timme och en kolumn per dag, så att flera inlägg samma dag syns med klockslag
+function _renderCalWeek(posts, today){
+  var el = document.getElementById('calWeek'); if (!el) return;
+  var mon = new Date(today); mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7) + 7 * (_calWeekOffset || 0));
+  var days = []; for (var i = 0; i < 7; i++) { var d = new Date(mon); d.setDate(mon.getDate() + i); days.push(d); }
+  var sun = days[6];
+  document.getElementById('calWeekLabel').textContent = 'Vecka ' + _calWeekNo(mon) + ' · ' + mon.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }) + ' – ' + sun.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' });
+  var CH_COLOR = { linkedin: '#0077b5', facebook: '#1877F2', instagram: '#e91e8c', tiktok: '#111' }, statusDot = { review: '🟡', scheduled: '🔵', published: '🟢' };
+  var slot = {}; posts.forEach(function(p){ if (!p.scheduledAt) return; var t = new Date(p.scheduledAt); var k = _calKey(t) + '|' + t.getHours(); (slot[k] = slot[k] || []).push(p); });
+  Object.keys(slot).forEach(function(k){ slot[k].sort(function(a, b){ return new Date(a.scheduledAt) - new Date(b.scheduledAt); }); });
+  var wd = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'], tk = _calKey(today);
+  // Ett enda rutnät som scrollar åt båda håll; dagraden ligger fast överst. Kolumnerna är minst 100 px så att titlarna går att läsa
+  var hs = 'position:sticky;top:0;z-index:2;background:#fafafa;border-bottom:1px solid #e5e7eb;';
+  var h = '<div style="border:1px solid #e5e7eb;border-radius:14px;overflow:hidden"><div id="calWeekBody" style="max-height:560px;overflow:auto;display:grid;grid-template-columns:52px repeat(7,minmax(100px,1fr))"><div style="' + hs + 'left:0"></div>' +
+    days.map(function(d, i){ var isT = _calKey(d) === tk; return '<div style="' + hs + 'padding:8px 4px;text-align:center;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:' + (i > 4 ? '#b31e59' : '#9ca3af') + '">' + wd[i] + ' <span style="' + (isT ? 'display:inline-flex;width:22px;height:22px;border-radius:50%;background:var(--m);color:#fff;align-items:center;justify-content:center;' : 'color:#374151;') + 'font-size:12px;margin-left:2px">' + d.getDate() + '</span></div>'; }).join('');
+  for (var hr = 0; hr < 24; hr++) {
+    h += '<div style="font-size:10px;color:#9ca3af;text-align:right;padding:4px 6px 0 0;border-bottom:1px solid #f3f4f6">' + String(hr).padStart(2, '0') + ':00</div>';
+    days.forEach(function(d){
+      var key = _calKey(d), ps = slot[key + '|' + hr] || [], isT = key === tk;
+      h += '<div class="cal-wk-cell" data-key="' + key + '" data-hr="' + hr + '" onclick="createForDay(\'' + key + '\', \'' + String(hr).padStart(2, '0') + ':00\')" title="Nytt inlägg ' + key + ' kl. ' + String(hr).padStart(2, '0') + ':00" style="min-height:42px;min-width:0;padding:3px;border-left:1px solid #f3f4f6;border-bottom:1px solid #f3f4f6;cursor:pointer;background:' + (isT ? '#fff5f7' : '#fff') + ';display:flex;flex-direction:column;gap:3px">' +
+        ps.map(function(p){
+          var t = new Date(p.scheduledAt), bg = CH_COLOR[p.channel] || '#b31e59', icon = { linkedin: '💼', facebook: '👥', instagram: '📸', tiktok: '🎵' }[p.channel] || '📄';
+          var movable = !String(p.id).startsWith('demo-') && p.status !== 'published', ttl = String(p.title || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+          return '<div class="cal-chip"' + (movable ? ' draggable="true" ondragstart="calDragStart(event,\'' + p.id + '\')"' : '') + ' onclick="event.stopPropagation();openScheduledPost(\'' + p.id + '\')" title="' + ttl + (movable ? ' – dra för att flytta' : '') + '" style="background:' + bg + '18;color:' + bg + ';font-size:11px;padding:3px 6px;border-radius:6px;line-height:1.25;overflow:hidden;white-space:normal;overflow-wrap:anywhere"><b>' + t.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }) + '</b> ' + icon + ' ' + ttl + (statusDot[p.status] || '') + '</div>';
+        }).join('') + '</div>';
+    });
+  }
+  h += '</div></div>';
+  el.innerHTML = h;
+  el.querySelectorAll('.cal-wk-cell').forEach(function(c){
+    c.addEventListener('dragover', function(e){ if (!_calDragId) return; e.preventDefault(); c.style.boxShadow = 'inset 0 0 0 2px var(--m)'; c.style.background = '#fdf0f6'; });
+    c.addEventListener('dragleave', function(){ c.style.boxShadow = ''; c.style.background = ''; });
+    c.addEventListener('drop', function(e){ e.preventDefault(); calDropOn(c.dataset.key, +c.dataset.hr); });
+  });
+  // Visa arbetsdagen från start (kl. 07), första gången veckan visas
+  var body = document.getElementById('calWeekBody'); if (body && !window._calWeekScrolled) { window._calWeekScrolled = true; body.scrollTop = 7 * 43; }
+}
 
 function openScheduledPost(id) {
   const inQueue = S.reviewQueue.find(x => x.id === id);
@@ -5741,16 +5791,16 @@ function openScheduledPost(id) {
   }
 }
 
-function createForDay(dateStr) {
+function createForDay(dateStr, time) {
   navigate('create');
   setTimeout(() => {
     const sch = document.getElementById('m-schedule');
     if (sch) {
-      sch.value = dateStr + 'T09:00';
+      sch.value = dateStr + 'T' + (time || '09:00');
       sch.style.borderColor = 'var(--m)';
       setTimeout(() => sch.style.borderColor = '', 1500);
     }
-    showToast(`📅 Datum ${dateStr} valt — fyll i inlägget och lägg till granskning`);
+    showToast(`📅 ${dateStr}${time ? ' kl. ' + time : ''} valt — fyll i inlägget och lägg till granskning`);
   }, 100);
 }
 
