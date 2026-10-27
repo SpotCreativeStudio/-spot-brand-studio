@@ -868,8 +868,9 @@ app.get('/api/drafts', auth, async (req, res) => {
     // Utkast hör till arbetsytan: Spot-admin som visar en kund ser bara kundens utkast. Gamla utkast utan arbetsyta räknas till användarens egen.
     // Alla i arbetsytan ser teamets utkast (inte bara sina egna)
     // Bara den egna arbetsytans utkast. Utkast utan arbetsyta (från huvudadmin) hör till Spot.
-    const r = await getAuthPool().query("SELECT id, data, ts, username FROM user_drafts WHERE workspace=$1 OR (workspace IS NULL AND $1='spot') ORDER BY ts DESC", [s.workspace || 'spot'])
-    res.json({ drafts: r.rows.map(row => Object.assign({}, row.data, { id: row.id, ts: row.ts, by: (row.data && row.data.by) || row.username || '' })) })
+    // Namnet slås upp i användartabellen, så att även gamla utkast visar för- och efternamn i stället för användarnamn
+    const r = await getAuthPool().query("SELECT d.id, d.data, d.ts, d.username, u.first_name, u.last_name FROM user_drafts d LEFT JOIN app_users u ON u.username = d.username WHERE d.workspace=$1 OR (d.workspace IS NULL AND $1='spot') ORDER BY d.ts DESC", [s.workspace || 'spot'])
+    res.json({ drafts: r.rows.map(row => Object.assign({}, row.data, { id: row.id, ts: row.ts, by: [row.first_name, row.last_name].filter(Boolean).join(' ') || (row.data && row.data.by) || row.username || '' })) })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 app.post('/api/drafts', auth, async (req, res) => {
