@@ -6194,26 +6194,44 @@ function _emAutosaveNow(){
     // För stort (t.ex. inbäddade bilder): spara utan bilddata
     try { var q = JSON.parse(JSON.stringify(p)); ['imageUrl', 'aiImageUrl'].forEach(function(k){ if (String(q[k] || '').indexOf('data:') === 0) delete q[k]; }); (q.elements || []).forEach(function(el){ if (String(el.src || '').indexOf('data:') === 0) delete el.src; }); localStorage.setItem(key, JSON.stringify({ ts: Date.now(), post: q })); ok = true; } catch (e2) {}
   }
+  _emDraftPush(p);
   if (!S._editIsCreateMode && typeof _saveAppState === 'function') _saveAppState();
   var ind = document.getElementById('emAutosave'), cl = document.querySelector('#editorModal .em-close');
   if (!ind && cl) { ind = document.createElement('span'); ind.id = 'emAutosave'; ind.style.cssText = 'margin-left:auto;margin-right:12px;font-size:11px;color:#6b7280;white-space:nowrap'; cl.parentNode.insertBefore(ind, cl); }
   if (ind) ind.textContent = ok ? '✓ Utkast sparat ' + new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }) : '';
 }
-function _emDraftClear(p){ try { localStorage.removeItem(_emDraftKey(p)); } catch (e) {} var ind = document.getElementById('emAutosave'); if (ind) ind.textContent = ''; }
-// När editorn öppnas: finns ett osparat utkast för samma inlägg erbjuds det tillbaka
+function _emDraftClear(p){ try { localStorage.removeItem(_emDraftKey(p)); } catch (e) {} clearTimeout(window._emPushT); fetch('/api/edit-draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: _emServerKey(p), saved: true }) }).catch(function(){}); var ind = document.getElementById('emAutosave'); if (ind) ind.textContent = ''; }
+// Utkasten sparas även på servern så att alla i teamet kommer åt dem (bara admin kan radera)
+function _emServerKey(p){ return S._editIsCreateMode ? 'create' : String((p && p.id) || 'x'); }
+function _emDraftPush(p){
+  clearTimeout(window._emPushT);
+  window._emPushT = setTimeout(function(){ fetch('/api/edit-draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: _emServerKey(p), post: p }) }).catch(function(){}); }, 2500);
+}
+function _emDraftDiscard(p){
+  try { localStorage.removeItem(_emDraftKey(p)); } catch (e) {}
+  return fetch('/api/edit-draft?key=' + encodeURIComponent(_emServerKey(p)), { method: 'DELETE' }).then(function(r){ return r.json(); }).then(function(j){ if (j && j.error) showToast(j.error); else showToast('🗑 Utkastet är raderat'); }).catch(function(){});
+}
+// När editorn öppnas: finns ett osparat utkast för samma inlägg (från dig eller någon i teamet) erbjuds det tillbaka
 function _emDraftOffer(post){
-  var d = null; try { d = JSON.parse(localStorage.getItem(_emDraftKey(post)) || 'null'); } catch (e) {}
-  if (!d || !d.post || Date.now() - d.ts > 86400000 || S._editPost !== post) return;
+  fetch('/api/edit-draft?key=' + encodeURIComponent(_emServerKey(post))).then(function(r){ return r.json(); }).catch(function(){ return {}; }).then(function(sd){
+    var d = (sd && sd.post) ? sd : null;
+    if (!d) { try { d = JSON.parse(localStorage.getItem(_emDraftKey(post)) || 'null'); } catch (e) {} }
+    _emDraftShow(post, d);
+  });
+}
+function _emDraftShow(post, d){
+  if (!d || !d.post || Date.now() - d.ts > 7 * 86400000 || S._editPost !== post) return;
   if (JSON.stringify(d.post.elements || []) === JSON.stringify(post.elements || []) && (d.post.title || '') === (post.title || '') && (d.post.content || '') === (post.content || '')) return;
   var left = document.getElementById('emLeft'); if (!left || document.getElementById('emDraftBar')) return;
+  var isAdmin = typeof CURRENT_ROLE === 'undefined' || CURRENT_ROLE === 'admin';
   var b = document.createElement('div'); b.id = 'emDraftBar';
   b.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border:1.5px solid #f3d3de;background:#fff7fa;border-radius:10px;font-size:12px;color:#374151';
-  b.innerHTML = '<span style="flex:1;min-width:150px">💾 Osparade ändringar från ' + new Date(d.ts).toLocaleString('sv-SE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + '</span>' +
+  b.innerHTML = '<span style="flex:1;min-width:150px">💾 Osparade ändringar från ' + new Date(d.ts).toLocaleString('sv-SE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + (d.by ? ' av ' + _cvEsc(d.by) : '') + '</span>' +
     '<button type="button" id="emDraftYes" style="font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;border:none;background:var(--m);color:#fff;cursor:pointer">Återställ</button>' +
-    '<button type="button" id="emDraftNo" style="font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer">Släng</button>';
+    (isAdmin ? '<button type="button" id="emDraftNo" title="Radera utkastet för alla i teamet" style="font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer">Radera</button>' : '');
   left.insertBefore(b, left.firstChild);
   b.querySelector('#emDraftYes').onclick = function(){ Object.keys(d.post).forEach(function(k){ if (k !== 'id' && d.post[k] !== undefined) post[k] = d.post[k]; }); b.remove(); openEditorModal(post); showToast('💾 Utkastet är återställt'); };
-  b.querySelector('#emDraftNo').onclick = function(){ _emDraftClear(post); b.remove(); };
+  var no = b.querySelector('#emDraftNo'); if (no) no.onclick = function(){ _emDraftDiscard(post); b.remove(); };
 }
 function _cvNewId(){ return 'el' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function _cvTopZ(post){ return ((post.elements || []).reduce(function(m, e){ return Math.max(m, e.z || 0); }, 0)) + 1; }
