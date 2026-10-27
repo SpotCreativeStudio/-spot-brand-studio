@@ -289,7 +289,7 @@ body.ws-customer .brand-strip{display:none!important}
 /* Bara admin får neka inlägg i Granskning */
 body.brand-ro button[onclick*="rejectPost("],body.brand-ro .reject-btn{display:none!important}
 /* Bara admin får redigera inlägg i Granskning */
-body.brand-ro:not(.role-redaktor) [onclick*="openEditorModal(S.reviewQueue"]{display:none!important}
+body.brand-ro [onclick*="openEditorModal(S.reviewQueue"]{display:none!important}
 /* Bara admin får byta mall i Granskning */
 body.brand-ro .rc-layout-btn,body.brand-ro [onclick*="setReviewLayout("]{display:none!important}
 /* Inläggsbilder utan rundade hörn: kortet runt bilden blir också rakt */
@@ -1058,7 +1058,6 @@ function applyRolePermissions(){
   var isAdmin = CURRENT_ROLE === 'admin';
   // Varumärke: bara admin får ändra. Övriga ser profilen och kan ladda ner, men inget går att redigera.
   document.body.classList.toggle('brand-ro', !isAdmin);
-  document.body.classList.toggle('role-redaktor', CURRENT_ROLE === 'redaktor'); // redaktörer ser Redigera-knapparna i granskning
   // Spots varumärkesmodul på dashboarden visas bara i Spots egen arbetsyta
   document.body.classList.toggle('ws-customer', typeof CURRENT_WORKSPACE !== 'undefined' && !!CURRENT_WORKSPACE && CURRENT_WORKSPACE !== 'spot');
   var _vb = document.getElementById('v-brand');
@@ -3275,13 +3274,11 @@ function renderCanvasEditor(post) {
 }
 
 function openEditorModal(post) {
-  // Admin och redaktör får redigera inlägg i granskning (granskare får bara läsa)
-  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE !== 'admin' && CURRENT_ROLE !== 'redaktor' && !S._editIsCreateMode && post && (S.reviewQueue || []).some(function(p){ return p.id === post.id; })) { if (typeof showToast === 'function') showToast('Endast admin och redaktör kan redigera inlägg i granskning'); return; }
+  if (typeof CURRENT_ROLE !== 'undefined' && CURRENT_ROLE !== 'admin' && !S._editIsCreateMode && post && (S.reviewQueue || []).some(function(p){ return p.id === post.id; })) { if (typeof showToast === 'function') showToast('Endast admin kan redigera inlägg i granskning'); return; }
   if (!post.blocks) post.blocks = [...DEFAULT_BLOCK_ORDER];
   post.blocks = post.blocks.filter(function(b){ return b !== 'cta' && b !== 'title'; });
   const _isSamePost = S._editPost === post;
   S._editPost = post; // working copy reference
-  _emPresenceStart(post);
   setTimeout(function(){ _emDraftOffer(post); }, 60);
   // Inlägg utan mall får arbetsytans mall (som i manuellt läge) i stället för Gradient
   if (!post.layout && typeof _manualLayout === 'function') post.layout = _manualLayout();
@@ -4114,7 +4111,6 @@ function emAttachDnd(post) {
 }
 
 function closeEditorModal() {
-  _emPresenceLeave();
   document.getElementById('editorModal').classList.remove('open');
   S.editMode = false;
   S._editPost = null;
@@ -4124,7 +4120,6 @@ function closeEditorModal() {
 function saveEditorModal() {
   const post = S._editPost;
   if (!post) return;
-  _emPresenceLeave();
   _emDraftClear(post); clearTimeout(window._emAsT); // sparat på riktigt – utkastet behövs inte längre
   // Final sync from form
   const t  = document.getElementById('em-title');
@@ -4149,8 +4144,6 @@ function saveEditorModal() {
     S._editPost = null;
     showToast('✅ Ändringar sparade');
   } else {
-    // Ändringen sparas på servern så att resten av teamet ser den
-    if ((S.reviewQueue || []).indexOf(post) >= 0 && typeof saveToServer === 'function') saveToServer(post);
     S._editPost = null;
     renderReview(); renderDetailPanel();
     showToast('✅ Ändringar sparade');
@@ -6189,36 +6182,6 @@ function _cvRedoLast(){ var p = _cvPost(); if (!p || !_cvRedo.length) return fal
 function _cvUndoLast(){ var p = _cvPost(); if (!p || !_cvUndo.length) return false; _cvRedo.push(_cvState(p)); var s = JSON.parse(_cvUndo.pop()); p.elements = s.el; p.photoBox = s.pb; p.imgPos = s.ip; _cvRerender(); return true; }
 function _cvRerender(){ if (typeof emRenderPreview === 'function') emRenderPreview(); _emAutosave(); }
 // ── Autospara i editorn: ändringar sparas löpande som utkast (i webbläsaren), så att inget försvinner om fliken stängs ──
-// ── Varning när någon annan i teamet har samma inlägg öppet i editorn ──
-function _emPresenceSend(post, leave){
-  return fetch('/api/edit-presence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: _emServerKey(post), leave: !!leave, tab: window._emTabId || (window._emTabId = Math.random().toString(36).slice(2, 10)) }) }).then(function(r){ return r.json(); }).catch(function(){ return {}; });
-}
-function _emPresenceStart(post){
-  clearInterval(window._emPresT); window._emPresPost = post;
-  var tick = function(){
-    if (S._editPost !== post) { clearInterval(window._emPresT); return; }
-    _emPresenceSend(post).then(function(j){ if (S._editPost === post) _emPresenceShow((j && j.others) || []); });
-  };
-  // Uppdateras varje sekund, och direkt när man kommer tillbaka till fliken
-  tick(); window._emPresT = setInterval(tick, 1000); window._emPresTick = tick;
-  if (!window._emPresVis) { window._emPresVis = true; document.addEventListener('visibilitychange', function(){ if (!document.hidden && window._emPresTick && window._emPresPost) window._emPresTick(); }); window.addEventListener('focus', function(){ if (window._emPresTick && window._emPresPost) window._emPresTick(); }); }
-  // Stängs fliken meddelas servern direkt, så att varningen försvinner hos de andra
-  if (!window._emPresUnload) { window._emPresUnload = true; window.addEventListener('pagehide', function(){ var p = window._emPresPost; if (p && navigator.sendBeacon) navigator.sendBeacon('/api/edit-presence', new Blob([JSON.stringify({ key: _emServerKey(p), leave: true, tab: window._emTabId })], { type: 'application/json' })); }); }
-}
-function _emPresenceLeave(){
-  clearInterval(window._emPresT); var p = window._emPresPost; window._emPresPost = null;
-  if (p) _emPresenceSend(p, true); window._emPresTick = null;
-  var b = document.getElementById('emPresenceBar'); if (b) b.remove();
-}
-function _emPresenceShow(others){
-  var left = document.getElementById('emLeft'); if (!left) return;
-  var b = document.getElementById('emPresenceBar');
-  if (!others.length) { if (b) b.remove(); return; }
-  if (!b) { b = document.createElement('div'); b.id = 'emPresenceBar'; b.style.cssText = 'padding:10px 12px;border:1.5px solid #fcd34d;background:#fffbeb;border-radius:10px;font-size:12px;color:#92400e;line-height:1.45'; left.insertBefore(b, left.firstChild); }
-  var names = others.map(function(n){ return String(n).replace(/</g, '&lt;'); }), who = names.length > 1 ? names.slice(0, -1).join(', ') + ' och ' + names[names.length - 1] : names[0];
-  var self = names.length === 1 && /^Du /.test(names[0]);
-  b.innerHTML = self ? '⚠️ <b>Du har också det här inlägget öppet i en annan flik.</b> Spara i en flik i taget, annars kan ändringar skrivas över.' : '⚠️ <b>' + who + '</b> har också det här inlägget öppet just nu. Om ni sparar samtidigt kan ändringar skrivas över – prata ihop er först.';
-}
 function _emDraftKey(p){ return 'spotEditDraft:' + (typeof CURRENT_WORKSPACE !== 'undefined' ? CURRENT_WORKSPACE || '' : '') + ':' + (S._editIsCreateMode ? 'create' : ((p && p.id) || 'x')); }
 function _emAutosave(){ clearTimeout(window._emAsT); window._emAsT = setTimeout(_emAutosaveNow, 1200); }
 function _emAutosaveNow(){
