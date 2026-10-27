@@ -1051,30 +1051,7 @@ function _authorLine(p){
   return '👤 ' + who + (lbls ? (' · 📣 ' + lbls) : '');
 }
 function _saveAppState(){ if(!CURRENT_WORKSPACE) return; try{ localStorage.setItem('spotAppState', JSON.stringify({workspace:CURRENT_WORKSPACE, reviewQueue:S.reviewQueue, publishedPosts:S.publishedPosts, archiveOverride:S.archiveOverride})); }catch(e){} }
-// TEMP DIAGNOSTIC: remove after imageUrl-loss bug is found
-function _instrumentImageUrl(post) {
-  try {
-    if (!post || typeof post !== 'object') return;
-    if (post.__imageUrlTrapped) return;
-    var initial = post.imageUrl;
-    Object.defineProperty(post, '_imageUrl', { value: initial, writable: true, configurable: true, enumerable: false });
-    Object.defineProperty(post, 'imageUrl', {
-      configurable: true,
-      enumerable: true,
-      get: function () { return post._imageUrl; },
-      set: function (v) {
-        try {
-          if (!v && post._imageUrl) {
-            console.warn('[imageUrl-trap] Clearing imageUrl on post', post.id, post.title, new Error().stack);
-          }
-        } catch (e2) {}
-        post._imageUrl = v;
-      }
-    });
-    Object.defineProperty(post, '__imageUrlTrapped', { value: true, writable: true, configurable: true, enumerable: false });
-  } catch (e) {}
-}
-function _restoreAppStateIfSameWorkspace(){ try{ var _as=JSON.parse(localStorage.getItem('spotAppState')||'null'); if(_as && _as.workspace===CURRENT_WORKSPACE){ if(Array.isArray(_as.reviewQueue)){S.reviewQueue=_as.reviewQueue; S.reviewQueue.forEach(function(p){_instrumentImageUrl(p);});} if(Array.isArray(_as.publishedPosts)){S.publishedPosts=_as.publishedPosts; S.publishedPosts.forEach(function(p){_instrumentImageUrl(p);});} if(_as.archiveOverride)S.archiveOverride=_as.archiveOverride; } else { localStorage.removeItem('spotAppState'); } }catch(e){} }
+function _restoreAppStateIfSameWorkspace(){ try{ var _as=JSON.parse(localStorage.getItem('spotAppState')||'null'); if(_as && _as.workspace===CURRENT_WORKSPACE){ if(Array.isArray(_as.reviewQueue)){S.reviewQueue=_as.reviewQueue;} if(Array.isArray(_as.publishedPosts)){S.publishedPosts=_as.publishedPosts;} if(_as.archiveOverride)S.archiveOverride=_as.archiveOverride; } else { localStorage.removeItem('spotAppState'); } }catch(e){} }
 var CURRENT_ROLE = 'admin';
 function _loadUserInfo(){ fetch('/api/me').then(function(r){ return r.json(); }).then(function(u){ var el=document.getElementById('avatarInitials'); if(el && u.initials) el.textContent=u.initials; var el2=document.getElementById('avatarInitials2'); if(el2 && u.initials) el2.textContent=u.initials; var _ca=document.getElementById('createAuthorAvatar'); if(_ca) _ca.textContent=u.initials||''; var _cn=document.getElementById('createAuthorName'); if(_cn) _cn.textContent=((u.firstName||'')+' '+(u.lastName||'')).trim(); var btn=document.getElementById('avatarBtn'); if(btn && u.firstName) btn.title=u.firstName+' '+u.lastName; var nameEl=document.getElementById('userFullName'); if(nameEl) nameEl.textContent=(u.firstName||'')+' '+(u.lastName||''); CURRENT_ROLE = u.role || 'admin'; CURRENT_WORKSPACE = u.workspace || 'spot'; CURRENT_USER_NAME = ((u.firstName||'') + ' ' + (u.lastName||'')).trim() || 'Okänd'; _restoreAppStateIfSameWorkspace(); _hydrateFromServer(); if (typeof renderDashboard === 'function') renderDashboard(); applyRolePermissions(); if (typeof _loadMyChannels === 'function') _loadMyChannels(); if (typeof _loadLinkedInStatus === 'function') _loadLinkedInStatus(); if (typeof _loadLinkedInCompanyStatus === 'function') _loadLinkedInCompanyStatus(); if (typeof _loadImgLibrary === 'function') _loadImgLibrary(); if (typeof _loadDrafts === 'function') _loadDrafts(); if (typeof _loadTeamPosts === 'function') _loadTeamPosts(); }).catch(function(){}); }
 function applyRolePermissions(){
@@ -2349,7 +2326,7 @@ function addToReview() {
     imageUrl: activeImageUrl(),
     imgPos: S._imgPos ? {...S._imgPos} : { x:50, y:50 },
   };
-  S.reviewQueue.push(post); _instrumentImageUrl(post); saveToServer(post);
+  S.reviewQueue.push(post); saveToServer(post);
   updateBadge();
   showToast('✅ Inlägg lagt till i granskning');
   navigate('review');
@@ -3108,7 +3085,7 @@ function addManualToReview() {
         elements: S._elements ? JSON.parse(JSON.stringify(S._elements)) : [],
         aspectRatio: S.aspectRatio || null,
         ..._createExtra(),
-      }); saveToServer(S.reviewQueue[S.reviewQueue.length-1]); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
+      }); saveToServer(S.reviewQueue[S.reviewQueue.length-1]);
       added++;
     });
     if (!added) { showToast('Välj minst ett förslag', 'err'); return false; }
@@ -3133,7 +3110,7 @@ function addManualToReview() {
         elements: S._elements ? JSON.parse(JSON.stringify(S._elements)) : [],
         aspectRatio: S.aspectRatio || null,
         ..._createExtra(),
-      }); saveToServer(S.reviewQueue[S.reviewQueue.length-1]); _instrumentImageUrl(S.reviewQueue[S.reviewQueue.length-1]);
+      }); saveToServer(S.reviewQueue[S.reviewQueue.length-1]);
     });
   }
   // Reset
@@ -3302,6 +3279,7 @@ function openEditorModal(post) {
   post.blocks = post.blocks.filter(function(b){ return b !== 'cta' && b !== 'title'; });
   const _isSamePost = S._editPost === post;
   S._editPost = post; // working copy reference
+  _emPresenceStart(post);
   setTimeout(function(){ _emDraftOffer(post); }, 60);
   // Inlägg utan mall får arbetsytans mall (som i manuellt läge) i stället för Gradient
   if (!post.layout && typeof _manualLayout === 'function') post.layout = _manualLayout();
@@ -4134,6 +4112,7 @@ function emAttachDnd(post) {
 }
 
 function closeEditorModal() {
+  _emPresenceLeave();
   document.getElementById('editorModal').classList.remove('open');
   S.editMode = false;
   S._editPost = null;
@@ -4143,6 +4122,7 @@ function closeEditorModal() {
 function saveEditorModal() {
   const post = S._editPost;
   if (!post) return;
+  _emPresenceLeave();
   _emDraftClear(post); clearTimeout(window._emAsT); // sparat på riktigt – utkastet behövs inte längre
   // Final sync from form
   const t  = document.getElementById('em-title');
@@ -4442,7 +4422,6 @@ async function _hydrateFromServer(){
     const pub = [];
     posts.forEach(function(p){
       if (!p) return;
-      _instrumentImageUrl(p);
       p._synced = true;
       if (!p.status || p.status === 'review') review.push(p);
       else pub.push(p);
@@ -4923,7 +4902,7 @@ function reusePost(idx) {
     blocks: original.blocks ? [...original.blocks] : undefined,
     hashtags: original.hashtags ? [...original.hashtags] : [],
   };
-  S.reviewQueue.push(clone); _instrumentImageUrl(clone); saveToServer(clone);
+  S.reviewQueue.push(clone); saveToServer(clone);
   S.selectedReviewId = clone.id;
   // Close the detail modal
   document.getElementById('pubDetailModal').style.display = 'none';
@@ -6206,6 +6185,31 @@ function _cvRedoLast(){ var p = _cvPost(); if (!p || !_cvRedo.length) return fal
 function _cvUndoLast(){ var p = _cvPost(); if (!p || !_cvUndo.length) return false; _cvRedo.push(_cvState(p)); var s = JSON.parse(_cvUndo.pop()); p.elements = s.el; p.photoBox = s.pb; p.imgPos = s.ip; _cvRerender(); return true; }
 function _cvRerender(){ if (typeof emRenderPreview === 'function') emRenderPreview(); _emAutosave(); }
 // ── Autospara i editorn: ändringar sparas löpande som utkast (i webbläsaren), så att inget försvinner om fliken stängs ──
+// ── Varning när någon annan i teamet har samma inlägg öppet i editorn ──
+function _emPresenceSend(post, leave){
+  return fetch('/api/edit-presence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: _emServerKey(post), leave: !!leave }) }).then(function(r){ return r.json(); }).catch(function(){ return {}; });
+}
+function _emPresenceStart(post){
+  clearInterval(window._emPresT); window._emPresPost = post;
+  var tick = function(){
+    if (S._editPost !== post) { clearInterval(window._emPresT); return; }
+    _emPresenceSend(post).then(function(j){ if (S._editPost === post) _emPresenceShow((j && j.others) || []); });
+  };
+  tick(); window._emPresT = setInterval(tick, 25000);
+}
+function _emPresenceLeave(){
+  clearInterval(window._emPresT); var p = window._emPresPost; window._emPresPost = null;
+  if (p) _emPresenceSend(p, true);
+  var b = document.getElementById('emPresenceBar'); if (b) b.remove();
+}
+function _emPresenceShow(others){
+  var left = document.getElementById('emLeft'); if (!left) return;
+  var b = document.getElementById('emPresenceBar');
+  if (!others.length) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('div'); b.id = 'emPresenceBar'; b.style.cssText = 'padding:10px 12px;border:1.5px solid #fcd34d;background:#fffbeb;border-radius:10px;font-size:12px;color:#92400e;line-height:1.45'; left.insertBefore(b, left.firstChild); }
+  var names = others.map(function(n){ return String(n).replace(/</g, '&lt;'); }), who = names.length > 1 ? names.slice(0, -1).join(', ') + ' och ' + names[names.length - 1] : names[0];
+  b.innerHTML = '⚠️ <b>' + who + '</b> har också det här inlägget öppet just nu. Om ni sparar samtidigt kan ändringar skrivas över – prata ihop er först.';
+}
 function _emDraftKey(p){ return 'spotEditDraft:' + (typeof CURRENT_WORKSPACE !== 'undefined' ? CURRENT_WORKSPACE || '' : '') + ':' + (S._editIsCreateMode ? 'create' : ((p && p.id) || 'x')); }
 function _emAutosave(){ clearTimeout(window._emAsT); window._emAsT = setTimeout(_emAutosaveNow, 1200); }
 function _emAutosaveNow(){
