@@ -6187,7 +6187,7 @@ function _cvRerender(){ if (typeof emRenderPreview === 'function') emRenderPrevi
 // ── Autospara i editorn: ändringar sparas löpande som utkast (i webbläsaren), så att inget försvinner om fliken stängs ──
 // ── Varning när någon annan i teamet har samma inlägg öppet i editorn ──
 function _emPresenceSend(post, leave){
-  return fetch('/api/edit-presence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: _emServerKey(post), leave: !!leave }) }).then(function(r){ return r.json(); }).catch(function(){ return {}; });
+  return fetch('/api/edit-presence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: _emServerKey(post), leave: !!leave, tab: window._emTabId || (window._emTabId = Math.random().toString(36).slice(2, 10)) }) }).then(function(r){ return r.json(); }).catch(function(){ return {}; });
 }
 function _emPresenceStart(post){
   clearInterval(window._emPresT); window._emPresPost = post;
@@ -6208,7 +6208,8 @@ function _emPresenceShow(others){
   if (!others.length) { if (b) b.remove(); return; }
   if (!b) { b = document.createElement('div'); b.id = 'emPresenceBar'; b.style.cssText = 'padding:10px 12px;border:1.5px solid #fcd34d;background:#fffbeb;border-radius:10px;font-size:12px;color:#92400e;line-height:1.45'; left.insertBefore(b, left.firstChild); }
   var names = others.map(function(n){ return String(n).replace(/</g, '&lt;'); }), who = names.length > 1 ? names.slice(0, -1).join(', ') + ' och ' + names[names.length - 1] : names[0];
-  b.innerHTML = '⚠️ <b>' + who + '</b> har också det här inlägget öppet just nu. Om ni sparar samtidigt kan ändringar skrivas över – prata ihop er först.';
+  var self = names.length === 1 && /^Du /.test(names[0]);
+  b.innerHTML = self ? '⚠️ <b>Du har också det här inlägget öppet i en annan flik.</b> Spara i en flik i taget, annars kan ändringar skrivas över.' : '⚠️ <b>' + who + '</b> har också det här inlägget öppet just nu. Om ni sparar samtidigt kan ändringar skrivas över – prata ihop er först.';
 }
 function _emDraftKey(p){ return 'spotEditDraft:' + (typeof CURRENT_WORKSPACE !== 'undefined' ? CURRENT_WORKSPACE || '' : '') + ':' + (S._editIsCreateMode ? 'create' : ((p && p.id) || 'x')); }
 function _emAutosave(){ clearTimeout(window._emAsT); window._emAsT = setTimeout(_emAutosaveNow, 1200); }
