@@ -865,14 +865,16 @@ app.get('/api/drafts', auth, async (req, res) => {
     const s = sessions[getToken(req)] || {}
     await ensureDraftsTable()
     // Utkast hör till arbetsytan: Spot-admin som visar en kund ser bara kundens utkast. Gamla utkast utan arbetsyta räknas till användarens egen.
-    const r = await getAuthPool().query('SELECT id, data, ts FROM user_drafts WHERE username=$1 AND COALESCE(workspace, $3)=$2 ORDER BY ts DESC', [s.u, s.workspace || 'spot', s.realWorkspace || s.workspace || 'spot'])
-    res.json({ drafts: r.rows.map(row => Object.assign({}, row.data, { id: row.id, ts: row.ts })) })
+    // Alla i arbetsytan ser teamets utkast (inte bara sina egna)
+    const r = await getAuthPool().query('SELECT id, data, ts, username FROM user_drafts WHERE COALESCE(workspace, $2)=$1 ORDER BY ts DESC', [s.workspace || 'spot', s.realWorkspace || s.workspace || 'spot'])
+    res.json({ drafts: r.rows.map(row => Object.assign({}, row.data, { id: row.id, ts: row.ts, by: (row.data && row.data.by) || row.username || '' })) })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 app.post('/api/drafts', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
     const draft = req.body || {}
+    draft.by = [s.firstName, s.lastName].filter(Boolean).join(' ') || s.u || ''
     await ensureDraftsTable()
     const ts = Date.now()
     const r = await getAuthPool().query('INSERT INTO user_drafts (username,data,ts,workspace) VALUES ($1,$2,$3,$4) RETURNING id', [s.u, JSON.stringify(draft), ts, s.workspace || 'spot'])
@@ -882,9 +884,10 @@ app.post('/api/drafts', auth, async (req, res) => {
 app.post('/api/drafts/delete', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
+    if ((s.role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan radera utkast' })
     const { id } = req.body || {}
     await ensureDraftsTable()
-    await getAuthPool().query('DELETE FROM user_drafts WHERE id=$1 AND username=$2', [id, s.u])
+    await getAuthPool().query('DELETE FROM user_drafts WHERE id=$1 AND COALESCE(workspace, $3)=$2', [id, s.workspace || 'spot', s.realWorkspace || s.workspace || 'spot'])
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
