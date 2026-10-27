@@ -859,14 +859,15 @@ app.post('/api/brand-images/delete', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
-async function ensureDraftsTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS user_drafts (id SERIAL PRIMARY KEY, username TEXT, data JSONB, ts BIGINT)"); await getAuthPool().query('ALTER TABLE user_drafts ADD COLUMN IF NOT EXISTS workspace TEXT') }
+async function ensureDraftsTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS user_drafts (id SERIAL PRIMARY KEY, username TEXT, data JSONB, ts BIGINT)"); await getAuthPool().query('ALTER TABLE user_drafts ADD COLUMN IF NOT EXISTS workspace TEXT'); /* gamla utkast utan arbetsyta får skaparens arbetsyta, så att de aldrig syns för andra team */ await getAuthPool().query("UPDATE user_drafts d SET workspace = COALESCE(u.workspace, 'spot') FROM app_users u WHERE d.workspace IS NULL AND d.username = u.username") }
 app.get('/api/drafts', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
     await ensureDraftsTable()
     // Utkast hör till arbetsytan: Spot-admin som visar en kund ser bara kundens utkast. Gamla utkast utan arbetsyta räknas till användarens egen.
     // Alla i arbetsytan ser teamets utkast (inte bara sina egna)
-    const r = await getAuthPool().query('SELECT id, data, ts, username FROM user_drafts WHERE COALESCE(workspace, $2)=$1 ORDER BY ts DESC', [s.workspace || 'spot', s.realWorkspace || s.workspace || 'spot'])
+    // Bara den egna arbetsytans utkast. Utkast utan arbetsyta (från huvudadmin) hör till Spot.
+    const r = await getAuthPool().query("SELECT id, data, ts, username FROM user_drafts WHERE workspace=$1 OR (workspace IS NULL AND $1='spot') ORDER BY ts DESC", [s.workspace || 'spot'])
     res.json({ drafts: r.rows.map(row => Object.assign({}, row.data, { id: row.id, ts: row.ts, by: (row.data && row.data.by) || row.username || '' })) })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -887,7 +888,7 @@ app.post('/api/drafts/delete', auth, async (req, res) => {
     if ((s.role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan radera utkast' })
     const { id } = req.body || {}
     await ensureDraftsTable()
-    await getAuthPool().query('DELETE FROM user_drafts WHERE id=$1 AND COALESCE(workspace, $3)=$2', [id, s.workspace || 'spot', s.realWorkspace || s.workspace || 'spot'])
+    await getAuthPool().query("DELETE FROM user_drafts WHERE id=$1 AND (workspace=$2 OR (workspace IS NULL AND $2='spot'))", [id, s.workspace || 'spot'])
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
