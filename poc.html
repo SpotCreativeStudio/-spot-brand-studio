@@ -2696,11 +2696,21 @@ function _draftLabel(d){
   var lbl = (d.channels || []).map(function(c){ return (typeof CH_LABEL !== 'undefined' && CH_LABEL[c]) || c; }).join(', ');
   return 'Utkast' + (lbl ? ' – ' + lbl : '') + ' ' + new Date(Number(d.ts)).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
 }
+function _dftFocus(){ var i=document.getElementById("dftQ"); if(i){ i.focus(); var n=i.value.length; try{ i.setSelectionRange(n,n); }catch(e){} } }
 function renderDraftsPanel(){
   var el=document.getElementById("draftsPanel"); if(!el)return;
   var DRAFTHEADER='<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff"><b style="font-size:15px">📝 Teamets utkast</b><button onclick="toggleDrafts()" style="border:none;background:none;font-size:22px;cursor:pointer;color:#666;line-height:1;padding:0 4px">×</button></div>';
-  var drafts=_getDrafts();
-  if(!drafts.length){ el.innerHTML=DRAFTHEADER+'<div style="padding:16px;color:#9ca3af;font-size:13px">Inga sparade utkast ännu.</div>'; return; }
+  // Sök och filtrera (text, kanal, person)
+  var _all=_getDrafts(), _q=String(window._dftQ||"").toLowerCase().trim(), _fc=window._dftCh||"", _fp=window._dftBy||"";
+  var _chs=[], _ppl=[]; _all.forEach(function(d){ (d.channels||[]).forEach(function(c){ if(_chs.indexOf(c)<0)_chs.push(c); }); if(d.by&&_ppl.indexOf(d.by)<0)_ppl.push(d.by); });
+  var drafts=_all.filter(function(d){ if(_fc&&(d.channels||[]).indexOf(_fc)<0)return false; if(_fp&&d.by!==_fp)return false; if(_q&&[d.title,d.content,d.by,_draftLabel(d)].join(" ").toLowerCase().indexOf(_q)<0)return false; return true; });
+  var _esc=function(s){ return String(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }, _sel="font-size:12px;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer";
+  if(_all.length) DRAFTHEADER+='<div style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid #eee">'+
+    '<input id="dftQ" value="'+_esc(window._dftQ)+'" placeholder="Sök utkast…" oninput="window._dftQ=this.value;renderDraftsPanel();_dftFocus()" style="flex:1;min-width:120px;font-size:12px;padding:6px 9px;border:1.5px solid #e5e7eb;border-radius:8px;outline:none">'+
+    (_chs.length>1?'<select onchange="window._dftCh=this.value;renderDraftsPanel()" style="'+_sel+'"><option value="">Alla kanaler</option>'+_chs.map(function(c){ return '<option value="'+_esc(c)+'"'+(c===_fc?' selected':'')+'>'+_esc((typeof CH_LABEL!=="undefined"&&CH_LABEL[c])||c)+'</option>'; }).join("")+'</select>':'')+
+    (_ppl.length>1?'<select onchange="window._dftBy=this.value;renderDraftsPanel()" style="'+_sel+'"><option value="">Alla personer</option>'+_ppl.map(function(p){ return '<option value="'+_esc(p)+'"'+(p===_fp?' selected':'')+'>'+_esc(p)+'</option>'; }).join("")+'</select>':'')+
+    '</div>';
+  if(!drafts.length){ el.innerHTML=DRAFTHEADER+'<div style="padding:16px;color:#9ca3af;font-size:13px">'+(_all.length?'Inga utkast matchar sökningen.':'Inga sparade utkast ännu.')+'</div>'; return; }
   el.innerHTML=DRAFTHEADER+drafts.map(function(d){ var w=new Date(Number(d.ts)); var wl=w.toLocaleDateString("sv-SE")+" "+w.toLocaleTimeString("sv-SE").slice(0,5)+(d.by?" · "+String(d.by).replace(/</g,"&lt;"):""); var title=(d.title||_draftLabel(d)).replace(/</g,"&lt;"); var reasonHtml=(d.rejected&&d.rejectedReason)?('<div style="font-size:11px;color:#b31e59;background:#fdf2f5;border-radius:6px;padding:5px 8px;margin-top:4px;line-height:1.4"><b>Orsak:</b> '+String(d.rejectedReason).replace(/</g,"&lt;")+'</div>'):""; return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #f2f2f2"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+title+'</div><div style="font-size:11px;color:#9ca3af">'+wl+" · "+((d.channels||[]).length)+' kanaler</div>'+reasonHtml+'</div><button class="dft-open" data-id="'+d.id+'" style="font-size:12px;font-weight:600;padding:5px 10px;border-radius:6px;border:none;background:var(--m);color:#fff;cursor:pointer">Öppna</button><button class="dft-del" data-id="'+d.id+'" style="font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid #e5e7eb;background:#fff;color:#b31e59;cursor:pointer">Ta bort</button></div>'; }).join("");
   [].slice.call(el.querySelectorAll(".dft-open")).forEach(function(b){ b.onclick=function(){ openDraft(b.dataset.id); }; });
   // Bara admin kan radera utkast
@@ -6366,6 +6376,17 @@ function cvPalPick(hex){
 }
 function _cvInk(h){ var r = parseInt(h.substr(1, 2), 16), g = parseInt(h.substr(3, 2), 16), b = parseInt(h.substr(5, 2), 16); return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#111' : '#fff'; }
 // Färgval i "Markerat element": varumärkets färger som en remsa (som Squarespace) + valfri färg
+// Varumärkets typsnitt som snabbval: varje knapp visas i sitt eget typsnitt, klick byter typsnitt på texten
+function _cvBrandFonts(e){
+  var T = (typeof TYPOGRAPHY !== 'undefined' && Array.isArray(TYPOGRAPHY)) ? TYPOGRAPHY : []; if (!T.length) return '';
+  var seen = [], cur = String(e.font || '').toLowerCase();
+  var chips = T.map(function(t){
+    var nm = String((t && t.name) || '').replace(/\s+(Bold|Regular|Light|Medium|Black|Thin)$/i, ''); if (!nm || seen.indexOf(nm) >= 0) return ''; seen.push(nm);
+    var role = String((t && t.role) || '').split(/[\/,–-]/)[0].trim(), on = cur === nm.toLowerCase();
+    return '<button type="button" onclick="cvSet(\'font\', \'' + nm.replace(/\\/g, '').replace(/'/g, "\\'") + '\')" title="' + _cvAttr((role ? role + ': ' : '') + nm) + '" style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:5px 10px;border-radius:8px;cursor:pointer;background:' + (on ? '#fdf0f6' : '#fff') + ';border:1.5px solid ' + (on ? '#b31e59' : '#e5e7eb') + '"><span style="font-family:\'' + _cvAttr(nm) + '\',sans-serif;font-size:14px;line-height:1.1;color:#111">' + _cvEsc(nm) + '</span>' + (role ? '<span style="font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em">' + _cvEsc(role) + '</span>' : '') + '</button>';
+  }).join('');
+  return chips ? _CV_ROW + _CV_LBL('Varumärkets typsnitt') + chips + '</div>' : '';
+}
 function _cvSw(prop, val, title, clearable){
   var cols = []; try { cols = (typeof COLORS !== 'undefined' && Array.isArray(COLORS) ? COLORS : []).filter(function(c){ return c && /^#[0-9a-f]{6}$/i.test(c.hex || ''); }).map(function(c){ return { hex: String(c.hex).toUpperCase(), name: c.name || '' }; }); } catch (e) {}
   [['#FFFFFF', 'Vit'], ['#000000', 'Svart']].forEach(function(x){ if (!cols.some(function(c){ return c.hex === x[0]; })) cols.push({ hex: x[0], name: x[1] }); });
@@ -6409,7 +6430,7 @@ function _cvToolbarHTML(){
   if (e.type === 'text') {
     var fonts = (typeof TYPOGRAPHY !== 'undefined' && Array.isArray(TYPOGRAPHY)) ? TYPOGRAPHY.map(function(t){ return String(t.name || '').replace(/\s+(Bold|Regular|Light|Medium|Black|Thin)$/i, ''); }) : [];
     fonts = fonts.concat(['Georgia', 'Helvetica', 'Arial', 'Times New Roman', 'Trebuchet MS', 'Verdana', 'Courier New', 'Impact']).filter(function(v, i, arr){ return v && arr.indexOf(v) === i; });
-    a += _cvTa("cvSet('text', this.value)", e.text) + '</div>' + _CV_ROW + _CV_LBL('Färg') + _cvSw('color', e.color || '#ffffff', 'Textfärg') + '</div>' + _CV_ROW +
+    a += _cvTa("cvSet('text', this.value)", e.text) + '</div>' + _CV_ROW + _CV_LBL('Färg') + _cvSw('color', e.color || '#ffffff', 'Textfärg') + '</div>' + _cvBrandFonts(e) + _CV_ROW +
       _cvDd("cvSet('font', this.value)", [['', 'Typsnitt']].concat(fonts.concat(e.font && fonts.indexOf(e.font) < 0 ? [e.font] : []).map(function(f){ return [f, f]; })), e.font || '', 'Typsnitt') +
       '<input list="gfontAll" placeholder="Google Fonts…" title="Sök bland alla Google Fonts" onfocus="loadGoogleFontList()" onchange="cvSetGFont(this.value)" style="width:120px;font-size:12px;padding:5px 7px;border:1.5px solid #e5e7eb;border-radius:8px">' +
       _cvBtn('A−', "cvBump('fs', -0.5, 1, 40)", 'Mindre text') + _cvBtn('A+', "cvBump('fs', 0.5, 1, 40)", 'Större text') +
