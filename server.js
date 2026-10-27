@@ -613,13 +613,14 @@ app.delete('/api/edit-draft', auth, async (req, res) => {
 const _editPresence = {}
 app.post('/api/edit-presence', auth, (req, res) => {
   const s = sessions[getToken(req)] || {}, ws = s.workspace || 'spot'
-  const { key, leave } = req.body || {}
+  const { key, leave, tab } = req.body || {}
   if (!key) return res.status(400).json({ error: 'Nyckel saknas' })
-  const k = ws + '|' + draftKey(s, key), now = Date.now(), m = _editPresence[k] = _editPresence[k] || {}
-  if (leave) delete m[s.u]; else m[s.u] = { name: [s.firstName, s.lastName].filter(Boolean).join(' ') || s.u, ts: now }
-  Object.keys(m).forEach(u => { if (now - m[u].ts > 70000) delete m[u] })
+  // Varje flik räknas för sig, så att varningen även syns om samma person har inlägget öppet i två flikar
+  const k = ws + '|' + draftKey(s, key), now = Date.now(), m = _editPresence[k] = _editPresence[k] || {}, me = s.u + '#' + String(tab || '').slice(0, 40)
+  if (leave) delete m[me]; else m[me] = { u: s.u, name: [s.firstName, s.lastName].filter(Boolean).join(' ') || s.u, ts: now }
+  Object.keys(m).forEach(x => { if (now - m[x].ts > 70000) delete m[x] })
   if (!Object.keys(m).length) delete _editPresence[k]
-  res.json({ others: Object.keys(m).filter(u => u !== s.u).map(u => m[u].name) })
+  res.json({ others: Object.keys(m).filter(x => x !== me).map(x => m[x].u === s.u ? 'Du (i en annan flik)' : m[x].name).filter((n, i, a) => a.indexOf(n) === i) })
 })
 app.post('/api/save-post', auth, async (req, res) => { try { const s = sessions[getToken(req)] || {}; const { Pool } = require('pg'); const pool = getAuthPool(); await pool.query('CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, data JSONB, created_at TIMESTAMPTZ DEFAULT NOW())'); const post = req.body; post.workspace = s.workspace || 'spot'; for (const _k of ['imageUrl', 'aiImageUrl']) { if (typeof post[_k] === 'string' && post[_k].indexOf('data:') === 0) { const _u = await storeDataUrlImage(post[_k], post.workspace, s.u, 'https://' + req.get('host')); if (_u) post[_k] = _u } } const _pid = post.id || Date.now().toString(); const _links = postLinks(_pid, post, 'https://' + req.get('host')); await ensurePostLinkColumns(); await pool.query('INSERT INTO posts (id,data,link,image_url) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET data=$2,link=$3,image_url=$4,created_at=NOW()', [_pid, JSON.stringify(post), _links.link, _links.image_url]); res.json({ saved: true }) } catch (e) { res.status(500).json({ error: e.message }) } })
 app.get('/api/published-posts', auth, async (req, res) => { try { const s = sessions[getToken(req)] || {}; const { Pool } = require('pg'); const pool = getAuthPool(); await pool.query('CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, data JSONB, created_at TIMESTAMPTZ DEFAULT NOW())'); const result = await pool.query("SELECT data FROM posts WHERE data->>'status' IN ('published','archived') AND data->>'workspace' = $1 AND (data->>'deleted' IS NULL OR data->>'deleted' <> 'true') ORDER BY created_at DESC LIMIT 200", [s.workspace || 'spot']); res.json({ posts: result.rows.map(r => r.data) }) } catch (e) { res.status(500).json({ error: e.message }) } })
