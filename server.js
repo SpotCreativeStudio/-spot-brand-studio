@@ -978,7 +978,9 @@ app.post('/api/admin/create-workspace', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
     if ((s.realWorkspace || s.workspace || 'spot') !== 'spot' || s.role !== 'admin') return res.status(403).json({ error: 'Endast spot-admin kan skapa nya arbetsytor' })
-    const { companyName, adminUsername, adminPassword, adminFirstName, adminLastName } = req.body || {}
+    const { companyName, adminUsername, adminPassword, adminFirstName, adminLastName, adminEmail } = req.body || {}
+    const email = String(adminEmail || '').trim().toLowerCase() || null
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Ogiltig e-postadress' })
     if (!companyName || !adminUsername || !adminPassword) return res.status(400).json({ error: 'Företagsnamn, användarnamn och lösenord krävs' })
     if (passwordError(adminPassword)) return res.status(400).json({ error: passwordError(adminPassword) })
     await ensureUsersTable()
@@ -986,9 +988,10 @@ app.post('/api/admin/create-workspace', auth, async (req, res) => {
     const username = slugBase(adminUsername).replace(/[^\p{L}\p{N}]/gu, '')
     const existing = await getAuthPool().query('SELECT 1 FROM app_users WHERE username=$1', [username])
     if (existing.rows.length) return res.status(400).json({ error: 'Användarnamnet är upptaget' })
+    if (email && await getUserByEmail(email)) return res.status(400).json({ error: 'E-postadressen används redan' })
     await getAuthPool().query(
-      'INSERT INTO app_users (username,password,role,first_name,last_name,workspace) VALUES ($1,$2,$3,$4,$5,$6)',
-      [username, hashPassword(adminPassword), 'admin', adminFirstName || companyName, adminLastName || '', workspaceId]
+      'INSERT INTO app_users (username,password,role,first_name,last_name,workspace,email) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      [username, hashPassword(adminPassword), 'admin', adminFirstName || companyName, adminLastName || '', workspaceId, email]
     )
     res.json({ ok: true, workspaceId, username })
   } catch (e) { res.status(500).json({ error: e.message }) }
