@@ -780,6 +780,7 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
         <div style="padding:16px;display:flex;flex-direction:column;gap:12px;max-width:420px">
           <div><div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase">Företagsnamn</div><input id="nwCompany" placeholder="t.ex. IKEA" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px"></div>
           <div style="display:flex;gap:10px"><div style="flex:1"><div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase">Admin förnamn</div><input id="nwFirstName" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px"></div><div style="flex:1"><div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase">Admin efternamn</div><input id="nwLastName" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px"></div></div>
+          <div><div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase">Admin-e-post</div><input id="nwEmail" type="email" placeholder="t.ex. anna@ikea.se" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px"></div>
           <div><div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase">Admin-användarnamn</div><input id="nwUsername" placeholder="t.ex. ikea-admin" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px"></div>
           <div><div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase">Admin-lösenord</div><input id="nwPassword" type="password" placeholder="Minst 6 tecken" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px"><div style="font-size:11px;color:#6b7280;margin-top:4px">Minst 6 tecken, 1 versal och 1 specialtecken (t.ex. ! # ?)</div></div>
           <button onclick="createWorkspace()" style="padding:10px 16px;background:var(--m);color:#fff;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:none;align-self:flex-start">Skapa arbetsyta</button>
@@ -5100,17 +5101,19 @@ function createWorkspace(){
   var firstName = (document.getElementById('nwFirstName').value||'').trim();
   var lastName = (document.getElementById('nwLastName').value||'').trim();
   var username = (document.getElementById('nwUsername').value||'').trim();
+  var email = (document.getElementById('nwEmail').value||'').trim();
   var password = document.getElementById('nwPassword').value;
   var resEl = document.getElementById('nwResult');
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { resEl.style.display='block'; resEl.style.background='#fdf2f5'; resEl.style.color='#b31e59'; resEl.textContent='Ange en giltig e-postadress.'; return; }
   if (!company || !username || !password) { resEl.style.display='block'; resEl.style.background='#fdf2f5'; resEl.style.color='#b31e59'; resEl.textContent='Fyll i företagsnamn, användarnamn och lösenord.'; return; }
-  fetch('/api/admin/create-workspace', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ companyName:company, adminUsername:username, adminPassword:password, adminFirstName:firstName, adminLastName:lastName }) })
+  fetch('/api/admin/create-workspace', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ companyName:company, adminUsername:username, adminPassword:password, adminFirstName:firstName, adminLastName:lastName, adminEmail:email }) })
     .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
     .then(function(res){
       resEl.style.display='block';
       if (res.ok) {
         resEl.style.background='#f0fdf4'; resEl.style.color='#16a34a';
         resEl.textContent='✅ Arbetsyta "' + res.data.workspaceId + '" skapad! Logga in med användarnamn "' + res.data.username + '".';
-        document.getElementById('nwCompany').value=''; document.getElementById('nwFirstName').value=''; document.getElementById('nwLastName').value=''; document.getElementById('nwUsername').value=''; document.getElementById('nwPassword').value='';
+        document.getElementById('nwCompany').value=''; document.getElementById('nwFirstName').value=''; document.getElementById('nwLastName').value=''; document.getElementById('nwUsername').value=''; document.getElementById('nwEmail').value=''; document.getElementById('nwPassword').value='';
       } else {
         resEl.style.background='#fdf2f5'; resEl.style.color='#b31e59';
         resEl.textContent='⚠️ ' + (res.data.error || 'Kunde inte skapa arbetsytan');
