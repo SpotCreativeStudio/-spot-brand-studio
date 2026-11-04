@@ -5527,11 +5527,7 @@ let _calMonthOffset = 0; // months from current month
 // Demo scheduled posts (until real data flows in from reviewQueue)
 const _dm = new Date(); // use current month for demo posts
 const _y = _dm.getFullYear(), _m = String(_dm.getMonth()+1).padStart(2,'0');
-const DEMO_SCHEDULED = [
-  { id:'demo-1', channel:'facebook', title:'Ny produktlansering 🚀', content:'Spännande nyheter! Vår senaste produkt är nu tillgänglig. Kolla in den och berätta vad ni tycker!', hashtags:['Lansering','Produkt','SpotOn'], scheduledAt:`${_y}-${_m}-05T09:00`, status:'published' },
-  { id:'demo-2', channel:'linkedin', title:'Hållbarhetsrapport 2025', content:'Vår hållbarhetsrapport för 2025 är nu publicerad. Läs om våra framsteg och mål för framtiden.', hashtags:['Hållbarhet','CSR','SpotOn'], scheduledAt:`${_y}-${_m}-10T10:00`, status:'review' },
-  { id:'demo-3', channel:'instagram', title:'Bakom kulisserna', content:'Idag öppnar vi dörrarna till hur vi jobbar varje dag. Passion, precision och genuint engagemang.', hashtags:['BakomKulisserna','SpotOn'], scheduledAt:`${_y}-${_m}-18T12:00`, status:'review' },
-];
+const DEMO_SCHEDULED = []; // demoinlägg borttagna: kalendern visar bara arbetsytans egna inlägg
 
 var TEAM_POSTS = [];
 function _loadTeamPosts(){
@@ -5546,7 +5542,7 @@ function getScheduledPosts() {
   const fromQueue     = S.reviewQueue.filter(p => p.scheduledAt);
   const fromPublished = S.publishedPosts.filter(p => p.scheduledAt);
   const fromTeam      = (TEAM_POSTS||[]).filter(p => p.scheduledAt);
-  const all = [...DEMO_SCHEDULED, ...fromQueue, ...fromPublished, ...fromTeam];
+  const all = [...fromQueue, ...fromPublished, ...fromTeam];
   const seen = new Set();
   return all.filter(p => { if(seen.has(p.id)) return false; seen.add(p.id); return true; });
 }
