@@ -10,6 +10,8 @@
     btn.onmouseenter = function () { btn.style.background = '#faf0f0'; };
     btn.onmouseleave = function () { btn.style.background = '#fff'; };
     btn.onclick = function () {
+      // [Säkerhet 16] Rensa lokalt sparade inlägg och utkast vid utloggning (skyddar på delade datorer)
+      try { Object.keys(localStorage).forEach(function (k) { if (k === 'spotAppState' || k === 'spotDrafts' || k.indexOf('spotEditDraft:') === 0 || k.indexOf('tplClean:') === 0) localStorage.removeItem(k); }); } catch (e) {}
       fetch('/logout', { method: 'POST' }).then(function () {
         location.href = '/login';
       }).catch(function () {
