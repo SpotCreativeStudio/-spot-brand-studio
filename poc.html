@@ -997,6 +997,8 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
 <div id="toast"></div>
 
 <script>
+// [Säkerhet 15] Escapar text innan den läggs in som HTML (skydd mot XSS: kod i rubriker, texter och namn körs aldrig)
+function _h(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 // ════════════════════════════════════════════════════════
 //  STATE
 // ════════════════════════════════════════════════════════
@@ -2086,7 +2088,7 @@ function updatePubDropdown() {
     <div class="pd-item">
       <div class="pd-check">✓</div>
       <div>
-        <div class="pd-title">${p.title}</div>
+        <div class="pd-title">${_h(p.title)}</div>
         <div class="pd-meta">${CH_LABEL[p.channel]} · ${new Date(p.createdAt).toLocaleDateString('sv-SE')}</div>
       </div>
     </div>`).join('');
@@ -2163,8 +2165,8 @@ function renderDashboard() {
     : all.map(p => `<div class="post-row">
         <div class="ch-dot" style="background:${chBg(p.channel)}">${chEmoji(p.channel)}</div>
         <div class="post-info">
-          <div class="post-title-row">${p.title}</div>
-          <div class="post-content-row">${p.content}</div>
+          <div class="post-title-row">${_h(p.title)}</div>
+          <div class="post-content-row">${_h(p.content)}</div>
         </div>
         <span class="status-pill ${p.status === 'published' ? 's-pub' : 's-review'}">${p.status === 'published' ? 'Publicerat' : 'Granskning'}</span>
       </div>`).join('');
@@ -2185,7 +2187,7 @@ function renderDashboard() {
       <div style="border:1.5px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)">
         <div style="aspect-ratio:1;overflow:hidden">${getPostImageHTML(p)}</div>
         <div style="padding:8px 10px">
-          <div style="font-size:12px;font-weight:600;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.title}</div>
+          <div style="font-size:12px;font-weight:600;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_h(p.title)}</div>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
             <span style="font-size:10px;color:${CH_TC[p.channel]};font-weight:500">${CH_LABEL[p.channel]}</span>
             <span style="font-size:10px;color:#9ca3af">${new Date(p.createdAt).toLocaleDateString('sv-SE')}</span>
@@ -2272,10 +2274,10 @@ function renderPropCards() {
   document.getElementById('propCards').innerHTML = props.map((p, i) => `
     <div class="proposal-card ${S.selectedPerChannel[ch] === i ? 'selected' : ''}" onclick="selectProposal('${ch}',${i})">
       <div class="prop-head">
-        <div class="prop-title">${p.title}</div>
+        <div class="prop-title">${_h(p.title)}</div>
         ${S.selectedPerChannel[ch] === i ? '<span class="prop-sel-badge">Vald</span>' : ''}
       </div>
-      <div class="prop-content">${p.content}</div>
+      <div class="prop-content">${_h(p.content)}</div>
       <div class="prop-tags">${p.hashtags.map(t => `<span class="prop-tag">#${t.replace(/^#/, '')}</span>`).join('')}</div>
       
     </div>`).join('');
@@ -2966,8 +2968,8 @@ function renderProposalCards(ch) {
         </div>${_liFoot()}
         <div class="ai-prop-meta">
           <div class="ai-prop-num">Förslag ${i+1}${i===selectedIdx?' · ✓ Vald':''}</div>
-          <div class="ai-prop-title">${p.title||''}</div>
-          <div class="ai-prop-hint">${(p.content||'').slice(0,55)}…</div>
+          <div class="ai-prop-title">${_h(p.title||'')}</div>
+          <div class="ai-prop-hint">${_h((p.content||'').slice(0,55))}…</div>
         </div>
       </div>`;
     }).join('') + (function(){ const sp = proposals[selectedIdx] || proposals[0] || {}; const bp = { channel: ch, imageUrl: activeImageUrl(), imgPos: S._imgPos, imageStyle: S.imageStyle, title: sp.title || '', content: sp.content || '', hashtags: (sp.hashtags||[]).map(t=>t.replace(/^#/,'')), elements: [] }; return _blankCardHTML(bp, "S._blankPick=true;renderProposalCards('" + ch + "')", !!S._blankPick); })() + `</div></div>`;
@@ -3172,8 +3174,8 @@ function renderReview() {
         <div class="rc-ch-badge" style="background:rgba(255,255,255,.9);color:${CH_TC[post.channel]}">${CH_LABEL[post.channel]}</div>
       </div>${_liFoot()}
       <div class="rc-body">
-        <div class="rc-title">${post.title}</div>
-        <div class="rc-text">${post.content}</div>
+        <div class="rc-title">${_h(post.title)}</div>
+        <div class="rc-text">${_h(post.content)}</div>
         <div style="font-size:11px;color:#9ca3af;margin-top:4px">${_authorLine(post)}</div>
         <div class="rc-rules">${badges}</div>
       </div>
@@ -3225,9 +3227,9 @@ function renderDetailPanel() {
             color:${(post.layout||'gradient')===l?'var(--m)':'#6b7280'}">${LAYOUT_LABELS[l]}</button>`).join('')}
         </div>
         <div>
-          ${[['Avsändare',post.author],['Tid',new Date(post.createdAt).toLocaleString('sv-SE')],['Kanal',CH_LABEL[post.channel]],['Titel',post.title]].map(([k,v])=>`<div class="dp-row"><div class="dp-key">${k}</div><div class="dp-val">${v}</div></div>`).join('')}
+          ${[['Avsändare',post.author],['Tid',new Date(post.createdAt).toLocaleString('sv-SE')],['Kanal',CH_LABEL[post.channel]],['Titel',post.title]].map(([k,v])=>`<div class="dp-row"><div class="dp-key">${k}</div><div class="dp-val">${_h(v)}</div></div>`).join('')}
         </div>
-        <div><div class="dp-section-label">Innehåll</div><div class="dp-textbox">${post.content}</div></div>
+        <div><div class="dp-section-label">Innehåll</div><div class="dp-textbox">${_h(post.content)}</div></div>
         <div><div class="dp-section-label"># Hashtags</div><div class="dp-tags">${post.hashtags.map(t=>`<span class="dp-tag">#${t.replace(/^#/,'')}</span>`).join('')}</div></div>
         
         <div><div class="dp-section-label">Regelkontroll</div>${compHTML}</div>
@@ -3300,14 +3302,14 @@ function openEditorModal(post) {
     <div>
       <div class="em-field-label">Prompt</div>
       <div style="display:flex;gap:6px">
-        <input id="em-title" class="em-input" style="flex:1" value="${(post.title||'').replace(/"/g,'&quot;')}" placeholder="Prompt – vad inlägget ska handla om..." onfocus="emSnapshotText()" oninput="emSyncFromForm()" onkeydown="if(event.key==='Enter')rpNewText('ed')">
+        <input id="em-title" class="em-input" style="flex:1" value="${_h(post.title||'')}" placeholder="Prompt – vad inlägget ska handla om..." onfocus="emSnapshotText()" oninput="emSyncFromForm()" onkeydown="if(event.key==='Enter')rpNewText('ed')">
         <button id="rpTxtBtnEd" onclick="rpNewText('ed')" title="Skriv en ny caption utifrån prompten. Bilden behålls." style="padding:8px 12px;background:var(--m);color:#fff;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;border:none;white-space:nowrap">✨ Ny caption</button>
       </div>
       <div style="font-size:11px;color:#9ca3af;margin-top:4px">Prompten styr bara captionen. Rubriken i bilden hämtas från captionen.</div>
     </div>
     <div>
       <div class="em-field-label">Innehåll</div>
-      <textarea id="em-content" class="em-input em-textarea" rows="5" placeholder="Innehåll..." onfocus="emSnapshotText()" oninput="emSyncFromForm()">${post.content||''}</textarea>
+      <textarea id="em-content" class="em-input em-textarea" rows="5" placeholder="Innehåll..." onfocus="emSnapshotText()" oninput="emSyncFromForm()">${_h(post.content||'')}</textarea>
     </div>
     <div>
       <div class="em-field-label">Hashtags</div>
@@ -3322,7 +3324,7 @@ function openEditorModal(post) {
     <div style="background:#f9fafb;border:1px solid #f0f0f0;border-radius:10px;padding:12px;margin-bottom:4px">
       <div class="em-field-label" style="display:flex;align-items:center;justify-content:space-between">🖼️ Text i bilden <button onclick="emResetImgText()" style="font-size:11px;font-weight:600;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:3px 8px;cursor:pointer">↺ Samma som inlägget</button></div>
       <input id="em-img-title" class="em-input" value="${(((post.imgTitle!==undefined&&post.imgTitle!==null)?post.imgTitle:(post.aiTitle||''))+'').replace(/"/g,'&quot;')}" placeholder="Rubrik i bilden – hämtas från captionen, eller skriv fritt" onfocus="emSnapshotText()" oninput="emSyncImgText()" style="margin-bottom:6px">
-      <textarea id="em-img-content" class="em-input em-textarea" rows="3" placeholder="Text i bilden..." onfocus="emSnapshotText()" oninput="emSyncImgText()">${((post.imgContent!==undefined&&post.imgContent!==null)?post.imgContent:(post.content||''))}</textarea>
+      <textarea id="em-img-content" class="em-input em-textarea" rows="3" placeholder="Text i bilden..." onfocus="emSnapshotText()" oninput="emSyncImgText()">${_h(((post.imgContent!==undefined&&post.imgContent!==null)?post.imgContent:(post.content||'')))}</textarea>
       <div style="font-size:11px;color:#9ca3af;margin-top:4px">Påverkar bara texten i bilden — inte inläggstexten ovan.</div>
     </div>
     <div id="emWidgetPanel" style="display:none;background:#fff7fa;border:1.5px solid #f3d3de;border-radius:10px;padding:12px;margin-bottom:10px">
@@ -4352,7 +4354,7 @@ function renderLightbox() {
     <div id="lbImgWrap" style="overflow:hidden;width:100%">${getPostImageLargeHTML(post)}</div>
     ${_liFoot()}
     <div class="lb-footer" style="flex-direction:column;align-items:stretch;gap:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div class="lb-fs">${CH_LABEL[post.channel]} · ${post.author || ''}</div><div class="lb-count">${S._lbSingle ? '' : (S.lbIndex + 1) + ' / ' + S.reviewQueue.length}</div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div class="lb-fs">${CH_LABEL[post.channel]} · ${_h(post.author || '')}</div><div class="lb-count">${S._lbSingle ? '' : (S.lbIndex + 1) + ' / ' + S.reviewQueue.length}</div></div>
       ${_inReview ? `<div style="display:flex;gap:8px">
         <button onclick="event.stopPropagation();closeLightboxBtn();rejectPost('${post.id}')" style="${_bt}background:#fff;border:1.5px solid #ef4444;color:#ef4444">✕ Neka</button>
         <button onclick="event.stopPropagation();closeLightboxBtn();openEditorModal(S.reviewQueue.find(p=>p.id==='${post.id}'))" style="${_bt}background:#fff;border:1.5px solid #e5e7eb;color:#374151">✏️ Redigera</button>
@@ -4813,7 +4815,7 @@ async function renderPublished() {
         ${exp ? `<span class="pub-expiry ${exp.cls}" style="position:absolute;top:8px;left:8px;z-index:3">${exp.label}</span>` : ''}
       </div>
       <div class="pub-post-info">
-        <div class="pub-post-title">${post.title||'Inlägg'}</div>
+        <div class="pub-post-title">${_h(post.title||'Inlägg')}</div>
         <div class="pub-post-meta">${date}</div>
         <div style="font-size:11px;color:#9ca3af;margin-top:2px">${typeof _authorLine==='function'? _authorLine(post) : ''}</div>
         <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
@@ -4877,7 +4879,7 @@ function openPubDetail(idx) {
     </div>
     <div>
       <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin-bottom:6px">Innehåll</div>
-      <div style="font-size:13px;color:#374151;line-height:1.6;white-space:pre-wrap">${post.content||''}</div>
+      <div style="font-size:13px;color:#374151;line-height:1.6;white-space:pre-wrap">${_h(post.content||'')}</div>
     </div>
     ${tags ? `<div><div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin-bottom:6px">Hashtags</div><div>${tags}</div></div>` : ''}
     
@@ -4954,8 +4956,8 @@ function renderTeam() {
     <div class="member-row">
       <div class="member-avatar" style="background:${m.color}20;color:${m.color}">${m.initials}</div>
       <div class="member-info">
-        <div class="member-name">${m.name}</div>
-        <div class="member-email">${m.email}</div>
+        <div class="member-name">${_h(m.name)}</div>
+        <div class="member-email">${_h(m.email)}</div>
       </div>
       <span class="member-role-badge ${ROLE_CLASS[m.role]}">${ROLE_LABEL[m.role]}</span>
       <div class="member-actions">
@@ -5661,7 +5663,7 @@ function renderSchema() {
       const dot  = statusDot[p.status] || '';
       const movable = !String(p.id).startsWith('demo-') && p.status !== 'published';
       const dragAttr = movable ? ` draggable="true" ondragstart="calDragStart(event,'${p.id}')"` : '';
-      return `<div class="cal-chip"${dragAttr} style="background:${bg}18;color:${bg}" title="${p.title}${movable ? ' – dra för att flytta' : ''}" onclick="event.stopPropagation();openScheduledPost('${p.id}')">${icon} ${p.title}${dot}</div>`;
+      return `<div class="cal-chip"${dragAttr} style="background:${bg}18;color:${bg}" title="${_h(p.title)}${movable ? ' – dra för att flytta' : ''}" onclick="event.stopPropagation();openScheduledPost('${p.id}')">${icon} ${_h(p.title)}${dot}</div>`;
     }).join('');
 
     cell.innerHTML = `<div class="cal-date" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -5702,8 +5704,8 @@ function renderSchema() {
       <span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:99px;background:${bg};color:${col};white-space:nowrap">${lbl}</span>
       <div class="upcoming-date-badge">${dateStr} ${timeStr}</div>
       <div style="flex:1;min-width:0">
-        <div class="upcoming-title">${p.title||'(Utan titel)'}</div>
-        <div class="upcoming-content">${p.content||''}</div>
+        <div class="upcoming-title">${_h(p.title||'(Utan titel)')}</div>
+        <div class="upcoming-content">${_h(p.content||'')}</div>
         <div style="font-size:11px;color:#9ca3af;margin-top:3px">${_authorLine(p)}</div>
       </div>
       <button onclick="event.stopPropagation();repostScheduled('${p.id}')" title="Reposta" style="font-size:11px;font-weight:600;border:1px solid #e5e7eb;background:#fff;color:var(--m);border-radius:6px;padding:3px 9px;cursor:pointer;flex-shrink:0;margin-right:6px">🔁</button><button onclick="event.stopPropagation();deleteScheduledPost('${p.id}')" title="Ta bort" style="font-size:11px;font-weight:600;border:1px solid #fecaca;background:#fff;color:#b31e59;border-radius:6px;padding:3px 9px;cursor:pointer;flex-shrink:0">🗑️</button>
