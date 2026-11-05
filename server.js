@@ -1396,12 +1396,16 @@ async function runWeeklyReminders() {
 }
 setInterval(runWeeklyReminders, 15 * 60 * 1000)
 // ---- AI-fakturor: när en månad är slut sparas varje teams anrop och kostnad i ai_fakturor och låses ----
-// Priset tas från miljövariabeln AI_PRIS_PER_ANROP (standard 0.50 kr). En sparad månad ändras aldrig (ON CONFLICT DO NOTHING),
+// Priset tas från tabellen ai_pris (ändras manuellt i databasen). En sparad månad ändras aldrig (ON CONFLICT DO NOTHING),
 // så ett senare prisbyte påverkar bara kommande månader.
 async function lockAiInvoices() {
   try {
     const pool = getAuthPool()
-    const pris = Number(process.env.AI_PRIS_PER_ANROP || 0.5)
+    // Priset ändras manuellt i tabellen ai_pris (en rad, id = 1). Saknas den används AI_PRIS_PER_ANROP eller 0.50 kr.
+    await pool.query("CREATE TABLE IF NOT EXISTS ai_pris (id INTEGER PRIMARY KEY DEFAULT 1, pris_per_anrop_kr NUMERIC(10,2) NOT NULL)")
+    await pool.query("INSERT INTO ai_pris (id, pris_per_anrop_kr) VALUES (1, $1) ON CONFLICT (id) DO NOTHING", [Number(process.env.AI_PRIS_PER_ANROP || 0.5)])
+    const _p = await pool.query('SELECT pris_per_anrop_kr FROM ai_pris WHERE id = 1')
+    const pris = Number((_p.rows[0] && _p.rows[0].pris_per_anrop_kr) || process.env.AI_PRIS_PER_ANROP || 0.5)
     await pool.query("CREATE TABLE IF NOT EXISTS ai_fakturor (team TEXT, manad TEXT, textforslag INTEGER, bilder INTEGER, mallanrop INTEGER, totalt INTEGER, pris_per_anrop_kr NUMERIC(10,2), kostnad_kr NUMERIC(12,2), last_at TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (team, manad))")
     await pool.query("CREATE TABLE IF NOT EXISTS ai_usage (id SERIAL PRIMARY KEY, workspace TEXT, username TEXT, endpoint TEXT, status INTEGER, ms INTEGER, ip TEXT, user_agent TEXT, created_at TIMESTAMPTZ DEFAULT NOW())")
     const r = await pool.query(
