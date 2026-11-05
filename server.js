@@ -1395,6 +1395,27 @@ async function runWeeklyReminders() {
   } catch (e) { console.error('[reminders]', e.message) }
 }
 setInterval(runWeeklyReminders, 15 * 60 * 1000)
+// ---- AI-fakturor: när en månad är slut sparas varje teams anrop och kostnad i ai_fakturor och låses ----
+// Priset tas från miljövariabeln AI_PRIS_PER_ANROP (standard 0.50 kr). En sparad månad ändras aldrig (ON CONFLICT DO NOTHING),
+// så ett senare prisbyte påverkar bara kommande månader.
+async function lockAiInvoices() {
+  try {
+    const pool = getAuthPool()
+    const pris = Number(process.env.AI_PRIS_PER_ANROP || 0.5)
+    await pool.query("CREATE TABLE IF NOT EXISTS ai_fakturor (team TEXT, manad TEXT, textforslag INTEGER, bilder INTEGER, mallanrop INTEGER, totalt INTEGER, pris_per_anrop_kr NUMERIC(10,2), kostnad_kr NUMERIC(12,2), last_at TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (team, manad))")
+    await pool.query("CREATE TABLE IF NOT EXISTS ai_usage (id SERIAL PRIMARY KEY, workspace TEXT, username TEXT, endpoint TEXT, status INTEGER, ms INTEGER, ip TEXT, user_agent TEXT, created_at TIMESTAMPTZ DEFAULT NOW())")
+    const r = await pool.query(
+      "INSERT INTO ai_fakturor (team, manad, textforslag, bilder, mallanrop, totalt, pris_per_anrop_kr, kostnad_kr) " +
+      "SELECT workspace, to_char(created_at AT TIME ZONE 'Europe/Stockholm', 'YYYY-MM') AS m, " +
+      "COUNT(*) FILTER (WHERE endpoint = '/api/generate'), COUNT(*) FILTER (WHERE endpoint = '/api/generate-image'), " +
+      "COUNT(*) FILTER (WHERE endpoint IN ('/api/clean-template','/api/template-layers')), COUNT(*), $1::numeric, ROUND(COUNT(*) * $1::numeric, 2) " +
+      "FROM ai_usage WHERE status = 200 AND to_char(created_at AT TIME ZONE 'Europe/Stockholm', 'YYYY-MM') < to_char(NOW() AT TIME ZONE 'Europe/Stockholm', 'YYYY-MM') " +
+      "GROUP BY 1, 2 ON CONFLICT (team, manad) DO NOTHING", [pris])
+    if (r.rowCount) console.log('[ai_fakturor] låste ' + r.rowCount + ' månad(er)')
+  } catch (e) { console.error('[ai_fakturor]', e.message) }
+}
+setInterval(lockAiInvoices, 60 * 60 * 1000)
+setTimeout(lockAiInvoices, 90 * 1000)
 setTimeout(runWeeklyReminders, 60 * 1000)
 // Förhandsvisning för Spot-admin: visar vilka mejl som skulle gå ut, utan att skicka något
 app.get('/api/admin/reminders-preview', auth, async (req, res) => {
