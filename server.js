@@ -16,7 +16,7 @@ const app = express()
 app.set('trust proxy', 1)
 const PORT = process.env.PORT || 3000
 const UNAME = process.env.APP_USERNAME || 'Spot'
-const UPASS = process.env.APP_PASSWORD || 'SpotSpot1234!'
+const UPASS = process.env.APP_PASSWORD || null // [Säkerhet 11] inget hårdkodat reservlösenord
 const sessions = {}
 const { Pool } = require('pg')
 let _authPool = null
@@ -49,7 +49,7 @@ async function ensureUsersTable() {
   await getAuthPool().query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS workspace TEXT DEFAULT 'spot'")
   await getAuthPool().query("UPDATE app_users SET workspace='spot' WHERE workspace IS NULL")
   const r = await getAuthPool().query("SELECT COUNT(*) FROM app_users")
-  if (parseInt(r.rows[0].count, 10) === 0) {
+  if (parseInt(r.rows[0].count, 10) === 0 && process.env.SEED_DEMO_USERS === '1') { // [Säkerhet 12] demokonton skapas bara om SEED_DEMO_USERS=1
     await getAuthPool().query("INSERT INTO app_users (username,password,role,first_name,last_name,workspace) VALUES ($1,$2,$3,$4,$5,'spot'),($6,$7,$8,$9,$10,'spot'),($11,$12,$13,$14,$15,'spot')", [
       'admin', hashPassword('Spot1234!'), 'admin', 'Anna', 'Andersson',
       'redaktor', hashPassword('Spot1234!'), 'redaktor', 'Erik', 'Eriksson',
@@ -103,7 +103,7 @@ function verifyPassword(pw, stored) {
   const want = Buffer.from(parts[2], 'hex'), got = crypto.scryptSync(String(pw), parts[1], 64)
   return want.length === got.length && crypto.timingSafeEqual(want, got)
 }
-async function getPassword() { try { await ensureAuthTable(); const r = await getAuthPool().query("SELECT value FROM app_settings WHERE key='password'"); return (r.rows[0] && r.rows[0].value) || UPASS } catch (e) { console.error('[auth] getPassword error:', e.message); return UPASS } }
+async function getPassword() { try { await ensureAuthTable(); const r = await getAuthPool().query("SELECT value FROM app_settings WHERE key='password'"); return (r.rows[0] && r.rows[0].value) || UPASS } catch (e) { console.error('[auth] getPassword error:', e.message); return null } }
 async function setPassword(pw) { try { await ensureAuthTable(); const r = await getAuthPool().query("INSERT INTO app_settings (key,value) VALUES ('password',$1) ON CONFLICT (key) DO UPDATE SET value=$1", [hashPassword(pw)]); console.log('[auth] setPassword ok, rowCount:', r.rowCount) } catch (e) { console.error('[auth] setPassword error:', e.message) } }
 const resetTokens = {}
 function makeResetToken(username) { const t = crypto.randomBytes(24).toString('hex'); resetTokens[t] = { exp: Date.now() + 30 * 60 * 1000, username: username || null }; return t }
@@ -125,6 +125,122 @@ async function sendAppMail({ to, subject, text, html, fromName, replyTo, attachm
 }
 app.use(express.json({ limit: '20mb' }))
 app.use(express.urlencoded({ extended: true }))
+// ════════════════ SÄKERHET ════════════════
+function clientIp(req) { return String(req.headers['x-real-ip'] || (req.headers['x-forwarded-for'] || '').split(',')[0] || req.ip || '').trim() }
+function clientUa(req) { return String(req.headers['user-agent'] || '').slice(0, 300) }
+const COOKIE_FLAGS = '; Path=/; HttpOnly; Secure; SameSite=Lax'
+// [Säkerhet 1] Granskningslogg: inloggningar, misslyckade försök, byte av arbetsyta, lösenord, team m.m.
+async function ensureAuditTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS audit_log (id SERIAL PRIMARY KEY, event TEXT, username TEXT, workspace TEXT, ip TEXT, user_agent TEXT, details JSONB, created_at TIMESTAMPTZ DEFAULT NOW())") }
+function audit(req, event, extra) {
+  const s = (req && sessions[getToken(req)]) || {}
+  const e = extra || {}
+  ensureAuditTable()
+    .then(function () { return getAuthPool().query('INSERT INTO audit_log (event,username,workspace,ip,user_agent,details) VALUES ($1,$2,$3,$4,$5,$6)', [event, e.username || s.u || null, e.workspace || s.workspace || null, req ? clientIp(req) : null, req ? clientUa(req) : null, JSON.stringify(e.details || {})]) })
+    .catch(function (err) { console.error('[audit] log error:', err.message) })
+}
+// [Säkerhet 2] Säkerhetsheaders på alla svar
+app.use(function (req, res, next) {
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  res.removeHeader('X-Powered-By')
+  next()
+})
+// [Säkerhet 3] CSRF-skydd: anrop som ändrar data måste komma från appens egen domän
+app.use(function (req, res, next) {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next()
+  const origin = req.headers.origin || req.headers.referer || ''
+  if (!origin) return next()
+  try { if (new URL(origin).host === req.get('host')) return next() } catch (e) {}
+  audit(req, 'csrf_blocked', { details: { path: req.path, origin: String(origin).slice(0, 200) } })
+  return res.status(403).json({ error: 'Otillåten källa' })
+})
+// [Säkerhet 4] Hastighetsbegränsning (i minnet): skyddar inloggning, glömt lösenord och AI-kostnader
+const _rl = {}
+function rateHit(key, limit, windowMs) {
+  const now = Date.now(), e = _rl[key] || (_rl[key] = [])
+  while (e.length && e[0] < now - windowMs) e.shift()
+  e.push(now)
+  return e.length > limit
+}
+setInterval(function () { const cut = Date.now() - 2 * 3600 * 1000; Object.keys(_rl).forEach(function (k) { if (!_rl[k].length || _rl[k][_rl[k].length - 1] < cut) delete _rl[k] }) }, 10 * 60 * 1000)
+// [Säkerhet 5] Spärr efter för många felaktiga inloggningar (5 fel på 15 min = spärrad i 15 min)
+const _loginFails = {}
+function loginLocked(req, ident) { const k = clientIp(req) + '|' + String(ident || '').toLowerCase(), f = _loginFails[k]; return !!(f && f.until > Date.now()) }
+function loginFailed(req, ident) {
+  const k = clientIp(req) + '|' + String(ident || '').toLowerCase(), now = Date.now()
+  const f = _loginFails[k] && _loginFails[k].first > now - 15 * 60 * 1000 ? _loginFails[k] : (_loginFails[k] = { n: 0, first: now, until: 0 })
+  f.n++
+  if (f.n >= 5) { f.until = now + 15 * 60 * 1000; audit(req, 'login_locked', { username: ident }) }
+}
+function loginOk(req, ident) { delete _loginFails[clientIp(req) + '|' + String(ident || '').toLowerCase()] }
+// [Säkerhet 6] Mejlvarning när Spot-admin loggar in från en ny IP-adress (inte sedd senaste 30 dagarna)
+async function alertNewDevice(req, username) {
+  try {
+    await ensureAuditTable()
+    const ip = clientIp(req)
+    const r = await getAuthPool().query("SELECT 1 FROM audit_log WHERE event='login_ok' AND username=$1 AND ip=$2 AND created_at > NOW() - INTERVAL '30 days' LIMIT 1", [username, ip])
+    if (r.rows.length) return
+    const to = process.env.SECURITY_ALERT_EMAIL || process.env.FEEDBACK_EMAIL || 'hello@spotstudio.se'
+    const when = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' })
+    await sendAppMail({ to, subject: 'spot. – Ny inloggning för ' + username, text: 'Kontot ' + username + ' loggade in från en ny IP-adress.\n\nTid: ' + when + '\nIP: ' + ip + '\nEnhet: ' + clientUa(req) + '\n\nVar det inte ni? Byt lösenord direkt och logga ut alla sessioner i appen.' })
+  } catch (e) { console.error('[alert]', e.message) }
+}
+// [Säkerhet 7] Sessioner löper ut på servern: max 7 dagar totalt och 24 timmar utan aktivitet
+const SESSION_MAX_MS = 7 * 24 * 3600 * 1000, SESSION_IDLE_MS = 24 * 3600 * 1000
+function sessionValid(t) {
+  const s = sessions[t]; if (!s) return false
+  const now = Date.now()
+  if (!s.createdAt) s.createdAt = now
+  if (now - s.createdAt > SESSION_MAX_MS || (s.lastSeen && now - s.lastSeen > SESSION_IDLE_MS)) { delete sessions[t]; dropSession(t); return false }
+  if (!s.lastSeen || now - s.lastSeen > 5 * 60 * 1000) { s.lastSeen = now; persistSession(t, s) }
+  return true
+}
+// [Säkerhet 8] Logga ut alla sessioner för en användare (vid nytt lösenord, borttagning eller manuellt)
+function revokeUserSessions(username, exceptToken) { let n = 0; Object.keys(sessions).forEach(function (t) { if (t !== exceptToken && sessions[t] && sessions[t].u === username) { delete sessions[t]; dropSession(t); n++ } }); return n }
+// [Säkerhet 9] AI-logg: varje AI-anrop sparas med arbetsyta, användare, IP och enhet + tak per användare (60/timme)
+async function ensureAiUsageTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS ai_usage (id SERIAL PRIMARY KEY, workspace TEXT, username TEXT, endpoint TEXT, status INTEGER, ms INTEGER, ip TEXT, user_agent TEXT, created_at TIMESTAMPTZ DEFAULT NOW())") }
+const AI_ENDPOINTS = ['/api/generate', '/api/clean-template', '/api/template-layers', '/api/generate-image']
+app.use(function (req, res, next) {
+  if (req.method !== 'POST' || AI_ENDPOINTS.indexOf(req.path) < 0) return next()
+  const s = sessions[getToken(req)] || {}
+  if (s.u && rateHit('ai|' + s.u, 60, 3600 * 1000)) { audit(req, 'ai_rate_limited', { details: { path: req.path } }); return res.status(429).json({ error: 'För många AI-anrop. Försök igen om en stund.' }) }
+  const t0 = Date.now(), ip = clientIp(req), ua = clientUa(req)
+  res.on('finish', function () {
+    if (!s.u) return
+    ensureAiUsageTable()
+      .then(function () { return getAuthPool().query('INSERT INTO ai_usage (workspace,username,endpoint,status,ms,ip,user_agent) VALUES ($1,$2,$3,$4,$5,$6,$7)', [s.workspace || 'spot', s.u, req.path, res.statusCode, Date.now() - t0, ip, ua]) })
+      .catch(function (e) { console.error('[ai_usage] log error:', e.message) })
+  })
+  next()
+})
+function isSpotAdmin(req) { const s = sessions[getToken(req)] || {}; return (s.realWorkspace || s.workspace || 'spot') === 'spot' && s.role === 'admin' }
+// [Säkerhet 10] Spot-admin: läs granskningslogg, AI-logg och aktiva sessioner – och logga ut sessioner
+app.get('/api/admin/security/audit-log', auth, async (req, res) => {
+  if (!isSpotAdmin(req)) return res.status(403).json({ error: 'Endast spot-admin' })
+  try { await ensureAuditTable(); const lim = Math.min(1000, parseInt(req.query.limit, 10) || 200); const r = await getAuthPool().query('SELECT id, event, username, workspace, ip, user_agent, details, created_at FROM audit_log ORDER BY id DESC LIMIT $1', [lim]); res.json({ events: r.rows }) } catch (e) { res.status(500).json({ error: e.message }) }
+})
+app.get('/api/admin/security/ai-usage', auth, async (req, res) => {
+  if (!isSpotAdmin(req)) return res.status(403).json({ error: 'Endast spot-admin' })
+  try { await ensureAiUsageTable(); const lim = Math.min(1000, parseInt(req.query.limit, 10) || 200); const r = await getAuthPool().query('SELECT * FROM ai_usage ORDER BY id DESC LIMIT $1', [lim]); res.json({ calls: r.rows }) } catch (e) { res.status(500).json({ error: e.message }) }
+})
+app.get('/api/admin/security/sessions', auth, (req, res) => {
+  if (!isSpotAdmin(req)) return res.status(403).json({ error: 'Endast spot-admin' })
+  const mine = getToken(req)
+  res.json({ sessions: Object.keys(sessions).map(function (t) { const s = sessions[t] || {}; return { id: t.slice(0, 8), user: s.u, workspace: s.workspace, viewingAs: !!s.realWorkspace, ip: s.ip || null, device: s.ua || null, created: s.createdAt ? new Date(s.createdAt).toISOString() : null, lastSeen: s.lastSeen ? new Date(s.lastSeen).toISOString() : null, current: t === mine } }) })
+})
+app.post('/api/admin/security/revoke', auth, (req, res) => {
+  if (!isSpotAdmin(req)) return res.status(403).json({ error: 'Endast spot-admin' })
+  const b = req.body || {}, mine = getToken(req)
+  let n = 0
+  if (b.all) { Object.keys(sessions).forEach(function (t) { if (t !== mine) { delete sessions[t]; dropSession(t); n++ } }) }
+  else if (b.username) n = revokeUserSessions(String(b.username), mine)
+  else if (b.id) { Object.keys(sessions).forEach(function (t) { if (t !== mine && t.slice(0, 8) === String(b.id)) { delete sessions[t]; dropSession(t); n++ } }) }
+  audit(req, 'sessions_revoked', { details: { all: !!b.all, target: b.username || b.id || null, count: n } })
+  res.json({ ok: true, revoked: n })
+})
 const _TPL = { 'tpl-studio.png': '4.png', 'tpl-case-hallanning.png': '5.png', 'tpl-case-gardsstyling.png': '7.png', 'tpl-louisiana.png': '6.png' }
 const FAVICON_PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAE2ElEQVR42u1Wa2xURRQ+Z2bu3bu3u9tdyrYFti1gbStStFYggS5RCVGIwUhREiPRBEMiRoMgPv6YQIgx8Y8kakyqJmpiDCEQENFglPoAhGqgppIW2qbPbWnZbXfv7t3d+5jjj8UCDSRG4ZecZCaZmfN9X3LOmZmDh6qegltpDG6x3Ra4LfC/FECG1wggInIGiICInCFj01yRMeQMOQfEaUQFLPIrEJLkmPmrPfmTaq2byQEi2a6dNMl2mCIAGRDInI2cO4bpmpZjZJEzJjhIQsbIla5pkZROKuuaea6pyBAAyXHnb1rNGEt3x7hHAQJRXD8v1HgnSBI+Tfi8iVOdibbz0rKRs2BDdbKjb9ajS8MrFjHBuz84ZPaP8SLNNXPCr8+M1hdVlRUvqJxs7x3c+6Nr2mo4MP+5NbVb13Xs/Jx5ROrcoDVhsNrt6yfP9owcOT249yfjwvCidzarM/xF1bOjh3fX73627OFGktT36VF/bcXyAztFQHeMrDcSnrfpEbP/YuzgiaEDx6u3rI0e3u0pD5oD44nTnUCUaOsaa2130lnkjCXaukaOnsqNxPPjycEvW08077Qn05numBLQvXNKJtq6Rr8+PXm25/cte/TZJXMeW2ZNGAt3PZM41Zls73XM/MXvz7Suek2vLF3csk3aDhEVEkCSLid54Zsbm/btKl+zRK8q5UWacX6YCOx01ozFs0PxTO+oWuJXQ34rkbbTWb0iHGy4I9hQPdneq5YEAEgrDeXHk3+88XHJkroZ99e46dy0ohI9Hx2JPL68ojkKAMaF4fN79g/t/4VxjogoGKqCXEmSmMpQcNvIFs0tV4M+FExaNnIubUcJ6GOt7dKyixfOTfeOXFuzyNpfbTl635ZjD+04s+3DfDzV+N6LM5fdXQgfEAARIJLjaqUhoampjj57Ii00NXBXlZu1kDEgQsGclJmPG46Zh6n6RABEshzGOCcpU50DfZ9990PT1uGvTpatbHDsHDAkSYDIFGFPpstXL3bM3KVfzxldg/kJo277etfMk5QoONmuCOh2KhM//qfi00lKICJHypzlKQ2yutc3AIC0HBRcKS6Sjpv4rYsLlRypFOvgytxoIrCgsubl5rM7Whwj6+bsMy+9H47W37vneSedtZMZJ5OLrGvq/eTbTP9FIkLGuK5xjzKnuWnl8Xf5Kxs3hx+8RwsH/bWRiieiqY7+oX0/M0WJrFvur4kYPTE9Eq5+YW1vy5GBL46pxUVMFcmOvnhbZ+WGB8pXNXKP4q+tyMbisYMn1JA/N5IoWVoXjtZnBsYRYfbqJbjPv1avCGvlIQDIjSRyowkl5LfiqRXfvMU9ysmn3/bOKsn0jVoJQw35yJUAgJzZKRMZ+msiTFWysUtW3BA+jQjIdlDhWtmMbCwubUcrDwnPzICdzOTHk4DAFKEEfUAEAIXZHBizJ9JM4VPsAECuVAI6SUp3x4iIqUL4tELhoyKAyBwYY6rgmmqNJwW5EjnjuqdAWlgCAKoCFcFVhXs95LpT7FMaAMA09TLq72sFRIDAPAoQAREqQlw5uAos/F6mClS48HvJcaa9o1fp0PU2L4+CA16n8SJAzpSADgh2yiRHAv7770Fc78sAcmX+UhIAkPP/wn4DAQBAQEXcMAg3QeBmUN/uKv6h/QVNLGWbh4CtIwAAAABJRU5ErkJggg==';
 const FAVICON_PNG_BUF = Buffer.from(FAVICON_PNG_B64, 'base64');
@@ -285,34 +401,43 @@ app.get('/assets/:f', (req, res) => { const f = _TPL[req.params.f] || req.params
 function passwordError(pw) { pw = String(pw || ''); if (pw.length < 6 || !/[A-ZÅÄÖ]/.test(pw) || !/[^A-Za-z0-9ÅÄÖåäö]/.test(pw)) return 'Lösenordet måste vara minst 6 tecken och innehålla minst en versal och ett specialtecken'; return null }
 function makeToken() { return crypto.randomBytes(32).toString('hex') }
 function getToken(req) { const c = req.headers.cookie || ''; const p = c.split(';').map(x => x.trim()).find(x => x.startsWith('spot_session=')); return p ? p.split('=')[1] : null }
-function auth(req, res, next) { if (sessions[getToken(req)]) return next(); if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' }); res.redirect('/login') }
+function auth(req, res, next) { if (sessionValid(getToken(req))) return next(); if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' }); res.redirect('/login') }
 app.get('/login', (_req, res) => res.send(LOGIN_HTML))
 app.post('/login', async (req, res) => {
   const { username, password } = req.body
   const identifier = String(username || '')
+  if (loginLocked(req, identifier) || rateHit('login|' + clientIp(req), 30, 15 * 60 * 1000)) { audit(req, 'login_blocked', { username: identifier }); return res.redirect('/login?err=locked') }
   const u = (await getUserByUsername(identifier)) || (identifier.includes('@') ? await getUserByEmail(identifier) : null)
   if (u && verifyPassword(password, u.password)) {
     if (!isHashedPassword(u.password)) { try { await getAuthPool().query('UPDATE app_users SET password=$1 WHERE username=$2', [hashPassword(password), u.username]) } catch (e) {} }
     const t = makeToken()
-    sessions[t] = { u: u.username, role: u.role, firstName: u.first_name, lastName: u.last_name, workspace: u.workspace || 'spot' }
+    sessions[t] = { u: u.username, role: u.role, firstName: u.first_name, lastName: u.last_name, workspace: u.workspace || 'spot', createdAt: Date.now(), lastSeen: Date.now(), ip: clientIp(req), ua: clientUa(req) }
     persistSession(t, sessions[t])
-    res.setHeader('Set-Cookie', 'spot_session=' + t + '; Path=/; HttpOnly; SameSite=Lax; Max-Age=' + (60*60*24*7))
+    loginOk(req, identifier)
+    if ((u.workspace || 'spot') === 'spot' && u.role === 'admin') alertNewDevice(req, u.username)
+    audit(req, 'login_ok', { username: u.username, workspace: u.workspace || 'spot' })
+    res.setHeader('Set-Cookie', 'spot_session=' + t + COOKIE_FLAGS + '; Max-Age=' + (60*60*24*7))
     return res.redirect('/')
   }
   const recoveryEmail = process.env.APP_RECOVERY_EMAIL
   const isMainAdmin = identifier === UNAME || (recoveryEmail && identifier.trim().toLowerCase() === recoveryEmail.trim().toLowerCase())
   const _mainPw = isMainAdmin ? await getPassword() : null
-  if (isMainAdmin && verifyPassword(password, _mainPw)) {
+  if (isMainAdmin && _mainPw && verifyPassword(password, _mainPw)) {
     if (!isHashedPassword(_mainPw)) await setPassword(password)
     const t = makeToken()
-    sessions[t] = { u: UNAME, role: 'admin', firstName: process.env.APP_USER_FIRSTNAME || 'Spot', lastName: process.env.APP_USER_LASTNAME || 'Admin', workspace: 'spot' }
+    sessions[t] = { u: UNAME, role: 'admin', firstName: process.env.APP_USER_FIRSTNAME || 'Spot', lastName: process.env.APP_USER_LASTNAME || 'Admin', workspace: 'spot', createdAt: Date.now(), lastSeen: Date.now(), ip: clientIp(req), ua: clientUa(req) }
     persistSession(t, sessions[t])
-    res.setHeader('Set-Cookie', 'spot_session=' + t + '; Path=/; HttpOnly; SameSite=Lax; Max-Age=' + (60*60*24*7))
+    loginOk(req, identifier)
+    alertNewDevice(req, UNAME)
+    audit(req, 'login_ok', { username: UNAME, workspace: 'spot' })
+    res.setHeader('Set-Cookie', 'spot_session=' + t + COOKIE_FLAGS + '; Max-Age=' + (60*60*24*7))
     return res.redirect('/')
   }
+  loginFailed(req, identifier)
+  audit(req, 'login_failed', { username: identifier.slice(0, 100) })
   res.redirect('/login?err=1')
 })
-app.post('/logout', (req, res) => { const _t = getToken(req); delete sessions[_t]; dropSession(_t); res.setHeader('Set-Cookie', 'spot_session=; Path=/; Max-Age=0'); res.json({ ok: true }) })
+app.post('/logout', (req, res) => { const _t = getToken(req); audit(req, 'logout'); delete sessions[_t]; dropSession(_t); res.setHeader('Set-Cookie', 'spot_session=' + COOKIE_FLAGS + '; Max-Age=0'); res.json({ ok: true }) })
 app.get('/api/me', auth, (req, res) => { const s = sessions[getToken(req)] || {}; const firstName = s.firstName || 'Spot'; const lastName = s.lastName || (s.firstName ? '' : 'Admin'); const role = s.role || 'admin'; const initials = (firstName[0]||'') + (lastName[0]||''); res.json({ firstName, lastName, role, workspace: s.workspace || 'spot', viewingAs: s.realWorkspace ? s.workspace : null, initials: initials.toUpperCase() }) })
 async function ensureChannelsTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS user_channels (username TEXT, platform TEXT, handle TEXT, PRIMARY KEY (username, platform))") }
 app.get('/api/channels', auth, async (req, res) => {
@@ -368,6 +493,7 @@ app.post('/api/team/invite', auth, async (req, res) => {
     username = candidate
     await getAuthPool().query('INSERT INTO app_users (username,password,role,first_name,last_name,email,workspace) VALUES ($1,$2,$3,$4,$5,$6,$7)', [username, hashPassword(password), dbRole, firstName, lastName, email, s.workspace || 'spot'])
     logBillingEvent(s.workspace || 'spot', 'member_added', { username, name: (firstName + ' ' + lastName).trim(), role: dbRole, addedBy: s.u })
+    audit(req, 'member_added', { details: { member: username, role: dbRole } })
     const loginLink = 'https://' + req.get('host') + '/login'
     const mailSent = await sendAppMail({
       to: email,
@@ -411,16 +537,37 @@ app.post('/api/team/remove', auth, async (req, res) => {
     // Logga ut den borttagna medlemmen direkt
     Object.keys(sessions).forEach(function(t){ if (sessions[t] && sessions[t].u === username) { delete sessions[t]; dropSession(t) } })
     logBillingEvent(s.workspace || 'spot', 'member_removed', { username, removedBy: s.u })
+    audit(req, 'member_removed', { details: { member: username } })
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
-app.post('/api/change-password', auth, async (req, res) => { const { currentPassword, newPassword } = req.body || {}; if (passwordError(newPassword)) return res.status(400).json({ error: passwordError(newPassword) }); if (!verifyPassword(currentPassword, await getPassword())) return res.status(401).json({ error: 'Fel nuvarande lösenord' }); await setPassword(String(newPassword)); res.json({ ok: true }) })
+app.post('/api/change-password', auth, async (req, res) => {
+  // [Säkerhet 13] Varje användare byter sitt EGET lösenord (tidigare ändrades alltid huvudadminens), och andra sessioner loggas ut
+  const { currentPassword, newPassword } = req.body || {}
+  if (passwordError(newPassword)) return res.status(400).json({ error: passwordError(newPassword) })
+  const t = getToken(req), s = sessions[t] || {}
+  const u = s.u && s.u !== UNAME ? await getUserByUsername(s.u) : null
+  if (u) {
+    if (!verifyPassword(currentPassword, u.password)) { audit(req, 'password_change_failed'); return res.status(401).json({ error: 'Fel nuvarande lösenord' }) }
+    await getAuthPool().query('UPDATE app_users SET password=$1 WHERE username=$2', [hashPassword(String(newPassword)), u.username])
+  } else {
+    const cur = await getPassword()
+    if (!cur || !verifyPassword(currentPassword, cur)) { audit(req, 'password_change_failed'); return res.status(401).json({ error: 'Fel nuvarande lösenord' }) }
+    await setPassword(String(newPassword))
+  }
+  const n = revokeUserSessions(s.u, t)
+  audit(req, 'password_changed', { details: { otherSessionsLoggedOut: n } })
+  res.json({ ok: true })
+})
 app.get('/forgot', (_req, res) => res.send(FORGOT_HTML))
 app.post('/forgot', async (req, res) => {
   try {
     if (!process.env.RESEND_API_KEY) return res.redirect('/forgot?err=nomailer')
     const submitted = String((req.body || {}).email || '').trim().toLowerCase()
-    if (!submitted) return res.redirect('/forgot?err=nomatch')
+    if (!submitted) return res.redirect('/forgot?err=1')
+    // [Säkerhet 14] Max 5 återställningar per timme per IP, och samma svar oavsett om adressen finns (avslöjar inte konton)
+    if (rateHit('forgot|' + clientIp(req), 5, 3600 * 1000)) { audit(req, 'forgot_rate_limited', { details: { email: submitted.slice(0, 100) } }); return res.redirect('/forgot?sent=1') }
+    audit(req, 'password_reset_requested', { details: { email: submitted.slice(0, 100) } })
     const recoveryEmail = process.env.APP_RECOVERY_EMAIL
     let targetUsername = null
     let targetEmail = null
@@ -430,7 +577,7 @@ app.post('/forgot', async (req, res) => {
     } else {
       await ensureUsersTable()
       const r = await getAuthPool().query('SELECT username, email FROM app_users WHERE lower(email)=$1', [submitted])
-      if (!r.rows.length) return res.redirect('/forgot?err=nomatch')
+      if (!r.rows.length) return res.redirect('/forgot?sent=1')
       targetUsername = r.rows[0].username
       targetEmail = r.rows[0].email
     }
@@ -447,7 +594,7 @@ app.post('/forgot', async (req, res) => {
   } catch (e) { console.error('[forgot] error:', e.message); res.redirect('/forgot?err=1') }
 })
 app.get('/reset', (req, res) => { const t = req.query.token || ''; if (!validResetToken(t)) return res.send(RESET_INVALID_HTML); res.send(RESET_HTML.split('__TOKEN__').join(t)) })
-app.post('/reset', async (req, res) => { const { token, newPassword } = req.body || {}; if (!validResetToken(token)) return res.redirect('/forgot?err=1'); if (passwordError(newPassword)) return res.redirect('/reset?token=' + token + '&err=1'); const rt = resetTokens[token]; if (rt && rt.username) { await getAuthPool().query('UPDATE app_users SET password=$1 WHERE username=$2', [hashPassword(newPassword), rt.username]) } else { await setPassword(String(newPassword)) } delete resetTokens[token]; res.redirect('/login?reset=1') })
+app.post('/reset', async (req, res) => { const { token, newPassword } = req.body || {}; if (!validResetToken(token)) return res.redirect('/forgot?err=1'); if (passwordError(newPassword)) return res.redirect('/reset?token=' + token + '&err=1'); const rt = resetTokens[token]; if (rt && rt.username) { await getAuthPool().query('UPDATE app_users SET password=$1 WHERE username=$2', [hashPassword(newPassword), rt.username]) } else { await setPassword(String(newPassword)) } delete resetTokens[token]; const _ru = (rt && rt.username) || UNAME; revokeUserSessions(_ru); audit(req, 'password_reset', { username: _ru }); res.redirect('/login?reset=1') })
 app.get('/inject.js', (_req, res) => { try { res.setHeader('Content-Type', 'application/javascript'); res.send(fs.readFileSync(path.join(__dirname, 'inject.js'), 'utf-8')) } catch (e) { res.send('// inject.js not found') } })
 app.get('/', auth, (req, res) => { try { const html = fs.readFileSync(path.join(__dirname, 'poc.html'), 'utf-8'); const tag = '<script src="/inject.js"></script>'; const idx = html.lastIndexOf('</script>'); const patched = html.slice(0, idx + 9) + tag + html.slice(idx + 9); res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.send(patched) } catch (e) { res.status(500).send('Error: ' + e.message) } })
 // Text från Gemini: bildmodellen (Nano Banana 2.1) svarar ibland utan text, så textjobb provar en textmodell först.
@@ -993,6 +1140,7 @@ app.post('/api/admin/create-workspace', auth, async (req, res) => {
       'INSERT INTO app_users (username,password,role,first_name,last_name,workspace,email) VALUES ($1,$2,$3,$4,$5,$6,$7)',
       [username, hashPassword(adminPassword), 'admin', adminFirstName || companyName, adminLastName || '', workspaceId, email]
     )
+    audit(req, 'workspace_created', { details: { workspaceId, admin: username } })
     res.json({ ok: true, workspaceId, username })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -1050,6 +1198,7 @@ app.post('/api/admin/view-workspace', auth, async (req, res) => {
     }
     sessions[t] = s
     persistSession(t, s)
+    audit(req, 'view_workspace', { workspace: s.workspace })
     res.json({ ok: true, workspace: s.workspace })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -1280,7 +1429,7 @@ app.post('/api/admin/reminders-test', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 restoreSessions().finally(function(){ app.listen(PORT, () => console.log('spot. running on ' + PORT)) })
-const LOGIN_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot.</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:32px}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">content studio</div><form method="POST" action="/login"><div class="f"><label>Användarnamn eller e-post</label><input type="text" name="username" autofocus/></div><div class="f"><label>Lösenord</label><input type="password" name="password"/></div><div class="err" id="err">Fel.</div><button type="submit">Logga in</button><div style="text-align:center;margin-top:14px"><a href="/forgot" style="font-size:12px;color:#9ca3af;text-decoration:none">Glömt lösenord?</a></div><div class="ok" id="ok" style="display:none;color:#16a34a;font-size:13px;margin-top:8px;text-align:center">Lösenordet är återställt. Logga in med det nya lösenordet.</div></form></div><script>var q=new URLSearchParams(location.search);if(q.get("err"))document.getElementById("err").classList.add("show");if(q.get("reset"))document.getElementById("ok").style.display="block"<\/script></body></html>'
+const LOGIN_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot.</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:32px}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">content studio</div><form method="POST" action="/login"><div class="f"><label>Användarnamn eller e-post</label><input type="text" name="username" autofocus/></div><div class="f"><label>Lösenord</label><input type="password" name="password"/></div><div class="err" id="err">Fel.</div><button type="submit">Logga in</button><div style="text-align:center;margin-top:14px"><a href="/forgot" style="font-size:12px;color:#9ca3af;text-decoration:none">Glömt lösenord?</a></div><div class="ok" id="ok" style="display:none;color:#16a34a;font-size:13px;margin-top:8px;text-align:center">Lösenordet är återställt. Logga in med det nya lösenordet.</div></form></div><script>var q=new URLSearchParams(location.search);if(q.get("err")){var _e=document.getElementById("err");if(q.get("err")==="locked")_e.textContent="För många försök. Vänta 15 minuter och försök igen.";_e.classList.add("show")}if(q.get("reset"))document.getElementById("ok").style.display="block"<\/script></body></html>'
  
 const FORGOT_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot. - Glömt lösenord</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:24px;line-height:1.5}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.msg{font-size:13px;margin-top:8px;display:none;padding:10px 12px;border-radius:8px}.msg.err{color:#b31e59;background:#fff5f7}.msg.ok{color:#16a34a;background:#f0fdf4}.msg.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}a.back{display:block;text-align:center;margin-top:14px;font-size:12px;color:#9ca3af;text-decoration:none}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">Vi skickar en länk för att återställa lösenordet till adminens e-postadress.</div><form method="POST" action="/forgot"><div class="f"><label>E-postadress</label><input type="email" name="email" autofocus required placeholder="din@epost.se"/></div><div class="msg err" id="err">Något gick fel. Försök igen.</div><div class="msg err" id="nocfg">Ingen återställnings-e-post är konfigurerad. Kontakta utvecklaren.</div><div class="msg err" id="nomailer">E-postutskick är inte konfigurerat på servern. Kontakta utvecklaren.</div><div class="msg err" id="nomatch">Ingen adminadress matchar den e-postadressen.</div><div class="msg ok" id="sent">Ett mail med en återställningslänk har skickats. Kolla inkorgen (giltig i 30 minuter).</div><button type="submit">Skicka återställningslänk</button></form><a class="back" href="/login">Tillbaka till inloggning</a></div><script>var q=new URLSearchParams(location.search);var e=q.get("err");if(e==="1")document.getElementById("err").classList.add("show");if(e==="nocfg")document.getElementById("nocfg").classList.add("show");if(e==="nomailer")document.getElementById("nomailer").classList.add("show");if(e==="nomatch")document.getElementById("nomatch").classList.add("show");if(q.get("sent"))document.getElementById("sent").classList.add("show")<\/script></body></html>'
 const RESET_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot. - Nytt lösenord</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:24px}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">Välj ett nytt lösenord.</div><form method="POST" action="/reset"><input type="hidden" name="token" value="__TOKEN__"/><div class="f"><label>Nytt lösenord</label><input type="password" name="newPassword" autofocus/></div><div class="err" id="err">Minst 6 tecken, 1 versal och 1 specialtecken.</div><button type="submit">Spara nytt lösenord</button></form></div><script>if(new URLSearchParams(location.search).get("err"))document.getElementById("err").classList.add("show")<\/script></body></html>'
