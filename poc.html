@@ -459,6 +459,7 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
     </button>
     <button class="nav-btn" onclick="navigate('brand')"><span class="nav-icon">🎨</span>Varumärke</button>
     <button class="nav-btn" onclick="navigate('published')"><span class="nav-icon">📁</span>Publicerade</button>
+    <button class="nav-btn" onclick="navigate('stats')"><span class="nav-icon">📈</span>Statistik</button>
     <button class="nav-btn" onclick="navigate('team')"><span class="nav-icon">👥</span>Team</button>
     <button class="nav-btn" onclick="navigate('schema')"><span class="nav-icon">📅</span>Schema</button>
     <button class="nav-btn" onclick="navigate('advocacy')"><span class="nav-icon">📣</span>Ripple</button>
@@ -758,6 +759,17 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
     </div>
 
     <!-- TEAM -->
+    <!-- STATISTIK (LinkedIn-företagssida) -->
+    <div class="view" id="v-stats" style="overflow-y:auto;padding:24px;flex-direction:column;gap:20px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div><div class="page-title">📈 Statistik</div><div class="page-sub" id="stSub">Statistik från företagets LinkedIn-sida.</div></div>
+        <select id="stDays" onchange="renderStats()" style="padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px;background:#fff">
+          <option value="7">Senaste 7 dagarna</option><option value="30" selected>Senaste 30 dagarna</option><option value="90">Senaste 90 dagarna</option>
+        </select>
+      </div>
+      <div id="stBody"></div>
+    </div>
+
     <div class="view" id="v-team" style="overflow-y:auto;padding:24px;flex-direction:column;gap:20px">
       <div style="display:flex;align-items:flex-start;justify-content:space-between">
         <div><div class="page-title">Team</div><div class="page-sub">Hantera medlemmar och publiceringsrättigheter.</div></div>
@@ -2053,7 +2065,7 @@ function navigate(view) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('v-' + view).classList.add('active');
-  const labels = {dashboard:'dashboard',create:'skapa',review:'granskning',brand:'varumärke',published:'publicerade',team:'team',advocacy:'ripple',schema:'schema'};
+  const labels = {dashboard:'dashboard',create:'skapa',review:'granskning',brand:'varumärke',published:'publicerade',team:'team',advocacy:'ripple',schema:'schema',stats:'statistik'};
   document.querySelectorAll('.nav-btn').forEach(b => {
     if (b.textContent.trim().toLowerCase().includes(labels[view])) b.classList.add('active');
   });
@@ -2064,7 +2076,78 @@ function navigate(view) {
   if (view === 'team')      renderTeam();
   if (view === 'advocacy')  renderAdvocacy();
   if (view === 'schema')    renderSchema();
+  if (view === 'stats')     renderStats();
 }
+
+// ════════════════════════════════════════════════════════
+//  STATISTIK – LinkedIn-företagssida (översikt + diagram med hovring)
+// ════════════════════════════════════════════════════════
+var _st = { data: null, metric: 'impressions', demo: false };
+var ST_METRICS = { impressions: 'Visningar', reactions: 'Reaktioner', comments: 'Kommentarer', reposts: 'Ompubliceringar', clicks: 'Klick' };
+function _stNum(n) { return Number(n || 0).toLocaleString('sv-SE'); }
+function _stDate(d) { var x = new Date(d + 'T00:00:00'); return x.getDate() + ' ' + ['jan.','feb.','mars','apr.','maj','juni','juli','aug.','sep.','okt.','nov.','dec.'][x.getMonth()]; }
+function _stChange(cur, prev) {
+  if (!prev) return cur ? '<span style="color:#16a34a;font-size:12px">▲ ny</span>' : '<span style="color:#6b7280;font-size:12px">● 0 %</span>';
+  var p = (cur - prev) / prev * 100, a = Math.abs(p).toLocaleString('sv-SE', { maximumFractionDigits: 1 });
+  if (Math.abs(p) < 0.05) return '<span style="color:#6b7280;font-size:12px">● 0 %</span>';
+  return p > 0 ? '<span style="color:#16a34a;font-size:12px">▲ ' + a + ' %</span>' : '<span style="color:#dc2626;font-size:12px">▼ ' + a + ' %</span>';
+}
+function renderStats(demo) {
+  if (demo === true) _st.demo = true;
+  var body = document.getElementById('stBody'); if (!body) return;
+  var days = (document.getElementById('stDays') || {}).value || 30;
+  body.innerHTML = '<div class="section-card" style="color:#6b7280;font-size:13px">Hämtar statistik…</div>';
+  fetch('/api/linkedin/company/stats?days=' + days + (_st.demo ? '&demo=1' : '')).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
+    if (!res.ok) {
+      var msg = res.j.message || res.j.error || 'Kunde inte hämta statistik.';
+      body.innerHTML = '<div class="section-card"><div class="section-title">Ingen statistik ännu</div><div style="font-size:13px;color:#6b7280;line-height:1.6;margin-bottom:14px">' + _h(msg) + '</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="navigate(\'brand\')" style="padding:9px 14px;border-radius:9px;background:var(--m);color:#fff;font-size:13px;font-weight:600">Anslut företagssidan</button>' +
+        '<button onclick="renderStats(true)" style="padding:9px 14px;border-radius:9px;border:1.5px solid #e5e7eb;font-size:13px;font-weight:600;color:#374151">Visa exempeldata</button></div></div>';
+      document.getElementById('stSub').textContent = 'Statistik från företagets LinkedIn-sida.';
+      return;
+    }
+    _st.data = res.j;
+    var d = res.j, f = d.daily[0], l = d.daily[d.daily.length - 1];
+    document.getElementById('stSub').textContent = (d.demo ? 'EXEMPELDATA · ' : '') + (d.org ? d.org + ' · ' : '') + 'Data för ' + (f ? f.date : '') + '–' + (l ? l.date : '');
+    var cards = ['impressions', 'reactions', 'comments', 'reposts'].map(function (k) {
+      return '<div class="stat-card"><div style="font-size:24px;font-weight:700;color:#111">' + _stNum(d.totals[k]) + '</div><div class="stat-label" style="margin:4px 0 6px">' + ST_METRICS[k] + '</div>' + _stChange(d.totals[k], d.previous[k]) + '</div>';
+    }).join('');
+    var opts = Object.keys(ST_METRICS).map(function (k) { return '<option value="' + k + '"' + (k === _st.metric ? ' selected' : '') + '>' + ST_METRICS[k] + '</option>'; }).join('');
+    body.innerHTML = '<div class="section-card" style="margin-bottom:20px"><div class="section-title" style="font-size:16px">Översikt</div><div class="stats-grid">' + cards + '</div>' +
+      '<div style="font-size:11px;color:#9ca3af;margin-top:10px">Förändring jämfört med föregående ' + d.days + ' dagar.</div></div>' +
+      '<div class="section-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div class="section-title" style="font-size:16px;margin:0">Statistik</div>' +
+      '<select onchange="_st.metric=this.value;_stDraw()" style="padding:7px 12px;border-radius:99px;background:var(--m);color:#fff;font-size:13px;font-weight:600;border:none">' + opts + '</select></div>' +
+      '<div id="stChart" style="position:relative"></div><div id="stTotal" style="display:flex;justify-content:space-between;border-top:1px solid #f3f4f6;margin-top:10px;padding-top:10px;font-size:13px;color:#374151"></div></div>' +
+      (d.demo ? '<div style="font-size:12px;color:#9ca3af;margin-top:8px">Det här är exempeldata. <a href="#" onclick="_st.demo=false;renderStats();return false" style="color:var(--m)">Visa riktig data</a></div>' : '');
+    _stDraw();
+  }).catch(function (e) { body.innerHTML = '<div class="section-card" style="color:#dc2626;font-size:13px">Fel: ' + _h(e.message) + '</div>'; });
+}
+function _stDraw() {
+  var box = document.getElementById('stChart'), d = _st.data; if (!box || !d) return;
+  var k = _st.metric, pts = d.daily, W = Math.max(320, box.clientWidth || 700), H = 260, L = 44, R = 12, T = 12, B = 28;
+  var max = Math.max(1, Math.max.apply(null, pts.map(function (p) { return p[k]; })));
+  var step = Math.pow(10, Math.floor(Math.log10(max))), nice = Math.ceil(max / step) * step; if (nice / step > 5 && step >= 1) step *= 2; nice = Math.ceil(max / step) * step || 1;
+  var x = function (i) { return L + (pts.length < 2 ? 0 : i * (W - L - R) / (pts.length - 1)); }, y = function (v) { return T + (H - T - B) * (1 - v / nice); };
+  var g = '', i;
+  for (var v = 0; v <= nice + 1e-9; v += step) g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="#e5e7eb"/><text x="' + (L - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end" font-size="11" fill="#6b7280">' + _stNum(v) + '</text>';
+  var every = Math.max(1, Math.round(pts.length / 6));
+  for (i = 0; i < pts.length; i += every) g += '<text x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="11" fill="#6b7280">' + _stDate(pts[i].date) + '</text>';
+  var path = pts.map(function (p, j) { return (j ? 'L' : 'M') + x(j).toFixed(1) + ' ' + y(p[k]).toFixed(1); }).join(' ');
+  box.innerHTML = '<svg width="' + W + '" height="' + H + '" style="display:block">' + g + '<path d="' + path + '" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round"/>' +
+    '<line id="stHover" y1="' + T + '" y2="' + (H - B) + '" stroke="#9ca3af" stroke-dasharray="3 3" style="display:none"/><circle id="stDot" r="4.5" fill="#3b82f6" stroke="#fff" stroke-width="2" style="display:none"/>' +
+    '<rect x="' + L + '" y="' + T + '" width="' + (W - L - R) + '" height="' + (H - T - B) + '" fill="transparent" id="stHit"/></svg>' +
+    '<div id="stTip" style="position:absolute;pointer-events:none;display:none;background:#111;color:#fff;font-size:12px;padding:8px 10px;border-radius:8px;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.2)"></div>';
+  document.getElementById('stTotal').innerHTML = '<span><span style="display:inline-block;width:14px;height:2px;background:#3b82f6;vertical-align:middle;margin-right:8px"></span>' + ST_METRICS[k] + '</span><b>' + _stNum(d.totals[k]) + '</b>';
+  var hit = document.getElementById('stHit'), tip = document.getElementById('stTip'), hl = document.getElementById('stHover'), dot = document.getElementById('stDot');
+  hit.addEventListener('mousemove', function (ev) {
+    var rc = hit.getBoundingClientRect(), rel = (ev.clientX - rc.left) / rc.width, j = Math.max(0, Math.min(pts.length - 1, Math.round(rel * (pts.length - 1)))), p = pts[j];
+    hl.setAttribute('x1', x(j)); hl.setAttribute('x2', x(j)); hl.style.display = ''; dot.setAttribute('cx', x(j)); dot.setAttribute('cy', y(p[k])); dot.style.display = '';
+    tip.innerHTML = '<div style="color:#d1d5db;margin-bottom:4px">' + _stDate(p.date) + '</div>' + Object.keys(ST_METRICS).map(function (m) { return '<div style="display:flex;justify-content:space-between;gap:16px' + (m === k ? ';font-weight:700' : '') + '"><span>' + ST_METRICS[m] + '</span><span>' + _stNum(p[m]) + '</span></div>'; }).join('');
+    tip.style.display = 'block'; var tx = x(j) + 12; if (tx + tip.offsetWidth > W) tx = x(j) - tip.offsetWidth - 12; tip.style.left = tx + 'px'; tip.style.top = Math.max(0, y(p[k]) - 40) + 'px';
+  });
+  hit.addEventListener('mouseleave', function () { tip.style.display = 'none'; hl.style.display = 'none'; dot.style.display = 'none'; });
+}
+window.addEventListener('resize', function () { var v = document.getElementById('v-stats'); if (v && v.classList.contains('active')) _stDraw(); });
 
 // ════════════════════════════════════════════════════════
 //  TOPBAR DROPDOWN
