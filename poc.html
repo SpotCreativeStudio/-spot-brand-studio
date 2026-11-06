@@ -459,7 +459,6 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
     </button>
     <button class="nav-btn" onclick="navigate('brand')"><span class="nav-icon">🎨</span>Varumärke</button>
     <button class="nav-btn" onclick="navigate('published')"><span class="nav-icon">📁</span>Publicerade</button>
-    <button class="nav-btn" onclick="navigate('stats')"><span class="nav-icon">📈</span>Statistik</button>
     <button class="nav-btn" onclick="navigate('team')"><span class="nav-icon">👥</span>Team</button>
     <button class="nav-btn" onclick="navigate('schema')"><span class="nav-icon">📅</span>Schema</button>
     <button class="nav-btn" onclick="navigate('advocacy')"><span class="nav-icon">📣</span>Ripple</button>
@@ -490,6 +489,16 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
       <div class="card" style="padding:0;flex-shrink:0">
         <div class="card-header">Allt skapat per dag</div>
         <div id="dashChart" style="padding:8px 16px 10px"></div>
+      </div>
+      <!-- LINKEDIN-STATISTIK (företagssida) -->
+      <div style="display:flex;flex-direction:column;gap:12px;flex-shrink:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div><div style="font-size:16px;font-weight:700;color:#111">LinkedIn-statistik</div><div class="page-sub" id="stSub">Statistik från företagets LinkedIn-sida.</div></div>
+          <select id="stDays" onchange="renderStats()" style="padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px;background:#fff">
+            <option value="7">Senaste 7 dagarna</option><option value="30" selected>Senaste 30 dagarna</option><option value="90">Senaste 90 dagarna</option>
+          </select>
+        </div>
+        <div id="stBody"></div>
       </div>
       <div class="dash-grid">
         <div class="card">
@@ -759,17 +768,6 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
     </div>
 
     <!-- TEAM -->
-    <!-- STATISTIK (LinkedIn-företagssida) -->
-    <div class="view" id="v-stats" style="overflow-y:auto;padding:24px;flex-direction:column;gap:20px">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <div><div class="page-title">📈 Statistik</div><div class="page-sub" id="stSub">Statistik från företagets LinkedIn-sida.</div></div>
-        <select id="stDays" onchange="renderStats()" style="padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px;background:#fff">
-          <option value="7">Senaste 7 dagarna</option><option value="30" selected>Senaste 30 dagarna</option><option value="90">Senaste 90 dagarna</option>
-        </select>
-      </div>
-      <div id="stBody"></div>
-    </div>
-
     <div class="view" id="v-team" style="overflow-y:auto;padding:24px;flex-direction:column;gap:20px">
       <div style="display:flex;align-items:flex-start;justify-content:space-between">
         <div><div class="page-title">Team</div><div class="page-sub">Hantera medlemmar och publiceringsrättigheter.</div></div>
@@ -2065,18 +2063,17 @@ function navigate(view) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('v-' + view).classList.add('active');
-  const labels = {dashboard:'dashboard',create:'skapa',review:'granskning',brand:'varumärke',published:'publicerade',team:'team',advocacy:'ripple',schema:'schema',stats:'statistik'};
+  const labels = {dashboard:'dashboard',create:'skapa',review:'granskning',brand:'varumärke',published:'publicerade',team:'team',advocacy:'ripple',schema:'schema'};
   document.querySelectorAll('.nav-btn').forEach(b => {
     if (b.textContent.trim().toLowerCase().includes(labels[view])) b.classList.add('active');
   });
   if (view === 'review')    renderReview();
   if (view === 'brand')     { renderBrand(); if (typeof _loadLinkedInCompanyStatus === 'function') _loadLinkedInCompanyStatus(); }
-  if (view === 'dashboard') renderDashboard();
+  if (view === 'dashboard') { renderDashboard(); renderStats(); }
   if (view === 'published') renderPublished();
   if (view === 'team')      renderTeam();
   if (view === 'advocacy')  renderAdvocacy();
   if (view === 'schema')    renderSchema();
-  if (view === 'stats')     renderStats();
 }
 
 // ════════════════════════════════════════════════════════
@@ -2147,7 +2144,8 @@ function _stDraw() {
   });
   hit.addEventListener('mouseleave', function () { tip.style.display = 'none'; hl.style.display = 'none'; dot.style.display = 'none'; });
 }
-window.addEventListener('resize', function () { var v = document.getElementById('v-stats'); if (v && v.classList.contains('active')) _stDraw(); });
+document.addEventListener('DOMContentLoaded', function () { setTimeout(function () { if (document.getElementById('stBody')) renderStats(); }, 800); });
+window.addEventListener('resize', function () { var v = document.getElementById('v-dashboard'); if (v && v.classList.contains('active')) _stDraw(); });
 
 // ════════════════════════════════════════════════════════
 //  TOPBAR DROPDOWN
