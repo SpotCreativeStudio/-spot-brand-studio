@@ -494,11 +494,16 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
       <div style="display:flex;flex-direction:column;gap:12px;flex-shrink:0">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
           <div><div style="font-size:16px;font-weight:700;color:#111">LinkedIn-statistik</div><div class="page-sub" id="stSub">Statistik från företagets LinkedIn-sida.</div></div>
-          <select id="stDays" onchange="renderStats()" style="padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px;background:#fff">
+          <select id="stDays" onchange="renderStats();renderContributions()" style="padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px;background:#fff">
             <option value="7">Senaste 7 dagarna</option><option value="30" selected>Senaste 30 dagarna</option><option value="90">Senaste 90 dagarna</option>
           </select>
         </div>
         <div id="stBody"></div>
+      </div>
+      <!-- MEDARBETARNAS DELNINGAR (Ripple) -->
+      <div class="card" style="flex-shrink:0">
+        <div class="card-header">Medarbetarnas delningar <span style="font-size:12px;color:#9ca3af;font-weight:400">Hur alla bidrar via Ripple · samma period som ovan</span></div>
+        <div id="ctBody" style="padding:16px 18px"></div>
       </div>
       <div class="dash-grid">
         <div class="card">
@@ -2069,7 +2074,7 @@ function navigate(view) {
   });
   if (view === 'review')    renderReview();
   if (view === 'brand')     { renderBrand(); if (typeof _loadLinkedInCompanyStatus === 'function') _loadLinkedInCompanyStatus(); }
-  if (view === 'dashboard') { renderDashboard(); renderStats(); }
+  if (view === 'dashboard') { renderDashboard(); renderStats(); renderContributions(); }
   if (view === 'published') renderPublished();
   if (view === 'team')      renderTeam();
   if (view === 'advocacy')  renderAdvocacy();
@@ -2144,8 +2149,56 @@ function _stDraw() {
   });
   hit.addEventListener('mouseleave', function () { tip.style.display = 'none'; hl.style.display = 'none'; dot.style.display = 'none'; });
 }
-document.addEventListener('DOMContentLoaded', function () { setTimeout(function () { if (document.getElementById('stBody')) renderStats(); }, 800); });
-window.addEventListener('resize', function () { var v = document.getElementById('v-dashboard'); if (v && v.classList.contains('active')) _stDraw(); });
+document.addEventListener('DOMContentLoaded', function () { setTimeout(function () { if (document.getElementById('stBody')) { renderStats(); renderContributions(); } }, 800); });
+// ── Medarbetarnas delningar: topplista med andel + diagram där hovring visar vem som delade vilken dag ──
+var _ct = null, CT_COLORS = ['#b31e59','#3b82f6','#16a34a','#f59e0b','#8b5cf6','#06b6d4','#ef4444','#64748b'];
+function renderContributions() {
+  var body = document.getElementById('ctBody'); if (!body) return;
+  var days = (document.getElementById('stDays') || {}).value || 30;
+  body.innerHTML = '<div style="color:#6b7280;font-size:13px">Hämtar delningar…</div>';
+  fetch('/api/stats/contributions?days=' + days).then(function (r) { return r.json(); }).then(function (d) {
+    if (d.error) { body.innerHTML = '<div style="color:#dc2626;font-size:13px">' + _h(d.error) + '</div>'; return; }
+    _ct = d;
+    var max = Math.max(1, Math.max.apply(null, d.members.map(function (m) { return m.shares; })));
+    var rows = d.members.map(function (m, i) {
+      var c = CT_COLORS[i % CT_COLORS.length];
+      return '<div style="display:grid;grid-template-columns:150px 1fr 110px;gap:12px;align-items:center;padding:6px 0;font-size:13px">' +
+        '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#111;font-weight:500"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + c + ';margin-right:8px"></span>' + _h(m.name) + '</div>' +
+        '<div style="height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden"><div style="height:100%;width:' + (m.shares / max * 100) + '%;background:' + c + ';border-radius:4px"></div></div>' +
+        '<div style="text-align:right;color:#374151"><b>' + _stNum(m.shares) + '</b> <span style="color:#9ca3af">(' + String(m.share).replace('.', ',') + ' %)</span></div></div>';
+    }).join('') || '<div style="font-size:13px;color:#9ca3af">Inga medarbetare i teamet ännu.</div>';
+    body.innerHTML = '<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">' +
+      '<div class="stat-card"><div style="font-size:24px;font-weight:700">' + _stNum(d.total) + '</div><div class="stat-label" style="margin:4px 0 6px">Delningar totalt</div>' + _stChange(d.total, d.previousTotal) + '</div>' +
+      '<div class="stat-card"><div style="font-size:24px;font-weight:700">' + d.activeMembers + ' / ' + d.memberCount + '</div><div class="stat-label" style="margin:4px 0 0">Medarbetare som delat</div></div>' +
+      '<div class="stat-card"><div style="font-size:24px;font-weight:700">' + (d.activeMembers ? (d.total / d.activeMembers).toLocaleString('sv-SE', { maximumFractionDigits: 1 }) : 0) + '</div><div class="stat-label" style="margin:4px 0 0">Delningar per aktiv person</div></div></div>' +
+      '<div id="ctChart" style="position:relative;margin-bottom:14px"></div><div style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Per person</div>' + rows;
+    _ctDraw();
+  }).catch(function (e) { body.innerHTML = '<div style="color:#dc2626;font-size:13px">Fel: ' + _h(e.message) + '</div>'; });
+}
+function _ctDraw() {
+  var box = document.getElementById('ctChart'), d = _ct; if (!box || !d) return;
+  var pts = d.daily, W = Math.max(320, box.clientWidth || 700), H = 180, L = 36, R = 12, T = 10, B = 26, n = pts.length;
+  var max = Math.max(1, Math.max.apply(null, pts.map(function (p) { return p.total; }))), nice = Math.max(2, Math.ceil(max / 2) * 2), step = nice / 2;
+  var bw = Math.max(2, (W - L - R) / n * 0.7), x = function (i) { return L + (i + 0.5) * (W - L - R) / n; }, y = function (v) { return T + (H - T - B) * (1 - v / nice); };
+  var g = '';
+  for (var v = 0; v <= nice; v += step) g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="#e5e7eb"/><text x="' + (L - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end" font-size="11" fill="#6b7280">' + v + '</text>';
+  var every = Math.max(1, Math.round(n / 6));
+  for (var i = 0; i < n; i += every) g += '<text x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="11" fill="#6b7280">' + _stDate(pts[i].date) + '</text>';
+  pts.forEach(function (p, i) { if (p.total) g += '<rect x="' + (x(i) - bw / 2) + '" y="' + y(p.total) + '" width="' + bw + '" height="' + (y(0) - y(p.total)) + '" rx="2" fill="#b31e59"/>'; });
+  box.innerHTML = '<svg width="' + W + '" height="' + H + '" style="display:block">' + g + '<rect id="ctHl" y="' + T + '" height="' + (H - T - B) + '" fill="rgba(179,30,89,.08)" style="display:none"/><rect x="' + L + '" y="' + T + '" width="' + (W - L - R) + '" height="' + (H - T - B) + '" fill="transparent" id="ctHit"/></svg>' +
+    '<div id="ctTip" style="position:absolute;pointer-events:none;display:none;background:#111;color:#fff;font-size:12px;padding:8px 10px;border-radius:8px;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.2)"></div>';
+  var hit = document.getElementById('ctHit'), tip = document.getElementById('ctTip'), hl = document.getElementById('ctHl'), cw = (W - L - R) / n;
+  hit.addEventListener('mousemove', function (ev) {
+    var rc = hit.getBoundingClientRect(), j = Math.max(0, Math.min(n - 1, Math.floor((ev.clientX - rc.left) / rc.width * n))), p = pts[j];
+    hl.setAttribute('x', L + j * cw); hl.setAttribute('width', cw); hl.style.display = '';
+    var who = Object.keys(p.byUser).sort(function (a, b) { return p.byUser[b] - p.byUser[a]; });
+    tip.innerHTML = '<div style="color:#d1d5db;margin-bottom:4px">' + _stDate(p.date) + ' · ' + p.total + ' delning' + (p.total === 1 ? '' : 'ar') + '</div>' +
+      (who.length ? who.map(function (nm) { return '<div style="display:flex;justify-content:space-between;gap:16px"><span>' + _h(nm) + '</span><span>' + p.byUser[nm] + '</span></div>'; }).join('') : '<div style="color:#9ca3af">Ingen delade den här dagen</div>');
+    tip.style.display = 'block'; var tx = x(j) + 12; if (tx + tip.offsetWidth > W) tx = x(j) - tip.offsetWidth - 12; tip.style.left = tx + 'px'; tip.style.top = '6px';
+  });
+  hit.addEventListener('mouseleave', function () { tip.style.display = 'none'; hl.style.display = 'none'; });
+}
+window.addEventListener('resize', function () { var v = document.getElementById('v-dashboard'); if (v && v.classList.contains('active')) { _stDraw(); _ctDraw(); } });
 
 // ════════════════════════════════════════════════════════
 //  TOPBAR DROPDOWN
