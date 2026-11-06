@@ -69,6 +69,40 @@ app.post('/api/advocacy/log-share', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+// ---- Medarbetarnas delningar (Ripple): hur varje person bidrar, per dag och totalt ----
+app.get('/api/stats/contributions', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    const ws = s.workspace || 'spot'
+    const days = Math.max(7, Math.min(365, parseInt(req.query.days, 10) || 30))
+    const DAY = 86400000, end = new Date(); end.setHours(0, 0, 0, 0)
+    const since = end.getTime() - (days - 1) * DAY, prevSince = since - days * DAY
+    await ensureUsersTable(); await ensureAdvocacyTable()
+    const pool = getAuthPool()
+    const users = await pool.query('SELECT username, first_name, last_name FROM app_users WHERE workspace=$1', [ws])
+    const names = {}
+    users.rows.forEach(function (u) { names[u.username] = ((u.first_name || '') + ' ' + (u.last_name || '')).trim() || u.username })
+    if (ws === 'spot') names[UNAME] = names[UNAME] || ((process.env.APP_USER_FIRSTNAME || 'Spot') + ' ' + (process.env.APP_USER_LASTNAME || 'Admin'))
+    const sh = await pool.query('SELECT username, action, created_at FROM advocacy_shares WHERE workspace=$1 AND created_at >= $2', [ws, prevSince])
+    const daily = {}, members = {}, prevTotal = { n: 0 }
+    for (let t = since; t <= end.getTime(); t += DAY) daily[new Date(t).toISOString().slice(0, 10)] = { total: 0, byUser: {} }
+    Object.keys(names).forEach(function (u) { members[u] = { username: u, name: names[u], shares: 0, previous: 0, last: null } })
+    sh.rows.forEach(function (r) {
+      const t = Number(r.created_at), u = r.username || 'okänd'
+      if (!members[u]) members[u] = { username: u, name: names[u] || u, shares: 0, previous: 0, last: null }
+      if (t < since) { members[u].previous++; prevTotal.n++; return }
+      members[u].shares++
+      if (!members[u].last || t > members[u].last) members[u].last = t
+      const k = new Date(t).toISOString().slice(0, 10)
+      if (daily[k]) { daily[k].total++; const nm = members[u].name; daily[k].byUser[nm] = (daily[k].byUser[nm] || 0) + 1 }
+    })
+    const list = Object.values(members).sort(function (a, b) { return b.shares - a.shares || a.name.localeCompare(b.name) })
+    const total = list.reduce(function (a, m) { return a + m.shares }, 0)
+    res.json({ days, total, previousTotal: prevTotal.n, activeMembers: list.filter(function (m) { return m.shares > 0 }).length, memberCount: list.length,
+      members: list.map(function (m) { return { name: m.name, shares: m.shares, previous: m.previous, share: total ? Math.round(m.shares / total * 1000) / 10 : 0, last: m.last ? new Date(m.last).toISOString() : null } }),
+      daily: Object.keys(daily).sort().map(function (k) { return { date: k, total: daily[k].total, byUser: daily[k].byUser } }) })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 app.get('/api/advocacy/leaderboard', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
