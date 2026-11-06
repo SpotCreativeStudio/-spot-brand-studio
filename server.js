@@ -83,7 +83,7 @@ app.get('/api/stats/contributions', auth, async (req, res) => {
     const names = {}
     users.rows.forEach(function (u) { names[u.username] = ((u.first_name || '') + ' ' + (u.last_name || '')).trim() || u.username })
     if (ws === 'spot') names[UNAME] = names[UNAME] || ((process.env.APP_USER_FIRSTNAME || 'Spot') + ' ' + (process.env.APP_USER_LASTNAME || 'Admin'))
-    const sh = await pool.query('SELECT username, action, created_at FROM advocacy_shares WHERE workspace=$1 AND created_at >= $2', [ws, prevSince])
+    const sh = await pool.query("SELECT username, action, created_at FROM advocacy_shares WHERE workspace=$1 AND created_at >= $2 AND action <> 'approve'", [ws, prevSince])
     const daily = {}, members = {}, prevTotal = { n: 0 }
     for (let t = since; t <= end.getTime(); t += DAY) daily[new Date(t).toISOString().slice(0, 10)] = { total: 0, byUser: {} }
     Object.keys(names).forEach(function (u) { members[u] = { username: u, name: names[u], shares: 0, previous: 0, last: null } })
@@ -905,6 +905,8 @@ app.post('/api/linkedin/publish', auth, async (req, res) => {
       body: JSON.stringify(postBody)
     })
     if (!postRes.ok) { const errText = await postRes.text(); return res.status(500).json({ error: 'LinkedIn avvisade inlägget: ' + errText }) }
+    // Direktdelning till egen LinkedIn räknas som en delning i Medarbetarnas delningar
+    try { const _s = sessions[getToken(req)] || {}; await ensureAdvocacyTable(); await getAuthPool().query('INSERT INTO advocacy_shares (workspace, username, action, post_id, created_at) VALUES ($1,$2,$3,$4,$5)', [_s.workspace || 'spot', _s.u || '', 'linkedin', '', Date.now()]) } catch (e) { console.error('[advocacy] log linkedin share:', e.message) }
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
