@@ -946,6 +946,56 @@ app.post('/api/linkedin/company/disconnect', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+// ---- LinkedIn-företagsstatistik: visningar, reaktioner, kommentarer, ompubliceringar och klick per dag ----
+// Kräver Community Management API (r_organization_social). ?demo=1 ger exempeldata för att förhandsgranska vyn.
+const _liStatsCache = {}
+function _liStatsDemo(days) {
+  const out = [], now = Date.now(); let seed = 7
+  const rnd = function () { seed = (seed * 9301 + 49297) % 233280; return seed / 233280 }
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now - i * 86400000); const base = 20 + Math.round(rnd() * 90) + (i < 3 ? 250 : 0)
+    out.push({ date: d.toISOString().slice(0, 10), impressions: base, reactions: Math.round(base * 0.02 + rnd() * 2), comments: rnd() > 0.9 ? 1 : 0, reposts: rnd() > 0.95 ? 1 : 0, clicks: Math.round(base * 0.01 + rnd()) })
+  }
+  return out
+}
+function _liSum(rows) { return rows.reduce(function (a, r) { a.impressions += r.impressions; a.reactions += r.reactions; a.comments += r.comments; a.reposts += r.reposts; a.clicks += r.clicks; return a }, { impressions: 0, reactions: 0, comments: 0, reposts: 0, clicks: 0 }) }
+app.get('/api/linkedin/company/stats', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    const days = Math.max(7, Math.min(365, parseInt(req.query.days, 10) || 30))
+    if (req.query.demo === '1') {
+      const cur = _liStatsDemo(days), prev = _liStatsDemo(days).map(function (r) { return Object.assign({}, r, { impressions: r.impressions * 3 }) })
+      return res.json({ demo: true, days, org: 'Exempelföretag', daily: cur, totals: _liSum(cur), previous: _liSum(prev) })
+    }
+    await ensureLinkedInCompanyTable()
+    const ws = s.workspace || 'spot'
+    const r = await getAuthPool().query('SELECT access_token, org_urn, org_name, expires_at FROM linkedin_company_accounts WHERE username=$1', ['ws:' + ws])
+    if (!r.rows.length) return res.status(400).json({ error: 'not_connected', message: 'Ingen LinkedIn-företagssida är ansluten för den här arbetsytan.' })
+    const { access_token, org_urn, org_name, expires_at } = r.rows[0]
+    if (expires_at && Number(expires_at) < Date.now()) return res.status(400).json({ error: 'expired', message: 'Anslutningen till LinkedIn har gått ut. Anslut företagssidan igen under Varumärke.' })
+    const ck = ws + '|' + days, hit = _liStatsCache[ck]
+    if (hit && hit.at > Date.now() - 15 * 60 * 1000) return res.json(hit.data)
+    const DAY = 86400000, end = new Date(); end.setHours(0, 0, 0, 0)
+    const endMs = end.getTime(), startMs = endMs - days * DAY, prevStart = startMs - days * DAY
+    async function fetchRange(a, b) {
+      const url = 'https://api.linkedin.com/rest/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity=' + encodeURIComponent(org_urn) +
+        '&timeIntervals=(timeRange:(start:' + a + ',end:' + b + '),timeGranularityType:DAY)'
+      const rr = await fetch(url, { headers: { Authorization: 'Bearer ' + access_token, 'X-Restli-Protocol-Version': '2.0.0', 'Linkedin-Version': '202609' } })
+      if (!rr.ok) { const t = await rr.text(); const e = new Error(t.slice(0, 300)); e.status = rr.status; throw e }
+      const data = await rr.json()
+      return (data.elements || []).map(function (el) {
+        const st = el.totalShareStatistics || {}
+        return { date: new Date((el.timeRange || {}).start || 0).toISOString().slice(0, 10), impressions: st.impressionCount || 0, reactions: st.likeCount || 0, comments: st.commentCount || 0, reposts: st.shareCount || 0, clicks: st.clickCount || 0 }
+      }).sort(function (x, y) { return x.date < y.date ? -1 : 1 })
+    }
+    let daily, prev
+    try { daily = await fetchRange(startMs, endMs); prev = await fetchRange(prevStart, startMs) }
+    catch (e) { return res.status(502).json({ error: 'linkedin', status: e.status || 0, message: (e.status === 403 ? 'LinkedIn nekade åtkomst – Community Management API är troligen inte godkänt ännu. ' : 'LinkedIn svarade med fel. ') + e.message }) }
+    const out = { demo: false, days, org: org_name, daily, totals: _liSum(daily), previous: _liSum(prev) }
+    _liStatsCache[ck] = { at: Date.now(), data: out }
+    res.json(out)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 app.post('/api/linkedin/company/publish', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
