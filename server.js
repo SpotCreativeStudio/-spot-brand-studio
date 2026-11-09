@@ -46,6 +46,7 @@ async function restoreSessions() {
 async function ensureUsersTable() {
   await getAuthPool().query("CREATE TABLE IF NOT EXISTS app_users (username TEXT PRIMARY KEY, password TEXT, role TEXT, first_name TEXT, last_name TEXT)")
   await getAuthPool().query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS email TEXT")
+  await getAuthPool().query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS avatar_url TEXT")
   await getAuthPool().query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS workspace TEXT DEFAULT 'spot'")
   await getAuthPool().query("UPDATE app_users SET workspace='spot' WHERE workspace IS NULL")
   const r = await getAuthPool().query("SELECT COUNT(*) FROM app_users")
@@ -472,7 +473,32 @@ app.post('/login', async (req, res) => {
   res.redirect('/login?err=1')
 })
 app.post('/logout', (req, res) => { const _t = getToken(req); audit(req, 'logout'); delete sessions[_t]; dropSession(_t); res.setHeader('Set-Cookie', 'spot_session=' + COOKIE_FLAGS + '; Max-Age=0'); res.json({ ok: true }) })
-app.get('/api/me', auth, (req, res) => { const s = sessions[getToken(req)] || {}; const firstName = s.firstName || 'Spot'; const lastName = s.lastName || (s.firstName ? '' : 'Admin'); const role = s.role || 'admin'; const initials = (firstName[0]||'') + (lastName[0]||''); res.json({ firstName, lastName, role, workspace: s.workspace || 'spot', viewingAs: s.realWorkspace ? s.workspace : null, initials: initials.toUpperCase() }) })
+// Profilbild: kundanvändare i app_users.avatar_url, huvudadminen i app_settings ('avatar:<användarnamn>')
+async function getAvatar(username) {
+  try {
+    if (!username) return null
+    if (username === UNAME) { await ensureAuthTable(); const r = await getAuthPool().query("SELECT value FROM app_settings WHERE key=$1", ['avatar:' + username]); return (r.rows[0] && r.rows[0].value) || null }
+    await ensureUsersTable(); const r = await getAuthPool().query('SELECT avatar_url FROM app_users WHERE username=$1', [username]); return (r.rows[0] && r.rows[0].avatar_url) || null
+  } catch (e) { return null }
+}
+app.get('/api/me', auth, async (req, res) => { const s = sessions[getToken(req)] || {}; const firstName = s.firstName || 'Spot'; const lastName = s.lastName || (s.firstName ? '' : 'Admin'); const role = s.role || 'admin'; const initials = (firstName[0]||'') + (lastName[0]||''); const avatar = await getAvatar(s.u); res.json({ firstName, lastName, role, workspace: s.workspace || 'spot', viewingAs: s.realWorkspace ? s.workspace : null, initials: initials.toUpperCase(), avatar }) })
+app.post('/api/me/avatar', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    if (!s.u) return res.status(401).json({ error: 'Inte inloggad' })
+    const dataUrl = (req.body || {}).dataUrl
+    let url = null
+    if (dataUrl) {
+      if (!/^data:image\/(png|jpeg|jpg|webp);base64,/.test(String(dataUrl)) || String(dataUrl).length > 3 * 1024 * 1024) return res.status(400).json({ error: 'Bilden måste vara PNG, JPG eller WEBP och högst ca 2 MB' })
+      url = await storeDataUrlImage(dataUrl, s.realWorkspace || s.workspace || 'spot', s.u)
+      if (!url) return res.status(400).json({ error: 'Kunde inte spara bilden' })
+    }
+    if (s.u === UNAME) { await ensureAuthTable(); await getAuthPool().query("INSERT INTO app_settings (key,value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=$2", ['avatar:' + s.u, url]) }
+    else { await ensureUsersTable(); await getAuthPool().query('UPDATE app_users SET avatar_url=$1 WHERE username=$2', [url, s.u]) }
+    audit(req, url ? 'avatar_changed' : 'avatar_removed')
+    res.json({ ok: true, avatar: url })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 async function ensureChannelsTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS user_channels (username TEXT, platform TEXT, handle TEXT, PRIMARY KEY (username, platform))") }
 app.get('/api/channels', auth, async (req, res) => {
   try {
@@ -554,7 +580,7 @@ app.get('/api/team/members', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
     await ensureUsersTable()
-    const r = await getAuthPool().query('SELECT username, role, first_name, last_name, email FROM app_users WHERE workspace=$1 ORDER BY username', [s.workspace || 'spot'])
+    const r = await getAuthPool().query('SELECT username, role, first_name, last_name, email, avatar_url FROM app_users WHERE workspace=$1 ORDER BY username', [s.workspace || 'spot'])
     res.json({ members: r.rows })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
