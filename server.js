@@ -173,6 +173,19 @@ function audit(req, event, extra) {
     .then(function () { return getAuthPool().query('INSERT INTO audit_log (event,username,workspace,ip,user_agent,details) VALUES ($1,$2,$3,$4,$5,$6)', [event, e.username || s.u || null, e.workspace || s.workspace || null, req ? clientIp(req) : null, req ? clientUa(req) : null, JSON.stringify(e.details || {})]) })
     .catch(function (err) { console.error('[audit] log error:', err.message) })
 }
+// [Säkerhet 18] Inga tekniska felmeddelanden till användaren: vid serverfel (5xx) visas "Något gick fel", detaljerna loggas bara hos oss
+app.use(function (req, res, next) {
+  const _json = res.json.bind(res)
+  res.json = function (body) {
+    if (res.statusCode >= 500 && body && typeof body === 'object' && body.error) {
+      const ref = crypto.randomBytes(4).toString('hex')
+      console.error('[error ' + ref + '] ' + req.method + ' ' + req.path + ': ' + String(body.error).slice(0, 500))
+      return _json({ error: 'Något gick fel – försök igen. (Felkod ' + ref + ')' })
+    }
+    return _json(body)
+  }
+  next()
+})
 // [Säkerhet 2] Säkerhetsheaders på alla svar
 app.use(function (req, res, next) {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN')
@@ -180,6 +193,9 @@ app.use(function (req, res, next) {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  // [Säkerhet 19] CSP: de delar som inte kan påverka appens funktioner gäller direkt; resten körs i rapportläge (loggar avvikelser i webbläsaren utan att blockera)
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'")
+  res.setHeader('Content-Security-Policy-Report-Only', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://cdnjs.cloudflare.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'")
   res.removeHeader('X-Powered-By')
   next()
 })
@@ -572,7 +588,12 @@ app.post('/api/team/role', auth, async (req, res) => {
     const roleMap = { admin: 'admin', editor: 'redaktor', viewer: 'granskare' }
     const dbRole = roleMap[role] || 'granskare'
     await ensureUsersTable()
-    await getAuthPool().query('UPDATE app_users SET role=$1 WHERE username=$2', [dbRole, username])
+    // [Säkerhet 20] Rollbyte bara inom egna teamet, loggas, och slår igenom direkt på personens aktiva inloggningar
+    const prev = await getAuthPool().query('SELECT role FROM app_users WHERE username=$1 AND workspace=$2', [username, s.workspace || 'spot'])
+    if (!prev.rows.length) return res.status(404).json({ error: 'Medlemmen hittades inte i ert team' })
+    await getAuthPool().query('UPDATE app_users SET role=$1 WHERE username=$2 AND workspace=$3', [dbRole, username, s.workspace || 'spot'])
+    Object.keys(sessions).forEach(function (t) { if (sessions[t] && sessions[t].u === username) { sessions[t].role = dbRole; persistSession(t, sessions[t]) } })
+    audit(req, 'role_changed', { details: { member: username, from: prev.rows[0].role, to: dbRole } })
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -1205,6 +1226,29 @@ app.post('/api/brand', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+// Tillåter bara publika adresser: http/https på port 80/443, och värdnamnet får inte peka på interna, lokala eller reserverade IP-adresser
+const _dns = require('dns').promises, _net = require('net')
+function _isPrivateIp(ip) {
+  if (_net.isIPv4(ip)) {
+    const p = ip.split('.').map(Number)
+    return p[0] === 10 || p[0] === 127 || p[0] === 0 || (p[0] === 169 && p[1] === 254) || (p[0] === 172 && p[1] >= 16 && p[1] <= 31) || (p[0] === 192 && p[1] === 168) ||
+      (p[0] === 100 && p[1] >= 64 && p[1] <= 127) || (p[0] === 192 && p[1] === 0 && p[2] === 0) || (p[0] === 198 && (p[1] === 18 || p[1] === 19)) || p[0] >= 224
+  }
+  const v = ip.toLowerCase()
+  if (v.startsWith('::ffff:')) return _isPrivateIp(v.slice(7))
+  return v === '::' || v === '::1' || v.startsWith('fc') || v.startsWith('fd') || v.startsWith('fe8') || v.startsWith('fe9') || v.startsWith('fea') || v.startsWith('feb') || v.startsWith('ff')
+}
+async function isPublicUrl(u) {
+  try {
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false
+    if (u.port && u.port !== '80' && u.port !== '443') return false
+    if (u.username || u.password) return false
+    const host = u.hostname.replace(/^\[|\]$/g, '')
+    if (/^(localhost|.*\.localhost|.*\.internal|.*\.local|.*\.railway\.internal)$/i.test(host)) return false
+    const addrs = _net.isIP(host) ? [{ address: host }] : await _dns.lookup(host, { all: true })
+    return addrs.length > 0 && addrs.every(function (a) { return !_isPrivateIp(a.address) })
+  } catch (e) { return false }
+}
 app.post('/api/brand/fetch-website', auth, async (req, res) => {
   try {
     if (((sessions[getToken(req)] || {}).role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan ändra varumärket' })
@@ -1213,12 +1257,23 @@ app.post('/api/brand/fetch-website', auth, async (req, res) => {
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url
     let parsed
     try { parsed = new URL(url) } catch (e) { return res.status(400).json({ error: 'Ogiltig URL' }) }
+    // [Säkerhet 17] SSRF-skydd: bara publika webbplatser (http/https, port 80/443), inga interna adresser – kontrolleras även efter omdirigeringar
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 8000)
     let html = ''
     try {
-      const r = await fetch(parsed.toString(), { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0 (SpotBrandStudio)' } })
-      html = await r.text()
+      let cur = parsed
+      for (let hop = 0; ; hop++) {
+        if (!(await isPublicUrl(cur))) { audit(req, 'ssrf_blocked', { details: { url: String(cur).slice(0, 200) } }); return res.status(400).json({ error: 'Adressen är inte tillåten. Ange en publik webbplats.' }) }
+        const r = await fetch(cur.toString(), { signal: controller.signal, redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (SpotBrandStudio)' } })
+        if (r.status >= 300 && r.status < 400 && r.headers.get('location')) {
+          if (hop >= 4) return res.status(400).json({ error: 'För många omdirigeringar' })
+          cur = new URL(r.headers.get('location'), cur); continue
+        }
+        parsed = cur
+        html = await r.text()
+        break
+      }
     } finally { clearTimeout(timeout) }
     html = html.slice(0, 500000)
     const titleMatch = /<title[^>]*>([^<]*)<\/title>/i.exec(html)
