@@ -47,6 +47,7 @@ async function ensureUsersTable() {
   await getAuthPool().query("CREATE TABLE IF NOT EXISTS app_users (username TEXT PRIMARY KEY, password TEXT, role TEXT, first_name TEXT, last_name TEXT)")
   await getAuthPool().query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS email TEXT")
   await getAuthPool().query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS avatar_url TEXT")
+  await getAuthPool().query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS totp_secret TEXT")
   await getAuthPool().query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS workspace TEXT DEFAULT 'spot'")
   await getAuthPool().query("UPDATE app_users SET workspace='spot' WHERE workspace IS NULL")
   const r = await getAuthPool().query("SELECT COUNT(*) FROM app_users")
@@ -239,8 +240,8 @@ async function alertNewDevice(req, username) {
     await sendAppMail({ to, subject: 'spot. – Ny inloggning för ' + username, text: 'Kontot ' + username + ' loggade in från en ny IP-adress.\n\nTid: ' + when + '\nIP: ' + ip + '\nEnhet: ' + clientUa(req) + '\n\nVar det inte ni? Byt lösenord direkt och logga ut alla sessioner i appen.' })
   } catch (e) { console.error('[alert]', e.message) }
 }
-// [Säkerhet 7] Sessioner löper ut på servern: max 7 dagar totalt och 24 timmar utan aktivitet
-const SESSION_MAX_MS = 7 * 24 * 3600 * 1000, SESSION_IDLE_MS = 24 * 3600 * 1000
+// [Säkerhet 7] Sessioner löper ut på servern: max 7 dagar totalt och 8 timmar utan aktivitet
+const SESSION_MAX_MS = 7 * 24 * 3600 * 1000, SESSION_IDLE_MS = 8 * 3600 * 1000
 function sessionValid(t) {
   const s = sessions[t]; if (!s) return false
   const now = Date.now()
@@ -449,11 +450,78 @@ app.get('/favicon.ico', (req, res) => {
 });
 
 app.get('/assets/:f', (req, res) => { const f = _TPL[req.params.f] || req.params.f; if (f.indexOf('..') !== -1 || f.indexOf('/') !== -1) return res.status(400).end(); const p = path.join(__dirname, 'assets', f); if (fs.existsSync(p)) return res.sendFile(p); res.status(404).end() })
-function passwordError(pw) { pw = String(pw || ''); if (pw.length < 6 || !/[A-ZÅÄÖ]/.test(pw) || !/[^A-Za-z0-9ÅÄÖåäö]/.test(pw)) return 'Lösenordet måste vara minst 6 tecken och innehålla minst en versal och ett specialtecken'; return null }
+function passwordError(pw) { pw = String(pw || ''); if (pw.length < 10 || !/[A-ZÅÄÖ]/.test(pw) || !/[^A-Za-z0-9ÅÄÖåäö]/.test(pw)) return 'Lösenordet måste vara minst 10 tecken och innehålla minst en versal och ett specialtecken'; return null }
 function makeToken() { return crypto.randomBytes(32).toString('hex') }
 function getToken(req) { const c = req.headers.cookie || ''; const p = c.split(';').map(x => x.trim()).find(x => x.startsWith('spot_session=')); return p ? p.split('=')[1] : null }
 function auth(req, res, next) { if (sessionValid(getToken(req))) return next(); if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' }); res.redirect('/login') }
 app.get('/login', (_req, res) => res.send(LOGIN_HTML))
+// ════ [Säkerhet 21] Tvåstegsverifiering (TOTP, fungerar med Google/Microsoft Authenticator m.fl.) ════
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+function b32enc(buf) { let bits = 0, val = 0, out = ''; for (const b of buf) { val = (val << 8) | b; bits += 8; while (bits >= 5) { out += B32[(val >>> (bits - 5)) & 31]; bits -= 5 } } if (bits > 0) out += B32[(val << (5 - bits)) & 31]; return out }
+function b32dec(str) { let bits = 0, val = 0; const out = []; for (const c of String(str).replace(/[\s=]/g, '').toUpperCase()) { const i = B32.indexOf(c); if (i < 0) continue; val = (val << 5) | i; bits += 5; if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8 } } return Buffer.from(out) }
+function totpCode(secret, step) { const b = Buffer.alloc(8); b.writeUInt32BE(Math.floor(step / 4294967296), 0); b.writeUInt32BE(step >>> 0, 4); const h = crypto.createHmac('sha1', b32dec(secret)).update(b).digest(); const o = h[h.length - 1] & 15; return String(((h.readUInt32BE(o) & 0x7fffffff) % 1000000)).padStart(6, '0') }
+function totpVerify(secret, code) { code = String(code || '').replace(/\s/g, ''); if (!/^\d{6}$/.test(code)) return false; const st = Math.floor(Date.now() / 30000); for (let d = -1; d <= 1; d++) { const c = totpCode(secret, st + d); if (crypto.timingSafeEqual(Buffer.from(c), Buffer.from(code))) return true } return false }
+async function getTotp(username) {
+  try {
+    if (username === UNAME) { await ensureAuthTable(); const r = await getAuthPool().query("SELECT value FROM app_settings WHERE key=$1", ['totp:' + username]); return (r.rows[0] && r.rows[0].value) || null }
+    await ensureUsersTable(); const r = await getAuthPool().query('SELECT totp_secret FROM app_users WHERE username=$1', [username]); return (r.rows[0] && r.rows[0].totp_secret) || null
+  } catch (e) { return null }
+}
+async function setTotp(username, secret) {
+  if (username === UNAME) { await ensureAuthTable(); await getAuthPool().query("INSERT INTO app_settings (key,value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=$2", ['totp:' + username, secret]) }
+  else { await ensureUsersTable(); await getAuthPool().query('UPDATE app_users SET totp_secret=$1 WHERE username=$2', [secret, username]) }
+}
+const pending2fa = {}
+function start2fa(req, res, identifier, username, data, alert) {
+  const pt = crypto.randomBytes(24).toString('hex')
+  pending2fa[pt] = { identifier, username, data, alert, exp: Date.now() + 5 * 60 * 1000 }
+  audit(req, 'login_password_ok_2fa_required', { username })
+  return res.redirect('/login/2fa?t=' + pt)
+}
+const TWOFA_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>spot. – Verifiering</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#6b7280;margin-bottom:24px;line-height:1.5}input{width:100%;padding:12px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:22px;letter-spacing:.3em;text-align:center;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:14px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer}a{display:block;text-align:center;margin-top:14px;font-size:12px;color:#9ca3af;text-decoration:none}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">Ange den 6-siffriga koden från din autentiseringsapp.</div><form method="POST" action="/login/2fa"><input type="hidden" name="t" value="__T__"/><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" autofocus required/><div class="err" id="err">Fel kod. Försök igen.</div><button type="submit">Verifiera</button></form><a href="/login">Avbryt</a></div><script>if(new URLSearchParams(location.search).get("err"))document.getElementById("err").classList.add("show")<\/script></body></html>'
+app.get('/login/2fa', (req, res) => { const t = String(req.query.t || ''); const p = pending2fa[t]; if (!/^[a-f0-9]{48}$/.test(t) || !p || p.exp < Date.now()) return res.redirect('/login?err=1'); res.send(TWOFA_HTML.replace('__T__', t)) })
+app.post('/login/2fa', async (req, res) => {
+  const t = String((req.body || {}).t || ''), p = pending2fa[t]
+  if (!/^[a-f0-9]{48}$/.test(t) || !p || p.exp < Date.now()) { delete pending2fa[t]; return res.redirect('/login?err=1') }
+  if (loginLocked(req, p.identifier)) { delete pending2fa[t]; audit(req, 'login_blocked', { username: p.username }); return res.redirect('/login?err=locked') }
+  const secret = await getTotp(p.username)
+  if (!secret || !totpVerify(secret, (req.body || {}).code)) { loginFailed(req, p.identifier); audit(req, 'login_2fa_failed', { username: p.username }); return res.redirect('/login/2fa?t=' + t + '&err=1') }
+  delete pending2fa[t]
+  const tok = makeToken()
+  sessions[tok] = Object.assign({}, p.data, { createdAt: Date.now(), lastSeen: Date.now(), ip: clientIp(req), ua: clientUa(req), mfa: true })
+  persistSession(tok, sessions[tok])
+  loginOk(req, p.identifier)
+  if (p.alert) alertNewDevice(req, p.username)
+  audit(req, 'login_ok', { username: p.username, workspace: p.data.workspace, details: { mfa: true } })
+  res.setHeader('Set-Cookie', 'spot_session=' + tok + COOKIE_FLAGS + '; Max-Age=' + (60*60*24*7))
+  res.redirect('/')
+})
+setInterval(function () { const n = Date.now(); Object.keys(pending2fa).forEach(function (k) { if (pending2fa[k].exp < n) delete pending2fa[k] }) }, 5 * 60 * 1000)
+app.get('/api/me/2fa', auth, async (req, res) => { const s = sessions[getToken(req)] || {}; res.json({ enabled: !!(await getTotp(s.u)) }) })
+app.post('/api/me/2fa/setup', auth, async (req, res) => {
+  const s = sessions[getToken(req)] || {}
+  if (await getTotp(s.u)) return res.status(400).json({ error: 'Tvåstegsverifiering är redan aktiverad' })
+  s.totpPending = b32enc(crypto.randomBytes(20))
+  const label = encodeURIComponent('spot. Brand Studio:' + s.u)
+  res.json({ secret: s.totpPending.replace(/(.{4})/g, '$1 ').trim(), uri: 'otpauth://totp/' + label + '?secret=' + s.totpPending + '&issuer=' + encodeURIComponent('spot. Brand Studio') + '&digits=6&period=30' })
+})
+app.post('/api/me/2fa/enable', auth, async (req, res) => {
+  const s = sessions[getToken(req)] || {}
+  if (!s.totpPending) return res.status(400).json({ error: 'Starta aktiveringen igen' })
+  if (!totpVerify(s.totpPending, (req.body || {}).code)) return res.status(400).json({ error: 'Fel kod. Kontrollera att klockan i mobilen stämmer och försök igen.' })
+  await setTotp(s.u, s.totpPending); delete s.totpPending
+  audit(req, '2fa_enabled')
+  res.json({ ok: true })
+})
+app.post('/api/me/2fa/disable', auth, async (req, res) => {
+  const s = sessions[getToken(req)] || {}
+  const secret = await getTotp(s.u)
+  if (!secret) return res.json({ ok: true })
+  if (!totpVerify(secret, (req.body || {}).code)) return res.status(400).json({ error: 'Fel kod' })
+  await setTotp(s.u, null)
+  audit(req, '2fa_disabled')
+  res.json({ ok: true })
+})
 app.post('/login', async (req, res) => {
   const { username, password } = req.body
   const identifier = String(username || '')
@@ -461,6 +529,7 @@ app.post('/login', async (req, res) => {
   const u = (await getUserByUsername(identifier)) || (identifier.includes('@') ? await getUserByEmail(identifier) : null)
   if (u && verifyPassword(password, u.password)) {
     if (!isHashedPassword(u.password)) { try { await getAuthPool().query('UPDATE app_users SET password=$1 WHERE username=$2', [hashPassword(password), u.username]) } catch (e) {} }
+    if (u.totp_secret) return start2fa(req, res, identifier, u.username, { u: u.username, role: u.role, firstName: u.first_name, lastName: u.last_name, workspace: u.workspace || 'spot' }, (u.workspace || 'spot') === 'spot' && u.role === 'admin')
     const t = makeToken()
     sessions[t] = { u: u.username, role: u.role, firstName: u.first_name, lastName: u.last_name, workspace: u.workspace || 'spot', createdAt: Date.now(), lastSeen: Date.now(), ip: clientIp(req), ua: clientUa(req) }
     persistSession(t, sessions[t])
@@ -475,6 +544,7 @@ app.post('/login', async (req, res) => {
   const _mainPw = isMainAdmin ? await getPassword() : null
   if (isMainAdmin && _mainPw && verifyPassword(password, _mainPw)) {
     if (!isHashedPassword(_mainPw)) await setPassword(password)
+    if (await getTotp(UNAME)) return start2fa(req, res, identifier, UNAME, { u: UNAME, role: 'admin', firstName: process.env.APP_USER_FIRSTNAME || 'Spot', lastName: process.env.APP_USER_LASTNAME || 'Admin', workspace: 'spot' }, true)
     const t = makeToken()
     sessions[t] = { u: UNAME, role: 'admin', firstName: process.env.APP_USER_FIRSTNAME || 'Spot', lastName: process.env.APP_USER_LASTNAME || 'Admin', workspace: 'spot', createdAt: Date.now(), lastSeen: Date.now(), ip: clientIp(req), ua: clientUa(req) }
     persistSession(t, sessions[t])
@@ -1624,6 +1694,6 @@ restoreSessions().finally(function(){ app.listen(PORT, () => console.log('spot. 
 const LOGIN_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot.</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:32px}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">content studio</div><form method="POST" action="/login"><div class="f"><label>Användarnamn eller e-post</label><input type="text" name="username" autofocus/></div><div class="f"><label>Lösenord</label><input type="password" name="password"/></div><div class="err" id="err">Fel.</div><button type="submit">Logga in</button><div style="text-align:center;margin-top:14px"><a href="/forgot" style="font-size:12px;color:#9ca3af;text-decoration:none">Glömt lösenord?</a></div><div class="ok" id="ok" style="display:none;color:#16a34a;font-size:13px;margin-top:8px;text-align:center">Lösenordet är återställt. Logga in med det nya lösenordet.</div></form></div><script>var q=new URLSearchParams(location.search);if(q.get("err")){var _e=document.getElementById("err");if(q.get("err")==="locked")_e.textContent="För många försök. Vänta 15 minuter och försök igen.";_e.classList.add("show")}if(q.get("reset"))document.getElementById("ok").style.display="block"<\/script></body></html>'
  
 const FORGOT_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot. - Glömt lösenord</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:24px;line-height:1.5}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.msg{font-size:13px;margin-top:8px;display:none;padding:10px 12px;border-radius:8px}.msg.err{color:#b31e59;background:#fff5f7}.msg.ok{color:#16a34a;background:#f0fdf4}.msg.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}a.back{display:block;text-align:center;margin-top:14px;font-size:12px;color:#9ca3af;text-decoration:none}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">Vi skickar en länk för att återställa lösenordet till adminens e-postadress.</div><form method="POST" action="/forgot"><div class="f"><label>E-postadress</label><input type="email" name="email" autofocus required placeholder="din@epost.se"/></div><div class="msg err" id="err">Något gick fel. Försök igen.</div><div class="msg err" id="nocfg">Ingen återställnings-e-post är konfigurerad. Kontakta utvecklaren.</div><div class="msg err" id="nomailer">E-postutskick är inte konfigurerat på servern. Kontakta utvecklaren.</div><div class="msg err" id="nomatch">Ingen adminadress matchar den e-postadressen.</div><div class="msg ok" id="sent">Ett mail med en återställningslänk har skickats. Kolla inkorgen (giltig i 30 minuter).</div><button type="submit">Skicka återställningslänk</button></form><a class="back" href="/login">Tillbaka till inloggning</a></div><script>var q=new URLSearchParams(location.search);var e=q.get("err");if(e==="1")document.getElementById("err").classList.add("show");if(e==="nocfg")document.getElementById("nocfg").classList.add("show");if(e==="nomailer")document.getElementById("nomailer").classList.add("show");if(e==="nomatch")document.getElementById("nomatch").classList.add("show");if(q.get("sent"))document.getElementById("sent").classList.add("show")<\/script></body></html>'
-const RESET_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot. - Nytt lösenord</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:24px}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">Välj ett nytt lösenord.</div><form method="POST" action="/reset"><input type="hidden" name="token" value="__TOKEN__"/><div class="f"><label>Nytt lösenord</label><input type="password" name="newPassword" autofocus/></div><div class="err" id="err">Minst 6 tecken, 1 versal och 1 specialtecken.</div><button type="submit">Spara nytt lösenord</button></form></div><script>if(new URLSearchParams(location.search).get("err"))document.getElementById("err").classList.add("show")<\/script></body></html>'
+const RESET_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot. - Nytt lösenord</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,sans-serif;background:#0f0f0f;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:20px;padding:40px 36px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}.logo{font-size:28px;font-weight:800;color:#b31e59;margin-bottom:4px}.tag{font-size:13px;color:#9ca3af;margin-bottom:24px}.f{margin-bottom:16px}label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:15px;outline:none;font-family:inherit}input:focus{border-color:#b31e59}.err{color:#b31e59;font-size:13px;margin-top:8px;display:none}.err.show{display:block}button{width:100%;margin-top:8px;padding:13px;background:#b31e59;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}</style></head><body><div class="c"><div class="logo">spot.</div><div class="tag">Välj ett nytt lösenord.</div><form method="POST" action="/reset"><input type="hidden" name="token" value="__TOKEN__"/><div class="f"><label>Nytt lösenord</label><input type="password" name="newPassword" autofocus/></div><div class="err" id="err">Minst 10 tecken, 1 versal och 1 specialtecken.</div><button type="submit">Spara nytt lösenord</button></form></div><script>if(new URLSearchParams(location.search).get("err"))document.getElementById("err").classList.add("show")<\/script></body></html>'
 const RESET_INVALID_HTML = '<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8"/><title>spot.</title><style>body{font-family:Segoe UI,sans-serif;background:#0f0f0f;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}a{color:#b31e59}</style></head><body><div><p>Länken är ogiltig eller har gått ut.</p><p><a href="/forgot">Försök igen</a></p></div></body></html>'
  
