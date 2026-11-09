@@ -196,7 +196,7 @@ app.use(function (req, res, next) {
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
   // [Säkerhet 19] CSP: de delar som inte kan påverka appens funktioner gäller direkt; resten körs i rapportläge (loggar avvikelser i webbläsaren utan att blockera)
   res.setHeader('Content-Security-Policy', "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'")
-  res.setHeader('Content-Security-Policy-Report-Only', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://cdnjs.cloudflare.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'")
+  res.setHeader('Content-Security-Policy-Report-Only', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://cdnjs.cloudflare.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; report-uri /api/csp-report")
   res.removeHeader('X-Powered-By')
   next()
 })
@@ -217,6 +217,26 @@ function rateHit(key, limit, windowMs) {
   e.push(now)
   return e.length > limit
 }
+// [Säkerhet 22] CSP-rapporter: webbläsarna skickar avvikelser från rapportläget hit och de sparas i audit_log som csp_violation
+const _cspSeen = {}
+app.post('/api/csp-report', express.json({ type: ['application/csp-report', 'application/reports+json', 'application/json'], limit: '20kb' }), function (req, res) {
+  res.status(204).end()
+  if (rateHit('csp:' + clientIp(req), 30, 3600 * 1000)) return
+  const list = Array.isArray(req.body) ? req.body.map(function (x) { return x && x.body }) : [req.body && req.body['csp-report']]
+  list.filter(Boolean).slice(0, 5).forEach(function (r) {
+    const d = {
+      directive: String(r['effective-directive'] || r.effectiveDirective || r['violated-directive'] || '').slice(0, 100),
+      blocked: String(r['blocked-uri'] || r.blockedURL || '').slice(0, 300),
+      page: String(r['document-uri'] || r.documentURL || '').split('?')[0].slice(0, 200),
+      source: String(r['source-file'] || r.sourceFile || '').split('?')[0].slice(0, 200),
+      line: r['line-number'] || r.lineNumber || null
+    }
+    const key = d.directive + '|' + d.blocked + '|' + d.source + '|' + d.line
+    if (_cspSeen[key] && _cspSeen[key] > Date.now() - 3600 * 1000) return
+    _cspSeen[key] = Date.now()
+    audit(req, 'csp_violation', { details: d })
+  })
+})
 setInterval(function () { const cut = Date.now() - 2 * 3600 * 1000; Object.keys(_rl).forEach(function (k) { if (!_rl[k].length || _rl[k][_rl[k].length - 1] < cut) delete _rl[k] }) }, 10 * 60 * 1000)
 // [Säkerhet 5] Spärr efter för många felaktiga inloggningar (5 fel på 15 min = spärrad i 15 min)
 const _loginFails = {}
