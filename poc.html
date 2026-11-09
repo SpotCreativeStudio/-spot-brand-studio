@@ -1091,7 +1091,7 @@ function _authorLine(p){
 function _saveAppState(){ if(!CURRENT_WORKSPACE) return; try{ localStorage.setItem('spotAppState', JSON.stringify({workspace:CURRENT_WORKSPACE, reviewQueue:S.reviewQueue, publishedPosts:S.publishedPosts, archiveOverride:S.archiveOverride})); }catch(e){} }
 function _restoreAppStateIfSameWorkspace(){ try{ var _as=JSON.parse(localStorage.getItem('spotAppState')||'null'); if(_as && _as.workspace===CURRENT_WORKSPACE){ if(Array.isArray(_as.reviewQueue)){S.reviewQueue=_as.reviewQueue;} if(Array.isArray(_as.publishedPosts)){S.publishedPosts=_as.publishedPosts;} if(_as.archiveOverride)S.archiveOverride=_as.archiveOverride; } else { localStorage.removeItem('spotAppState'); } }catch(e){} }
 var CURRENT_ROLE = 'admin';
-function _loadUserInfo(){ fetch('/api/me').then(function(r){ return r.json(); }).then(function(u){ var el=document.getElementById('avatarInitials'); if(el && u.initials) el.textContent=u.initials; var el2=document.getElementById('avatarInitials2'); if(el2 && u.initials) el2.textContent=u.initials; var _ca=document.getElementById('createAuthorAvatar'); if(_ca) _ca.textContent=u.initials||''; var _cn=document.getElementById('createAuthorName'); if(_cn) _cn.textContent=((u.firstName||'')+' '+(u.lastName||'')).trim(); var btn=document.getElementById('avatarBtn'); if(btn && u.firstName) btn.title=u.firstName+' '+u.lastName; var nameEl=document.getElementById('userFullName'); if(nameEl) nameEl.textContent=(u.firstName||'')+' '+(u.lastName||''); CURRENT_ROLE = u.role || 'admin'; CURRENT_WORKSPACE = u.workspace || 'spot'; CURRENT_USER_NAME = ((u.firstName||'') + ' ' + (u.lastName||'')).trim() || 'Okänd'; _restoreAppStateIfSameWorkspace(); _hydrateFromServer(); if (typeof renderDashboard === 'function') renderDashboard(); applyRolePermissions(); if (typeof _loadMyChannels === 'function') _loadMyChannels(); if (typeof _loadLinkedInStatus === 'function') _loadLinkedInStatus(); if (typeof _loadLinkedInCompanyStatus === 'function') _loadLinkedInCompanyStatus(); if (typeof _loadImgLibrary === 'function') _loadImgLibrary(); if (typeof _loadDrafts === 'function') _loadDrafts(); if (typeof _loadTeamPosts === 'function') _loadTeamPosts(); }).catch(function(){}); }
+function _loadUserInfo(){ fetch('/api/me').then(function(r){ return r.json(); }).then(function(u){ _applyAvatar(u); var el=document.getElementById('avatarInitials'); if(el && u.initials) el.textContent=u.initials; var el2=document.getElementById('avatarInitials2'); if(el2 && u.initials) el2.textContent=u.initials; var _ca=document.getElementById('createAuthorAvatar'); if(_ca) _ca.textContent=u.initials||''; var _cn=document.getElementById('createAuthorName'); if(_cn) _cn.textContent=((u.firstName||'')+' '+(u.lastName||'')).trim(); var btn=document.getElementById('avatarBtn'); if(btn && u.firstName) btn.title=u.firstName+' '+u.lastName; var nameEl=document.getElementById('userFullName'); if(nameEl) nameEl.textContent=(u.firstName||'')+' '+(u.lastName||''); CURRENT_ROLE = u.role || 'admin'; CURRENT_WORKSPACE = u.workspace || 'spot'; CURRENT_USER_NAME = ((u.firstName||'') + ' ' + (u.lastName||'')).trim() || 'Okänd'; _restoreAppStateIfSameWorkspace(); _hydrateFromServer(); if (typeof renderDashboard === 'function') renderDashboard(); applyRolePermissions(); if (typeof _loadMyChannels === 'function') _loadMyChannels(); if (typeof _loadLinkedInStatus === 'function') _loadLinkedInStatus(); if (typeof _loadLinkedInCompanyStatus === 'function') _loadLinkedInCompanyStatus(); if (typeof _loadImgLibrary === 'function') _loadImgLibrary(); if (typeof _loadDrafts === 'function') _loadDrafts(); if (typeof _loadTeamPosts === 'function') _loadTeamPosts(); }).catch(function(){}); }
 function applyRolePermissions(){
   var isAdmin = CURRENT_ROLE === 'admin';
   // Varumärke: bara admin får ändra. Övriga ser profilen och kan ladda ner, men inget går att redigera.
@@ -2777,8 +2777,12 @@ function renderSettings() {
   fetch('/api/me').then(function (r) { return r.json(); }).then(function (u) {
     if (!acc) return;
     var name = ((u.firstName || '') + ' ' + (u.lastName || '')).trim();
-    acc.innerHTML = '<div style="display:flex;align-items:center;gap:12px"><div class="tb-avatar" style="cursor:default">' + _h(u.initials || '') + '</div><div><div style="font-weight:600;color:#111;font-size:14px">' + _h(name) + '</div>' +
-      '<div style="color:#6b7280;font-size:12px;margin-top:2px">' + _h(ROLE_NAMES[u.role] || u.role || '') + ' · Arbetsyta: ' + _h(u.viewingAs || u.workspace || '') + '</div></div></div>';
+    var av = u.avatar ? '<div title="Byt profilbild" onclick="pickAvatar()" style="width:64px;height:64px;border-radius:50%;cursor:pointer;background:url(' + _h(u.avatar) + ') center/cover;flex-shrink:0"></div>'
+      : '<div title="Ladda upp profilbild" onclick="pickAvatar()" class="tb-avatar" style="width:64px;height:64px;font-size:22px;cursor:pointer">' + _h(u.initials || '') + '</div>';
+    acc.innerHTML = '<div style="display:flex;align-items:center;gap:14px">' + av + '<div><div style="font-weight:600;color:#111;font-size:14px">' + _h(name) + '</div>' +
+      '<div style="color:#6b7280;font-size:12px;margin-top:2px">' + _h(ROLE_NAMES[u.role] || u.role || '') + ' · Arbetsyta: ' + _h(u.viewingAs || u.workspace || '') + '</div>' +
+      '<div style="margin-top:8px;display:flex;gap:10px;font-size:12px"><a href="#" onclick="pickAvatar();return false" style="color:var(--m);font-weight:600;text-decoration:none">' + (u.avatar ? 'Byt profilbild' : 'Ladda upp profilbild') + '</a>' +
+      (u.avatar ? '<a href="#" onclick="removeAvatar();return false" style="color:#6b7280;text-decoration:none">Ta bort</a>' : '') + '</div></div></div>';
   }).catch(function () { if (acc) acc.textContent = 'Kunde inte hämta kontot.'; });
   if (!con) return;
   Promise.all([
@@ -2793,6 +2797,41 @@ function renderSettings() {
         co.connected ? '<button onclick="disconnectLinkedInCompany();setTimeout(renderSettings,600)" style="' + btn + ';border:1.5px solid #e5e7eb;color:#374151">Koppla från</button>' : '<a href="/auth/linkedin/company" style="' + btn + ';background:var(--m);color:#fff">Anslut</a>');
   });
 }
+// ── Profilbild: väljs i Inställningar, beskärs till kvadrat 256×256 och sparas på servern ──
+function _applyAvatar(u) {
+  var btn = document.getElementById('avatarBtn'), ini = document.getElementById('avatarInitials');
+  if (!btn || !ini) return;
+  if (u && u.avatar) { btn.style.backgroundImage = 'url(' + u.avatar + ')'; btn.style.backgroundSize = 'cover'; btn.style.backgroundPosition = 'center'; ini.style.visibility = 'hidden'; }
+  else { btn.style.backgroundImage = ''; ini.style.visibility = ''; }
+}
+function pickAvatar() {
+  var inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/png,image/jpeg,image/webp';
+  inp.onchange = function () {
+    var f = inp.files && inp.files[0]; if (!f) return;
+    if (f.size > 15 * 1024 * 1024) { showToast('Bilden är för stor (max 15 MB)', 'err'); return; }
+    var img = new Image(), rd = new FileReader();
+    rd.onload = function () { img.src = rd.result; };
+    img.onload = function () {
+      var S2 = 256, c = document.createElement('canvas'); c.width = S2; c.height = S2;
+      var side = Math.min(img.width, img.height), sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+      c.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, S2, S2);
+      _saveAvatar(c.toDataURL('image/jpeg', 0.88));
+    };
+    img.onerror = function () { showToast('Kunde inte läsa bilden', 'err'); };
+    rd.readAsDataURL(f);
+  };
+  inp.click();
+}
+function _saveAvatar(dataUrl) {
+  fetch('/api/me/avatar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dataUrl: dataUrl }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok) { showToast('⚠️ ' + (res.j.error || 'Kunde inte spara profilbilden'), 'err'); return; }
+      showToast(dataUrl ? '✅ Profilbild sparad' : 'Profilbild borttagen');
+      _applyAvatar({ avatar: res.j.avatar }); renderSettings(); if (typeof loadTeamMembers === 'function') loadTeamMembers();
+    }).catch(function () { showToast('⚠️ Kunde inte spara profilbilden', 'err'); });
+}
+function removeAvatar() { if (confirm('Ta bort din profilbild?')) _saveAvatar(null); }
 function settingsLogout() {
   try { Object.keys(localStorage).forEach(function (k) { if (k === 'spotAppState' || k === 'spotDrafts' || k.indexOf('spotEditDraft:') === 0 || k.indexOf('tplClean:') === 0) localStorage.removeItem(k); }); } catch (e) {}
   fetch('/logout', { method: 'POST' }).then(function () { location.href = '/login'; }).catch(function () { location.href = '/login'; });
@@ -5128,7 +5167,7 @@ function loadTeamMembers(){
     data.members.forEach(function(u, i){
       var name = ((u.first_name||'') + ' ' + (u.last_name||'')).trim() || u.username;
       var initials = name.split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2);
-      TEAM_MEMBERS.push({ id: u.username, name: name, email: u.email || u.username, role: roleRev[u.role] || 'viewer', color: colors[i % colors.length], initials: initials, username: u.username });
+      TEAM_MEMBERS.push({ id: u.username, name: name, email: u.email || u.username, role: roleRev[u.role] || 'viewer', color: colors[i % colors.length], initials: initials, username: u.username, avatar: u.avatar_url || null });
     });
     renderTeam();
   }).catch(function(){});
@@ -5138,7 +5177,7 @@ function renderTeam() {
   document.getElementById('memberCount').textContent = `${TEAM_MEMBERS.length} medlemmar`;
   document.getElementById('memberList').innerHTML = TEAM_MEMBERS.map(m => `
     <div class="member-row">
-      <div class="member-avatar" style="background:${m.color}20;color:${m.color}">${m.initials}</div>
+      <div class="member-avatar" style="background:${m.color}20;color:${m.color}${m.avatar ? ';background-image:url(' + _h(m.avatar) + ');background-size:cover;background-position:center' : ''}">${m.avatar ? '' : m.initials}</div>
       <div class="member-info">
         <div class="member-name">${_h(m.name)}</div>
         <div class="member-email">${_h(m.email)}</div>
