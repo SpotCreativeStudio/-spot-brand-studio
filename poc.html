@@ -785,6 +785,10 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
         </div>
       </div>
       <div class="section-card" style="max-width:640px">
+        <div class="section-title">Tvåstegsverifiering</div>
+        <div id="set2fa" style="font-size:13px;color:#374151">Hämtar…</div>
+      </div>
+      <div class="section-card" style="max-width:640px">
         <div class="section-title">Kopplingar</div>
         <div id="setConnections" style="display:flex;flex-direction:column;gap:10px;font-size:13px">Hämtar…</div>
       </div>
@@ -815,7 +819,7 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
           <div style="display:flex;gap:10px"><div style="flex:1"><div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase">Admin förnamn</div><input id="nwFirstName" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px"></div><div style="flex:1"><div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase">Admin efternamn</div><input id="nwLastName" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px"></div></div>
           <div><div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase">Admin-e-post</div><input id="nwEmail" type="email" placeholder="t.ex. anna@ikea.se" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px"></div>
           <div><div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase">Admin-användarnamn</div><input id="nwUsername" placeholder="t.ex. ikea-admin" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px"></div>
-          <div><div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase">Admin-lösenord</div><input id="nwPassword" type="password" placeholder="Minst 6 tecken" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px"><div style="font-size:11px;color:#6b7280;margin-top:4px">Minst 6 tecken, 1 versal och 1 specialtecken (t.ex. ! # ?)</div></div>
+          <div><div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase">Admin-lösenord</div><input id="nwPassword" type="password" placeholder="Minst 10 tecken" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px"><div style="font-size:11px;color:#6b7280;margin-top:4px">Minst 10 tecken, 1 versal och 1 specialtecken (t.ex. ! # ?)</div></div>
           <button onclick="createWorkspace()" style="padding:10px 16px;background:var(--m);color:#fff;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:none;align-self:flex-start">Skapa arbetsyta</button>
           <div id="nwResult" style="font-size:12px;display:none;padding:10px 12px;border-radius:8px"></div>
           <div style="border-top:1px solid #f3f4f6;margin-top:8px;padding-top:14px;width:100%">
@@ -981,7 +985,7 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
     </div>
     <div style="margin-bottom:12px">
       <div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase">Lösenord</div>
-      <input id="newMemberPassword" placeholder="Minst 6 tecken" type="password" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px;outline:none;font-family:inherit"><div style="font-size:11px;color:#6b7280;margin-top:4px">Minst 6 tecken, 1 versal och 1 specialtecken (t.ex. ! # ?)</div>
+      <input id="newMemberPassword" placeholder="Minst 10 tecken" type="password" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px;outline:none;font-family:inherit"><div style="font-size:11px;color:#6b7280;margin-top:4px">Minst 10 tecken, 1 versal och 1 specialtecken (t.ex. ! # ?)</div>
     </div>
     <div style="margin-bottom:20px">
       <div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase">Roll</div>
@@ -1057,7 +1061,7 @@ const S = {
   _aiImageBrief: '',       // briefen som bilden genererades för
   pubTab: 'active',        // 'active' | 'archive' i Publicerade-vyn
 };
-function passwordInvalid(p){p=String(p||'');return p.length<6||!/[A-ZÅÄÖ]/.test(p)||!/[^A-Za-z0-9ÅÄÖåäö]/.test(p);}
+function passwordInvalid(p){p=String(p||'');return p.length<10||!/[A-ZÅÄÖ]/.test(p)||!/[^A-Za-z0-9ÅÄÖåäö]/.test(p);}
 var CURRENT_WORKSPACE = null;
 var CURRENT_USER_NAME = null;
 var AI_GENERATE_ENABLED = (function(){ try{ var v=localStorage.getItem('spotAiGenEnabled'); return v===null?true:v==='1'; }catch(e){ return true; } })();
@@ -2093,7 +2097,7 @@ function navigate(view) {
   if (view === 'review')    renderReview();
   if (view === 'brand')     { renderBrand(); if (typeof _loadLinkedInCompanyStatus === 'function') _loadLinkedInCompanyStatus(); }
   if (view === 'dashboard') { renderDashboard(); renderStats(); renderContributions(); }
-  if (view === 'settings')  renderSettings();
+  if (view === 'settings')  { renderSettings(); render2fa(); }
   if (view === 'published') renderPublished();
   if (view === 'team')      renderTeam();
   if (view === 'advocacy')  renderAdvocacy();
@@ -2832,6 +2836,41 @@ function _saveAvatar(dataUrl) {
     }).catch(function () { showToast('⚠️ Kunde inte spara profilbilden', 'err'); });
 }
 function removeAvatar() { if (confirm('Ta bort din profilbild?')) _saveAvatar(null); }
+// ── Tvåstegsverifiering (TOTP) ──
+function render2fa() {
+  var box = document.getElementById('set2fa'); if (!box) return;
+  fetch('/api/me/2fa').then(function (r) { return r.json(); }).then(function (d) {
+    var btn = 'padding:8px 14px;border-radius:9px;font-size:13px;font-weight:600';
+    box.innerHTML = d.enabled
+      ? '<div style="margin-bottom:10px">✅ <b>Aktiverad.</b> Vid inloggning anger du en kod från din autentiseringsapp.</div><button onclick="disable2fa()" style="' + btn + ';border:1.5px solid #e5e7eb;color:#374151">Stäng av</button>'
+      : '<div style="color:#6b7280;margin-bottom:10px;line-height:1.5">Skydda kontot med en kod från mobilen vid inloggning, även om någon får tag på ditt lösenord. Rekommenderas för admin.</div><button onclick="setup2fa()" style="' + btn + ';background:var(--m);color:#fff">Aktivera</button>';
+  }).catch(function () { box.textContent = 'Kunde inte hämta status.'; });
+}
+function setup2fa() {
+  var box = document.getElementById('set2fa');
+  fetch('/api/me/2fa/setup', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (d) {
+    if (d.error) { showToast('⚠️ ' + d.error, 'err'); return; }
+    box.innerHTML = '<ol style="padding-left:18px;line-height:1.7;margin-bottom:12px"><li>Öppna en autentiseringsapp i mobilen, till exempel Google Authenticator eller Microsoft Authenticator.</li>' +
+      '<li>Välj <b>Lägg till konto → Ange nyckel</b> och skriv in nyckeln nedan (tidsbaserad). På mobilen kan du i stället trycka <a href="' + _h(d.uri) + '" style="color:var(--m)">här</a>.</li><li>Skriv in den 6-siffriga koden appen visar.</li></ol>' +
+      '<div style="font-family:monospace;font-size:15px;letter-spacing:.08em;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;margin-bottom:12px;user-select:all">' + _h(d.secret) + '</div>' +
+      '<div style="display:flex;gap:8px"><input id="tfaCode" inputmode="numeric" maxlength="6" placeholder="123456" style="width:130px;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:15px;letter-spacing:.2em">' +
+      '<button onclick="enable2fa()" style="padding:9px 14px;border-radius:9px;background:var(--m);color:#fff;font-size:13px;font-weight:600">Bekräfta</button><button onclick="render2fa()" style="padding:9px 14px;border-radius:9px;border:1.5px solid #e5e7eb;font-size:13px;color:#374151">Avbryt</button></div>';
+  });
+}
+function enable2fa() {
+  var c = (document.getElementById('tfaCode') || {}).value || '';
+  fetch('/api/me/2fa/enable', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: c }) }).then(function (r) { return r.json(); }).then(function (d) {
+    if (d.error) { showToast('⚠️ ' + d.error, 'err'); return; }
+    showToast('✅ Tvåstegsverifiering aktiverad'); render2fa();
+  });
+}
+function disable2fa() {
+  var c = prompt('Ange en kod från din autentiseringsapp för att stänga av tvåstegsverifieringen:'); if (!c) return;
+  fetch('/api/me/2fa/disable', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: c }) }).then(function (r) { return r.json(); }).then(function (d) {
+    if (d.error) { showToast('⚠️ ' + d.error, 'err'); return; }
+    showToast('Tvåstegsverifiering avstängd'); render2fa();
+  });
+}
 function settingsLogout() {
   try { Object.keys(localStorage).forEach(function (k) { if (k === 'spotAppState' || k === 'spotDrafts' || k.indexOf('spotEditDraft:') === 0 || k.indexOf('tplClean:') === 0) localStorage.removeItem(k); }); } catch (e) {}
   fetch('/logout', { method: 'POST' }).then(function () { location.href = '/login'; }).catch(function () { location.href = '/login'; });
@@ -5352,7 +5391,7 @@ function addMember() {
   const password = document.getElementById('newMemberPassword').value;
   const role  = document.getElementById('newMemberRole').value;
   if (!name || !email || !password) { showToast('Fyll i namn, e-post och lösenord','err'); return; }
-  if (passwordInvalid(password)) { showToast('Lösenordet måste vara minst 6 tecken och innehålla minst en versal och ett specialtecken','err'); return; }
+  if (passwordInvalid(password)) { showToast('Lösenordet måste vara minst 10 tecken och innehålla minst en versal och ett specialtecken','err'); return; }
   const username = (document.getElementById('newMemberUsername')||{}).value || '';
   fetch('/api/team/invite', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name,email,password,role,username}) })
     .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
@@ -5626,7 +5665,7 @@ function closeChangePwModal(){ document.getElementById('changePwModal').style.di
 function submitChangePw(){
   var cur=document.getElementById('cpwCurrent').value, nw=document.getElementById('cpwNew').value;
   var m=document.getElementById('cpwMsg');
-  if(passwordInvalid(nw)){ m.textContent='Lösenordet måste vara minst 6 tecken och innehålla minst en versal och ett specialtecken.'; m.style.color='#b31e59'; m.style.display='block'; return; }
+  if(passwordInvalid(nw)){ m.textContent='Lösenordet måste vara minst 10 tecken och innehålla minst en versal och ett specialtecken.'; m.style.color='#b31e59'; m.style.display='block'; return; }
   fetch('/api/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentPassword:cur,newPassword:nw})})
     .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
     .then(function(res){
