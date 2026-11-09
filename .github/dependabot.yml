@@ -1,0 +1,10 @@
+# Dependabot: veckovis kontroll av npm-paket och säkerhetsuppdateringar
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      timezone: "Europe/Stockholm"
+    open-pull-requests-limit: 5
