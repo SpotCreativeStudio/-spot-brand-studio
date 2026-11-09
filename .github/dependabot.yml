@@ -1,4 +1,7 @@
-# Dependabot: veckovis kontroll av npm-paket och säkerhetsuppdateringar
+# Dependabot: veckovis kontroll av npm-paket.
+# Små uppdateringar (patch/minor) samlas i EN pull request per vecka.
+# Stora versionshopp (t.ex. express 4 -> 5) hoppas över eftersom de kräver kodändringar;
+# säkerhetsfixar kommer ändå via Dependabot security updates.
 version: 2
 updates:
   - package-ecosystem: "npm"
@@ -6,5 +9,16 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+      time: "07:00"
       timezone: "Europe/Stockholm"
     open-pull-requests-limit: 5
+    groups:
+      sma-uppdateringar:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: "deps"
