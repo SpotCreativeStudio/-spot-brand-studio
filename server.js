@@ -194,9 +194,8 @@ app.use(function (req, res, next) {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-  // [Säkerhet 19] CSP: de delar som inte kan påverka appens funktioner gäller direkt; resten körs i rapportläge (loggar avvikelser i webbläsaren utan att blockera)
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'")
-  res.setHeader('Content-Security-Policy-Report-Only', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://cdnjs.cloudflare.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; report-uri /api/csp-report")
+  // [Säkerhet 19] CSP fullt påslagen 16 nov 2026 efter en vecka utan avvikelser i rapportläge. Blockerade försök rapporteras fortfarande till /api/csp-report
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://cdnjs.cloudflare.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; report-uri /api/csp-report")
   res.removeHeader('X-Powered-By')
   next()
 })
