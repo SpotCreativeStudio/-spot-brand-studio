@@ -2103,6 +2103,7 @@ function navigate(view) {
   if (view === 'team')      renderTeam();
   if (view === 'advocacy')  renderAdvocacy();
   if (view === 'schema')    renderSchema();
+  if (view === 'create')    setTimeout(openCreateChooser, 0);
 }
 
 // ════════════════════════════════════════════════════════
@@ -2974,13 +2975,15 @@ function openPostChat(){
     m = document.createElement('div'); m.id = 'postChatModal';
     m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
     m.onclick = function(e){ if (e.target === m) closePostChat(); };
-    m.innerHTML = '<div style="background:#fff;border-radius:16px;width:min(980px,100%);height:min(720px,100%);display:flex;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.3)">'
+    m.innerHTML = '<div style="background:#fff;border-radius:16px;width:min(1280px,100%);height:min(760px,100%);display:flex;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.3)">'
       + '<div style="width:230px;border-right:1px solid #f0f0f0;background:#fafafa;display:flex;flex-direction:column;flex-shrink:0"><div style="padding:12px"><button onclick="newPostChat()" style="width:100%;padding:9px;border-radius:9px;background:var(--m);color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">+ Ny chatt</button></div><div id="pcList" style="flex:1;overflow:auto;padding:0 8px 12px"></div></div>'
       + '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;border-bottom:1px solid #f0f0f0"><div id="pcTitle" style="font-weight:700;font-size:14px;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Ny chatt</div><button onclick="closePostChat()" title="Stäng" style="width:30px;height:30px;flex-shrink:0;border-radius:50%;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:16px;line-height:1">×</button></div>'
       + '<div id="pcMsgs" style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px"></div>'
       + '<div style="padding:12px 16px;border-top:1px solid #f0f0f0;display:flex;gap:8px;align-items:flex-end"><textarea id="pcInput" rows="2" placeholder="Beskriv inlägget eller be om ändringar, t.ex. kortare och mer personligt" style="flex:1;resize:none;border:1.5px solid #e5e7eb;border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;max-height:140px"></textarea><button id="pcSend" onclick="sendPostChat()" style="padding:10px 16px;border-radius:10px;background:var(--m);color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">Skicka</button></div>'
-      + '</div></div>';
+      + '</div>'
+      + '<div id="pcPrev" style="width:340px;flex-shrink:0;border-left:1px solid #f0f0f0;background:#fafafa;overflow:auto;padding:14px"></div>'
+      + '</div>';
     document.body.appendChild(m);
     document.getElementById('pcInput').onkeydown = function(e){ if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendPostChat(); } };
   }
@@ -2993,7 +2996,7 @@ function openPostChat(){
   setTimeout(function(){ var x = document.getElementById('pcInput'); if (x) x.focus(); }, 50);
 }
 function closePostChat(){ var m = document.getElementById('postChatModal'); if (m) m.style.display = 'none'; }
-function newPostChat(){ _pc.id = ''; _pc.messages = []; _pcRenderMsgs(); _pcRenderList(); var x = document.getElementById('pcInput'); if (x) { x.value = ''; x.focus(); } }
+function newPostChat(){ _pc.id = ''; _pc.messages = []; _pc.sel = null; _pcRenderMsgs(); _pcRenderList(); var x = document.getElementById('pcInput'); if (x) { x.value = ''; x.focus(); } }
 function _pcLoadList(){ fetch('/api/post-chats').then(function(r){ return r.json(); }).then(function(d){ _pc.chats = d.chats || []; _pcRenderList(); }).catch(function(){}); }
 function _pcRenderList(){
   var el = document.getElementById('pcList'); if (!el) return;
@@ -3006,7 +3009,7 @@ function _pcRenderList(){
 function openPostChatById(id){
   fetch('/api/post-chats/' + encodeURIComponent(id)).then(function(r){ return r.json(); }).then(function(d){
     if (!d || d.error) return;
-    _pc.id = d.id; _pc.messages = d.messages || [];
+    _pc.id = d.id; _pc.messages = d.messages || []; _pc.sel = null;
     var t = document.getElementById('pcTitle'); if (t) t.textContent = d.title || 'Chatt';
     _pcRenderMsgs(); _pcRenderList();
   }).catch(function(){});
@@ -3017,6 +3020,7 @@ function deletePostChat(id){
 }
 function _pcRenderMsgs(){
   var el = document.getElementById('pcMsgs'); if (!el) return;
+  _pcRenderPreview();
   var t = document.getElementById('pcTitle'); if (t && !_pc.id) t.textContent = 'Ny chatt';
   if (!_pc.messages.length) { el.innerHTML = '<div style="margin:auto;text-align:center;color:#9ca3af;font-size:13px;max-width:360px;line-height:1.6">💬 Beskriv vad inlägget ska handla om. Be sedan om ändringar tills texten är klar, och klicka <b>Använd i inlägget</b>.</div>'; return; }
   el.innerHTML = _pc.messages.map(function(m, i){
@@ -3024,7 +3028,7 @@ function _pcRenderMsgs(){
     var d = m.draft;
     return '<div style="align-self:flex-start;max-width:85%;display:flex;flex-direction:column;gap:8px">'
       + (m.text ? '<div style="background:#f3f4f6;color:#111;padding:10px 14px;border-radius:14px 14px 14px 4px;font-size:13px;white-space:pre-wrap">' + _h(m.text) + '</div>' : '')
-      + (d ? '<div style="border:1.5px solid #f0d5e1;background:#fff;border-radius:12px;padding:12px 14px">'
+      + (d ? '<div onclick="pcSelect(' + i + ')" title="Visa i förhandsvisningen" style="cursor:pointer;border:1.5px solid ' + (i === _pcSelIdx() ? 'var(--m)' : '#f0d5e1') + ';background:#fff;border-radius:12px;padding:12px 14px">'
         + (d.title ? '<div style="font-weight:700;font-size:14px;color:#111;margin-bottom:6px">' + _h(d.title) + '</div>' : '')
         + '<div style="font-size:13px;color:#374151;white-space:pre-wrap;line-height:1.5">' + _h(d.content || '') + '</div>'
         + (d.hashtags && d.hashtags.length ? '<div style="font-size:12px;color:#0a66c2;margin-top:6px">' + d.hashtags.map(function(h){ return '#' + _h(String(h).replace(/^#/, '')); }).join(' ') + '</div>' : '')
@@ -3036,7 +3040,7 @@ function _pcRenderMsgs(){
 async function sendPostChat(){
   var ta = document.getElementById('pcInput'), text = ((ta && ta.value) || '').trim();
   if (!text || _pc.busy) return;
-  ta.value = ''; _pc.messages.push({ role: 'user', text: text }); _pc.busy = true; _pcRenderMsgs();
+  _pc.sel = null; ta.value = ''; _pc.messages.push({ role: 'user', text: text }); _pc.busy = true; _pcRenderMsgs();
   var btn = document.getElementById('pcSend'); if (btn) btn.disabled = true;
   try {
     var ch = (S.manualChannels && S.manualChannels[0]) || S.manualChannel || 'linkedin';
@@ -3048,6 +3052,56 @@ async function sendPostChat(){
     _pcLoadList();
   } catch (e) { _pc.messages.push({ role: 'ai', text: '⚠️ ' + e.message }); }
   _pc.busy = false; if (btn) btn.disabled = false; _pcRenderMsgs();
+}
+// Förhandsvisning i chatten: senaste utkastet (eller det man klickat på) som ett LinkedIn-inlägg med mall och bild
+function _pcSelIdx(){
+  if (_pc.sel != null && _pc.messages[_pc.sel] && _pc.messages[_pc.sel].draft) return _pc.sel;
+  for (var i = _pc.messages.length - 1; i >= 0; i--) if (_pc.messages[i].draft) return i;
+  return -1;
+}
+function pcSelect(i){ _pc.sel = i; _pcRenderMsgs(); }
+function _pcPreviewPost(d){
+  var ch = (S.manualChannels && S.manualChannels[0]) || S.manualChannel || 'linkedin';
+  var p = { channel: ch, layout: _manualLayout(), title: d.title || '', aiTitle: d.title || '', content: d.content || '', hashtags: (d.hashtags || []).map(function(t){ return String(t).replace(/^#/, ''); }), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [], blocks: ((document.getElementById('m-include-brand') || {}).checked ? ['brand','content','hashtags'] : ['content','hashtags']) };
+  Object.assign(p, _createExtra()); p.tplIdx = _currentTplIdx(); _tplStrip(p);
+  return p;
+}
+function _pcRenderPreview(){
+  var el = document.getElementById('pcPrev'); if (!el) return;
+  var i = _pcSelIdx(), d = i >= 0 ? _pc.messages[i].draft : null;
+  var head = '<div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:8px">Förhandsvisning</div>';
+  if (!d) { el.innerHTML = head + '<div style="font-size:12px;color:#9ca3af;line-height:1.6">Här visas inlägget när AI har skrivit ett utkast. Klicka på ett utkast i chatten för att se det här.</div>'; return; }
+  try {
+    var p = _pcPreviewPost(d);
+    el.innerHTML = head + '<div style="border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#fff">' + _liTop(p) + '<div style="position:relative;aspect-ratio:' + _arFor(p.channel) + '">' + getPostImageHTML(p) + '</div>' + _liFoot() + '</div>'
+      + '<button onclick="usePostChatDraft(' + i + ')" style="width:100%;margin-top:10px;padding:9px;border-radius:9px;background:var(--m);color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">Använd i inlägget</button>';
+  } catch (e) { el.innerHTML = head + '<div style="font-size:12px;color:#9ca3af">Förhandsvisningen kunde inte visas.</div>'; }
+}
+// ── Val när man öppnar Skapa inlägg: skriva själv eller chatta med AI (visas bara när formuläret är tomt) ──
+function openCreateChooser(){
+  var ti = document.getElementById('m-title'), co = document.getElementById('m-content');
+  if ((ti && ti.value.trim()) || (co && co.value.trim()) || window._aiProposals) return;
+  var m = document.getElementById('createChooser');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'createChooser';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9998;display:flex;align-items:center;justify-content:center;padding:16px';
+    m.onclick = function(e){ if (e.target === m) chooseCreateMode('manual'); };
+    var card = function(mode, icon, title, text){ return '<button onclick="chooseCreateMode(\'' + mode + '\')" style="flex:1;min-width:220px;text-align:left;padding:22px;border-radius:16px;border:1.5px solid #f0d5e1;background:#fff;cursor:pointer;display:flex;flex-direction:column;gap:8px;transition:border-color .15s,box-shadow .15s" onmouseover="this.style.borderColor=\'var(--m)\';this.style.boxShadow=\'0 8px 24px rgba(179,30,89,.15)\'" onmouseout="this.style.borderColor=\'#f0d5e1\';this.style.boxShadow=\'none\'"><span style="font-size:28px">' + icon + '</span><span style="font-size:16px;font-weight:700;color:#111">' + title + '</span><span style="font-size:13px;color:#6b7280;line-height:1.5">' + text + '</span></button>'; };
+    m.innerHTML = '<div style="background:#fff;border-radius:20px;padding:26px;width:min(620px,100%);box-shadow:0 24px 60px rgba(0,0,0,.25)">'
+      + '<div style="font-size:18px;font-weight:700;color:#111;margin-bottom:4px">Hur vill du skapa inlägget?</div>'
+      + '<div style="font-size:13px;color:#6b7280;margin-bottom:18px">Du kan byta när som helst.</div>'
+      + '<div style="display:flex;gap:14px;flex-wrap:wrap">'
+      + card('manual', '✍️', 'Skriv själv', 'Fyll i formuläret. Du kan fortfarande låta AI ta fram förslag med Generera med AI.')
+      + card('chat', '💬', 'Chatta med AI', 'Beskriv inlägget och förfina texten i en chatt tills den är klar.')
+      + '</div></div>';
+    document.body.appendChild(m);
+  }
+  m.style.display = 'flex';
+}
+function chooseCreateMode(mode){
+  var m = document.getElementById('createChooser'); if (m) m.style.display = 'none';
+  if (mode === 'chat') openPostChat();
+  else { var ti = document.getElementById('m-title'); if (ti) ti.focus(); }
 }
 function _pcDraft(i){ var m = _pc.messages[i]; return m && m.draft; }
 function usePostChatDraft(i){
