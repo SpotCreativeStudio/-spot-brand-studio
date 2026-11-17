@@ -273,7 +273,7 @@ function sessionValid(t) {
 function revokeUserSessions(username, exceptToken) { let n = 0; Object.keys(sessions).forEach(function (t) { if (t !== exceptToken && sessions[t] && sessions[t].u === username) { delete sessions[t]; dropSession(t); n++ } }); return n }
 // [Säkerhet 9] AI-logg: varje AI-anrop sparas med arbetsyta, användare, IP och enhet + tak per användare (60/timme)
 async function ensureAiUsageTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS ai_usage (id SERIAL PRIMARY KEY, workspace TEXT, username TEXT, endpoint TEXT, status INTEGER, ms INTEGER, ip TEXT, user_agent TEXT, created_at TIMESTAMPTZ DEFAULT NOW())") }
-const AI_ENDPOINTS = ['/api/generate', '/api/clean-template', '/api/template-layers', '/api/generate-image']
+const AI_ENDPOINTS = ['/api/generate', '/api/clean-template', '/api/template-layers', '/api/generate-image', '/api/post-chat']
 app.use(function (req, res, next) {
   if (req.method !== 'POST' || AI_ENDPOINTS.indexOf(req.path) < 0) return next()
   const s = sessions[getToken(req)] || {}
@@ -787,6 +787,78 @@ async function geminiText(apiKey, parts, gen) {
   }
   throw new Error('Gemini gav ingen text – ' + notes.join(' | '))
 }
+// ── Chatt för att skriva inlägg (som en AI-chatt): historik sparas per användare och arbetsyta ──
+async function ensurePostChats() { await getAuthPool().query('CREATE TABLE IF NOT EXISTS post_chats (id TEXT PRIMARY KEY, workspace TEXT, username TEXT, title TEXT, messages JSONB, updated_at TIMESTAMPTZ DEFAULT NOW())') }
+function _chatBrandBlock(brand) {
+  if (!brand) return ''
+  let b = ' Varumarkesprofil - foljs strikt: Tonalitet: ' + (brand.tone || '') + '. Visuell stil: ' + (brand.visualStyle || '') + '. Tjanster: ' + (brand.services || '') + '.'
+  if (brand.dos && brand.dos.length) b += ' Gor: ' + brand.dos.join('; ') + '.'
+  if (brand.donts && brand.donts.length) b += ' Undvik: ' + brand.donts.join('; ') + '.'
+  if (brand.forbidden) b += ' Forbjudna ord/fraser: ' + brand.forbidden + '.'
+  return b
+}
+app.get('/api/post-chats', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    await ensurePostChats()
+    const r = await getAuthPool().query('SELECT id, title, updated_at FROM post_chats WHERE workspace=$1 AND username=$2 ORDER BY updated_at DESC LIMIT 50', [s.workspace || 'spot', s.u])
+    res.json({ chats: r.rows })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+app.get('/api/post-chats/:id', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    await ensurePostChats()
+    const r = await getAuthPool().query('SELECT id, title, messages, updated_at FROM post_chats WHERE id=$1 AND workspace=$2 AND username=$3', [String(req.params.id), s.workspace || 'spot', s.u])
+    if (!r.rows.length) return res.status(404).json({ error: 'Chatten hittades inte' })
+    res.json(r.rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+app.delete('/api/post-chats/:id', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    await ensurePostChats()
+    await getAuthPool().query('DELETE FROM post_chats WHERE id=$1 AND workspace=$2 AND username=$3', [String(req.params.id), s.workspace || 'spot', s.u])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+app.post('/api/post-chat', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}, ws = s.workspace || 'spot'
+    const { chatId = '', text = '', brand = null, channel = 'linkedin' } = req.body || {}
+    const msg = String(text).trim().slice(0, 4000)
+    if (!msg) return res.status(400).json({ error: 'Skriv ett meddelande' })
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY saknas' })
+    await ensurePostChats()
+    let chat = null
+    if (chatId) {
+      const r0 = await getAuthPool().query('SELECT id, title, messages FROM post_chats WHERE id=$1 AND workspace=$2 AND username=$3', [String(chatId), ws, s.u])
+      chat = r0.rows[0] || null
+      if (!chat) return res.status(404).json({ error: 'Chatten hittades inte' })
+    }
+    const messages = (chat && Array.isArray(chat.messages)) ? chat.messages : []
+    messages.push({ role: 'user', text: msg, at: Date.now() })
+    const brandName = (brand && brand.name) ? (brand.name + (brand.location ? ', ' + brand.location : '')) : 'spot. creative studio Halmstad'
+    const history = messages.slice(-20).map(m => m.role === 'user' ? 'Anvandare: ' + m.text : 'Du: ' + (m.text || '') + (m.draft ? ' [Utkast: ' + JSON.stringify(m.draft) + ']' : '')).join('\n')
+    const prompt = 'Du ar copywriter for ' + brandName + ' och hjalper anvandaren att skriva ett inlagg for ' + String(channel).slice(0, 20) + ' i en chatt.' + _chatBrandBlock(brand) +
+      ' Svara pa svenska. Bygg vidare pa det senaste utkastet och anvandarens onskemal. Om anvandaren bara staller en fraga kan du svara och behalla utkastet som det ar.' +
+      ' "title" ar rubriken som star pa bilden, max 5 ord, och far inte vara anvandarens uppdrag ordagrant.' +
+      ' Konversation hittills:\n' + history +
+      '\nSvara ENDAST med JSON: {"reply":"kort svar till anvandaren, max 2 meningar","title":"...","content":"hela inlaggstexten, max 150 ord","hashtags":["..."]}'
+    const g = await geminiText(apiKey, [{ text: prompt }], { temperature: 0.8, maxOutputTokens: 4096 })
+    const raw = g.text.replace(/```json/g, '').replace(/```/g, '').trim()
+    let out = {}
+    try { out = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1).replace(/,(\s*[}\]])/g, '$1')) } catch (e) { out = { reply: raw.slice(0, 1500) } }
+    const draft = (out.content || out.title) ? { title: capitalizeAfterSentences(String(out.title || '')), content: capitalizeAfterSentences(String(out.content || '')), hashtags: Array.isArray(out.hashtags) ? out.hashtags.map(String).slice(0, 10) : [] } : null
+    messages.push({ role: 'ai', text: String(out.reply || (draft ? 'Här är ett förslag.' : '')).slice(0, 2000), draft, at: Date.now() })
+    const id = chat ? chat.id : crypto.randomBytes(9).toString('hex')
+    const title = chat ? chat.title : msg.replace(/\s+/g, ' ').slice(0, 60)
+    const keep = messages.slice(-60)
+    await getAuthPool().query('INSERT INTO post_chats (id, workspace, username, title, messages, updated_at) VALUES ($1,$2,$3,$4,$5,NOW()) ON CONFLICT (id) DO UPDATE SET messages=$5, updated_at=NOW()', [id, ws, s.u, title, JSON.stringify(keep)])
+    res.json({ id, title, messages: keep })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 app.post('/api/generate', auth, async (req, res) => { try { const { channels = ['instagram'], brief = '', brand = null } = req.body; const nProps = Math.min(6, Math.max(1, parseInt(req.body.count, 10) || 3)); const apiKey = process.env.GEMINI_API_KEY; if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY saknas' }); const chList = Array.isArray(channels) ? channels : [channels]; let brandBlock = ''; if (brand) { brandBlock = ' Varumarkesprofil - foljs strikt: Tonalitet: ' + (brand.tone||'') + '. Visuell stil: ' + (brand.visualStyle||'') + '. Tjanster: ' + (brand.services||'') + '.'; if (brand.dos && brand.dos.length) brandBlock += ' Gor: ' + brand.dos.join('; ') + '.'; if (brand.donts && brand.donts.length) brandBlock += ' Undvik: ' + brand.donts.join('; ') + '.'; if (brand.forbidden) brandBlock += ' Forbjudna ord/fraser: ' + brand.forbidden + '.'; } const _logos = (brand && Array.isArray(brand.logos)) ? brand.logos.filter(l => l && typeof l.id === 'string').slice(0, 12) : []; let logoBlock = ''; if (_logos.length > 1) logoBlock = ' Varumarket har flera logotyper. Valj den som passar bast for varje forslag utifran innehallet (t.ex. formell foretagsnyhet = primar, lattsam kampanj = sekundar, liten yta = ikon) och logotypens beskrivning: ' + _logos.map(l => 'id "' + l.id.slice(0, 40) + '": ' + ({ primary: 'primar logga', secondary: 'sekundar logga', icon: 'ikon/symbol' }[l.kind] || 'logga') + ({ light: ', for ljus bakgrund', dark: ', for mork bakgrund' }[l.bg] || '') + (l.note ? ', anvands till: ' + String(l.note).slice(0, 120) : '')).join('; ') + '. Lagg till faltet "logoId" med valt id i varje forslag.'; const brandName = (brand && brand.name) ? (brand.name + (brand.location ? (', ' + brand.location) : '')) : 'spot. creative studio Halmstad'; const prompt = 'Du ar copywriter for ' + brandName + '.' + brandBlock + ' Brief: ' + (brief || ('Generellt om ' + brandName)) + '. Kanaler: ' + chList.join(', ') + '. Generera EXAKT ' + nProps + ' korta forslag max 100 ord. "title" ar rubriken som star pa bilden: en passande rubrik som sammanfattar just det forslagets "content" (innehallstexten), max 5 ord, slagkraftig, olika i varje forslag. Den far INTE vara uppdraget/prompten eller en omskrivning av den.' + logoBlock + ' Svara ENDAST med JSON-array: [{"title":"...","content":"...","hashtags":["..."],"cta":"..."},{"title":"...","content":"...","hashtags":["..."],"cta":"..."},{"title":"...","content":"...","hashtags":["..."],"cta":"..."}]'; const _gt = await geminiText(apiKey, [{ text: prompt }], { temperature: 0.9, maxOutputTokens: 8192 }); let s = _gt.text.replace(/```json/g, '').replace(/```/g, '').trim(); s = s.replace(/,(\s*[}\]])/g, '$1'); const start = s.indexOf('['), end = s.lastIndexOf(']'); if (start < 0 || end < 0) throw new Error('Ingen array i svar'); const flat = JSON.parse(s.slice(start, end + 1));
 flat.forEach(function(p){ if (p && typeof p === 'object') { if (typeof p.title === 'string') p.title = capitalizeAfterSentences(p.title); if (typeof p.content === 'string') p.content = capitalizeAfterSentences(p.content); if (p.logoId && !_logos.some(l => l.id === p.logoId)) delete p.logoId; } }); const proposals = {}; chList.forEach(ch => { proposals[ch] = flat }); res.json({ proposals }) } catch (e) { res.status(500).json({ error: e.message }) } })
 // Tvättar en kunds mallbild: AI tar bort all text och alla loggor men behåller designen,
