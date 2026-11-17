@@ -557,7 +557,8 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
         <div class="section-card" id="m-title-widget" style="display:flex;flex-direction:column;gap:4px;border:1.5px solid #b31e59;background:#fff5f7">
           <div style="display:flex;align-items:center;justify-content:space-between">
             <div class="field-label" id="m-title-label">Titel</div>
-            <button id="genFromPostBtn" onclick="generateFromPost()" style="font-size:11px;color:var(--m);font-weight:600;padding:3px 10px;border:1.5px solid var(--m);border-radius:6px;background:#fff5f7;cursor:pointer">✨ Generera med AI</button>
+            <div style="display:flex;gap:6px"><button onclick="openPostChat()" title="Skriv inlägget i en chatt med AI och fortsätt prompta tills texten är klar" style="font-size:11px;color:var(--m);font-weight:600;padding:3px 10px;border:1.5px solid var(--m);border-radius:6px;background:#fff;cursor:pointer">💬 Chatta med AI</button>
+            <button id="genFromPostBtn" onclick="generateFromPost()" style="font-size:11px;color:var(--m);font-weight:600;padding:3px 10px;border:1.5px solid var(--m);border-radius:6px;background:#fff5f7;cursor:pointer">✨ Generera med AI</button></div>
           </div>
           <input class="field-input" id="m-title" placeholder="Skriv en prompt..." oninput="updateManualPreview();onTitlePromptInput()">
         </div>
@@ -2965,6 +2966,106 @@ function renderDraftsPanel(){
 function toggleDrafts(){ var el=document.getElementById("draftsPanel"); if(!el)return; var open=el.style.display==="block"; var bd=document.getElementById("draftsBackdrop"); if(open){ el.style.display="none"; if(bd)bd.remove(); return; } if(!bd){ bd=document.createElement("div"); bd.id="draftsBackdrop"; bd.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99998"; bd.onclick=function(){ el.style.display="none"; bd.remove(); }; document.body.appendChild(bd); } el.style.cssText="display:block;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,92vw);max-height:75vh;overflow-y:auto;background:#fff;border:1px solid #eee;border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.35);z-index:99999"; document.body.appendChild(el); renderDraftsPanel(); }
 function startOverCreatePost(){S.manualTags=[];renderManualTags();var sc=document.getElementById("m-schedule");if(sc)sc.value="";resetCreateForm();updateManualPreview();if(typeof showToast==="function")showToast("Börjar om – tomt formulär");}
 async function generateFromPost(){var title=(document.getElementById("m-title").value||"").trim();var content=(document.getElementById("m-content").value||"").trim();var channels=[...document.querySelectorAll("#manualChGrid .ch-pill.active")].map(function(t){return t.dataset.ch;});if(!channels.length){if(typeof showToast==="function")showToast("Välj minst en kanal först");return;}var brief=((title?("Uppdrag (prompt, inte rubrik): "+title+". "):"")+(content?("Innehåll: "+content):"")).trim();if(!brief){if(typeof showToast==="function")showToast("Fyll i prompt eller innehåll först");return;}if((S._regenCount||0)>=5){startOverCreatePost();return;}S._lastGenPrompt=title;S._regenCount=(S._regenCount||0)+1;var btn=document.getElementById("genFromPostBtn");if(btn){btn.disabled=true;if(!btn.dataset.ot)btn.dataset.ot=btn.textContent;btn.textContent="✨ Genererar...";}try{var brand=(typeof getBrandProfile==="function")?getBrandProfile():undefined;var res=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({brief:brief,channels:channels,brand:brand,count:Math.min(6,Math.max.apply(null,channels.map(_tplCount)))})});var data=await res.json();if(!res.ok)throw new Error(data.error||"API-fel");var hasAny=channels.some(function(ch){return (data.proposals[ch]||[]).length>0;});if(hasAny){S.manualChannels=channels;S.manualChannel=channels[0];S._lastBrief=brief;renderMultiChannelProposals(data.proposals,channels);if(!S._uploadedImageUrl)generateBrandImage(brief);if(typeof showToast==="function")showToast("✨ Förslag klara!");}else{if(typeof showToast==="function")showToast("Inga förslag genererades. Försök igen.");}}catch(e){if(typeof showToast==="function")showToast("Fel: "+e.message);}if(btn){var _rc=S._regenCount||0;btn.disabled=false;btn.textContent=_rc<=0?(btn.dataset.ot||"✨ Generera med AI"):(_rc>=5?"🔄 Börja om":("🔁 Reprompt ("+(5-_rc)+" kvar)"))}}
+// ── Chatt för inlägg (som en AI-chatt): historik till vänster, prompta vidare tills texten är klar ──
+var _pc = { id: '', messages: [], chats: [], busy: false };
+function openPostChat(){
+  var m = document.getElementById('postChatModal');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'postChatModal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    m.onclick = function(e){ if (e.target === m) closePostChat(); };
+    m.innerHTML = '<div style="background:#fff;border-radius:16px;width:min(980px,100%);height:min(720px,100%);display:flex;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.3)">'
+      + '<div style="width:230px;border-right:1px solid #f0f0f0;background:#fafafa;display:flex;flex-direction:column;flex-shrink:0"><div style="padding:12px"><button onclick="newPostChat()" style="width:100%;padding:9px;border-radius:9px;background:var(--m);color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">+ Ny chatt</button></div><div id="pcList" style="flex:1;overflow:auto;padding:0 8px 12px"></div></div>'
+      + '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;border-bottom:1px solid #f0f0f0"><div id="pcTitle" style="font-weight:700;font-size:14px;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Ny chatt</div><button onclick="closePostChat()" title="Stäng" style="width:30px;height:30px;flex-shrink:0;border-radius:50%;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:16px;line-height:1">×</button></div>'
+      + '<div id="pcMsgs" style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px"></div>'
+      + '<div style="padding:12px 16px;border-top:1px solid #f0f0f0;display:flex;gap:8px;align-items:flex-end"><textarea id="pcInput" rows="2" placeholder="Beskriv inlägget eller be om ändringar, t.ex. kortare och mer personligt" style="flex:1;resize:none;border:1.5px solid #e5e7eb;border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;max-height:140px"></textarea><button id="pcSend" onclick="sendPostChat()" style="padding:10px 16px;border-radius:10px;background:var(--m);color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">Skicka</button></div>'
+      + '</div></div>';
+    document.body.appendChild(m);
+    document.getElementById('pcInput').onkeydown = function(e){ if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendPostChat(); } };
+  }
+  m.style.display = 'flex';
+  if (!_pc.id && !_pc.messages.length) {
+    var t = (document.getElementById('m-title') || {}).value || '', c = (document.getElementById('m-content') || {}).value || '', ta = document.getElementById('pcInput');
+    if (ta && !ta.value) ta.value = (t + (c ? '\n' + c : '')).trim();
+  }
+  _pcRenderMsgs(); _pcLoadList();
+  setTimeout(function(){ var x = document.getElementById('pcInput'); if (x) x.focus(); }, 50);
+}
+function closePostChat(){ var m = document.getElementById('postChatModal'); if (m) m.style.display = 'none'; }
+function newPostChat(){ _pc.id = ''; _pc.messages = []; _pcRenderMsgs(); _pcRenderList(); var x = document.getElementById('pcInput'); if (x) { x.value = ''; x.focus(); } }
+function _pcLoadList(){ fetch('/api/post-chats').then(function(r){ return r.json(); }).then(function(d){ _pc.chats = d.chats || []; _pcRenderList(); }).catch(function(){}); }
+function _pcRenderList(){
+  var el = document.getElementById('pcList'); if (!el) return;
+  if (!_pc.chats.length) { el.innerHTML = '<div style="font-size:12px;color:#9ca3af;padding:8px 6px">Inga tidigare chattar.</div>'; return; }
+  el.innerHTML = '<div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;padding:6px 6px 4px">Historik</div>' + _pc.chats.map(function(c){
+    var on = c.id === _pc.id, id = String(c.id).replace(/[^a-f0-9]/g, '');
+    return '<div onclick="openPostChatById(\'' + id + '\')" style="display:flex;align-items:center;gap:4px;padding:8px;border-radius:8px;cursor:pointer;background:' + (on ? '#fdf0f6' : 'transparent') + ';color:' + (on ? 'var(--m)' : '#374151') + '"><div style="flex:1;min-width:0"><div style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _h(c.title || 'Chatt') + '</div><div style="font-size:10px;color:#9ca3af">' + new Date(c.updated_at).toLocaleDateString('sv-SE') + '</div></div><button title="Ta bort chatten" onclick="event.stopPropagation();deletePostChat(\'' + id + '\')" style="border:none;background:none;color:#9ca3af;cursor:pointer;font-size:13px">🗑</button></div>';
+  }).join('');
+}
+function openPostChatById(id){
+  fetch('/api/post-chats/' + encodeURIComponent(id)).then(function(r){ return r.json(); }).then(function(d){
+    if (!d || d.error) return;
+    _pc.id = d.id; _pc.messages = d.messages || [];
+    var t = document.getElementById('pcTitle'); if (t) t.textContent = d.title || 'Chatt';
+    _pcRenderMsgs(); _pcRenderList();
+  }).catch(function(){});
+}
+function deletePostChat(id){
+  if (!confirm('Ta bort chatten?')) return;
+  fetch('/api/post-chats/' + encodeURIComponent(id), { method: 'DELETE' }).then(function(){ if (_pc.id === id) newPostChat(); _pcLoadList(); }).catch(function(){});
+}
+function _pcRenderMsgs(){
+  var el = document.getElementById('pcMsgs'); if (!el) return;
+  var t = document.getElementById('pcTitle'); if (t && !_pc.id) t.textContent = 'Ny chatt';
+  if (!_pc.messages.length) { el.innerHTML = '<div style="margin:auto;text-align:center;color:#9ca3af;font-size:13px;max-width:360px;line-height:1.6">💬 Beskriv vad inlägget ska handla om. Be sedan om ändringar tills texten är klar, och klicka <b>Använd i inlägget</b>.</div>'; return; }
+  el.innerHTML = _pc.messages.map(function(m, i){
+    if (m.role === 'user') return '<div style="align-self:flex-end;max-width:75%;background:var(--m);color:#fff;padding:10px 14px;border-radius:14px 14px 4px 14px;font-size:13px;white-space:pre-wrap">' + _h(m.text) + '</div>';
+    var d = m.draft;
+    return '<div style="align-self:flex-start;max-width:85%;display:flex;flex-direction:column;gap:8px">'
+      + (m.text ? '<div style="background:#f3f4f6;color:#111;padding:10px 14px;border-radius:14px 14px 14px 4px;font-size:13px;white-space:pre-wrap">' + _h(m.text) + '</div>' : '')
+      + (d ? '<div style="border:1.5px solid #f0d5e1;background:#fff;border-radius:12px;padding:12px 14px">'
+        + (d.title ? '<div style="font-weight:700;font-size:14px;color:#111;margin-bottom:6px">' + _h(d.title) + '</div>' : '')
+        + '<div style="font-size:13px;color:#374151;white-space:pre-wrap;line-height:1.5">' + _h(d.content || '') + '</div>'
+        + (d.hashtags && d.hashtags.length ? '<div style="font-size:12px;color:#0a66c2;margin-top:6px">' + d.hashtags.map(function(h){ return '#' + _h(String(h).replace(/^#/, '')); }).join(' ') + '</div>' : '')
+        + '<div style="display:flex;gap:6px;margin-top:10px"><button onclick="usePostChatDraft(' + i + ')" style="padding:7px 12px;border-radius:8px;background:var(--m);color:#fff;font-size:12px;font-weight:600;border:none;cursor:pointer">Använd i inlägget</button><button onclick="copyPostChatDraft(' + i + ')" style="padding:7px 12px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;color:#374151;font-size:12px;cursor:pointer">Kopiera</button></div></div>' : '')
+      + '</div>';
+  }).join('') + (_pc.busy ? '<div style="align-self:flex-start;color:#9ca3af;font-size:13px">✍️ Skriver…</div>' : '');
+  el.scrollTop = el.scrollHeight;
+}
+async function sendPostChat(){
+  var ta = document.getElementById('pcInput'), text = ((ta && ta.value) || '').trim();
+  if (!text || _pc.busy) return;
+  ta.value = ''; _pc.messages.push({ role: 'user', text: text }); _pc.busy = true; _pcRenderMsgs();
+  var btn = document.getElementById('pcSend'); if (btn) btn.disabled = true;
+  try {
+    var ch = (S.manualChannels && S.manualChannels[0]) || S.manualChannel || 'linkedin';
+    var res = await fetch('/api/post-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chatId: _pc.id, text: text, channel: ch, brand: (typeof getBrandProfile === 'function' ? getBrandProfile() : undefined) }) });
+    var d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'API-fel');
+    _pc.id = d.id; _pc.messages = d.messages || [];
+    var t = document.getElementById('pcTitle'); if (t) t.textContent = d.title || 'Chatt';
+    _pcLoadList();
+  } catch (e) { _pc.messages.push({ role: 'ai', text: '⚠️ ' + e.message }); }
+  _pc.busy = false; if (btn) btn.disabled = false; _pcRenderMsgs();
+}
+function _pcDraft(i){ var m = _pc.messages[i]; return m && m.draft; }
+function usePostChatDraft(i){
+  var d = _pcDraft(i); if (!d) return;
+  var ti = document.getElementById('m-title'), co = document.getElementById('m-content');
+  if (co) co.value = d.content || '';
+  if (ti && d.title) ti.value = d.title;
+  S.manualTags = (d.hashtags || []).map(function(t){ return String(t).replace(/^#/, ''); });
+  if (typeof renderManualTags === 'function') renderManualTags();
+  if (typeof updateManualPreview === 'function') updateManualPreview();
+  closePostChat();
+  if (typeof showToast === 'function') showToast('✓ Texten är inlagd i inlägget');
+}
+function copyPostChatDraft(i){
+  var d = _pcDraft(i); if (!d) return;
+  var txt = (d.title ? d.title + '\n\n' : '') + (d.content || '') + (d.hashtags && d.hashtags.length ? '\n\n' + d.hashtags.map(function(h){ return '#' + String(h).replace(/^#/, ''); }).join(' ') : '');
+  try { navigator.clipboard.writeText(txt); if (typeof showToast === 'function') showToast('Kopierat'); } catch (e) {}
+}
 function onTitlePromptInput(){/* regen counter persists across text edits by design */}
 
 async function generateAndFill() {
