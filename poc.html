@@ -6776,7 +6776,7 @@ function _cvToolbarHTML(){
   } else if (e.type === 'draw') {
     a += _CV_LBL('Färg') + _cvSw('fill', e.fill || '#b31e59', 'Färg') + _cvRng('Tjocklek', 'sw', 1, 14, 1, e.sw || 3, 64);
   } else if (e.type === 'logo') {
-    if (BRAND_LOGOS.length > 1) a += _CV_LBL('Logga') + _cvDd("cvSet('logoId', this.value)", [['', 'Automatiskt']].concat(BRAND_LOGOS.map(function(l, k){ return [l.id, (LOGO_KINDS[l.kind] || 'Logga') + (l.note ? ' – ' + l.note : '') + ' (' + (k + 1) + ')']; })), e.logoId || '', 'Vilken logga som visas');
+    if (BRAND_LOGOS.length > 1) a += _CV_LBL('Logga') + _cvDd("cvSet('logoId', this.value)", [['', 'Automatiskt']].concat(BRAND_LOGOS.map(function(l, k){ return [l.id, (LOGO_KINDS[l.kind] || 'Logga') + (l.note ? ' – ' + l.note : '') + ' (' + (k + 1) + ')']; })), e.logoId || '', 'Vilken logga som visas').replace('cursor:pointer"', 'cursor:pointer;display:block;width:100%;max-width:100%;box-sizing:border-box;text-overflow:ellipsis"');
     a += _CV_LBL('Färga loggan') + _cvSw('tint', e.tint || '', 'Loggans färg (✕ = originalfärger)', true);
   }
   a += '</div>';
