@@ -840,18 +840,21 @@ app.post('/api/post-chat', auth, async (req, res) => {
     const messages = (chat && Array.isArray(chat.messages)) ? chat.messages : []
     messages.push({ role: 'user', text: msg, at: Date.now() })
     const brandName = (brand && brand.name) ? (brand.name + (brand.location ? ', ' + brand.location : '')) : 'spot. creative studio Halmstad'
-    const history = messages.slice(-20).map(m => m.role === 'user' ? 'Anvandare: ' + m.text : 'Du: ' + (m.text || '') + (m.draft ? ' [Utkast: ' + JSON.stringify(m.draft) + ']' : '')).join('\n')
+    const history = messages.slice(-20).map(m => m.role === 'user' ? 'Anvandare: ' + m.text : 'Du: ' + (m.text || '') + (m.draft ? ' [Utkast: ' + JSON.stringify(m.draft) + ']' : '') + (m.questions && m.questions.length ? ' [Fragor du stallt: ' + m.questions.map(q => q.q).join(' | ') + ']' : '')).join('\n')
     const prompt = 'Du ar copywriter for ' + brandName + ' och hjalper anvandaren att skriva ett inlagg for ' + String(channel).slice(0, 20) + ' i en chatt.' + _chatBrandBlock(brand) +
       ' Svara pa svenska. Bygg vidare pa det senaste utkastet och anvandarens onskemal. Om anvandaren bara staller en fraga kan du svara och behalla utkastet som det ar.' +
       ' "title" ar rubriken som star pa bilden, max 5 ord, och far inte vara anvandarens uppdrag ordagrant.' +
+      ' Foljdfragor: om underlaget ar tunt (oklar malgrupp, oklart syfte, saknade detaljer som namn, datum eller plats, eller oklart vad lasaren ska gora) staller du 1-3 korta foljdfragor i "questions", var och en med 2-4 korta svarsalternativ, och skriver anda ett forsta utkast. Fraga aldrig om nagot som redan besvarats eller som du redan fragat. Nar underlaget racker ar "questions" en tom lista.' +
+      ' Bild: "imageBrief" ar en kort beskrivning av ett foto som passar inlagget (motiv, miljo, kansla), utan text och utan loggor i bilden. Satt "makeImage" till true bara om anvandaren ber om en ny eller annan bild.' +
       ' Konversation hittills:\n' + history +
-      '\nSvara ENDAST med JSON: {"reply":"kort svar till anvandaren, max 2 meningar","title":"...","content":"hela inlaggstexten, max 150 ord","hashtags":["..."]}'
+      '\nSvara ENDAST med JSON: {"reply":"kort svar till anvandaren, max 2 meningar","title":"...","content":"hela inlaggstexten, max 150 ord","hashtags":["..."],"questions":[{"q":"...","options":["...","..."]}],"imageBrief":"...","makeImage":false}'
     const g = await geminiText(apiKey, [{ text: prompt }], { temperature: 0.8, maxOutputTokens: 4096 })
     const raw = g.text.replace(/```json/g, '').replace(/```/g, '').trim()
     let out = {}
     try { out = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1).replace(/,(\s*[}\]])/g, '$1')) } catch (e) { out = { reply: raw.slice(0, 1500) } }
     const draft = (out.content || out.title) ? { title: capitalizeAfterSentences(String(out.title || '')), content: capitalizeAfterSentences(String(out.content || '')), hashtags: Array.isArray(out.hashtags) ? out.hashtags.map(String).slice(0, 10) : [] } : null
-    messages.push({ role: 'ai', text: String(out.reply || (draft ? 'Här är ett förslag.' : '')).slice(0, 2000), draft, at: Date.now() })
+    const questions = Array.isArray(out.questions) ? out.questions.filter(q => q && q.q).slice(0, 3).map(q => ({ q: String(q.q).slice(0, 160), options: (Array.isArray(q.options) ? q.options : []).map(o => String(o).slice(0, 60)).filter(Boolean).slice(0, 4) })) : []
+    messages.push({ role: 'ai', text: String(out.reply || (draft ? 'Här är ett förslag.' : '')).slice(0, 2000), draft, questions, imageBrief: String(out.imageBrief || '').slice(0, 400), makeImage: !!out.makeImage, at: Date.now() })
     const id = chat ? chat.id : crypto.randomBytes(9).toString('hex')
     const title = chat ? chat.title : msg.replace(/\s+/g, ' ').slice(0, 60)
     const keep = messages.slice(-60)
