@@ -3143,7 +3143,7 @@ function _pcQuestionsHTML(m, i){
     return '<div><div class="pc-q-t">' + _h(q.q) + '</div><div class="pc-q-o">' + (q.options || []).map(function(o, oi){
       return '<button class="pc-chip' + (live && ans[qi] === o ? ' on' : '') + '"' + (live ? ' onclick="pcAnswer(' + i + ',' + qi + ',' + oi + ')"' : ' disabled') + '>' + _h(o) + '</button>';
     }).join('') + '</div></div>';
-  }).join('') + (live ? '<div class="pc-q-h">Välj svar eller skriv med egna ord, och tryck Skicka.</div>' : '') + '</div>';
+  }).join('') + (live ? '<div class="pc-q-h" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span>Välj svar eller skriv med egna ord, och tryck Skicka.</span><button class="pc-btn" onclick="pcSkipQuestions()">Hoppa över – skriv direkt</button></div>' : '') + '</div>';
 }
 function pcAnswer(i, qi, oi){
   var m = _pc.messages[i]; if (!m || !m.questions) return;
@@ -3182,6 +3182,7 @@ function _pcTplGrid(d){
   return '<div style="margin-top:16px"><div style="font-size:12px;font-weight:600;color:#8a857d;margin-bottom:8px">Mallar · klicka för att byta</div><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">' + h + '</div></div>';
 }
 function pcTpl(k){ _pc.tpl = k; _pcRenderPreview(); }
+function pcSkipQuestions(){ var ta = document.getElementById('pcInput'); if (!ta || _pc.busy) return; ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + 'Skriv utkastet direkt utifrån det du vet.'; sendPostChat(); }
 function _pcDraft(i){ var m = _pc.messages[i]; return m && m.draft; }
 function usePostChatDraft(i){
   var d = _pcDraft(i); if (!d) return;
