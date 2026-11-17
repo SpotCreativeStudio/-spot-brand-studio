@@ -1501,7 +1501,7 @@ function _liEsc(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').rep
 function _liTop(post){
   _liCss();
   var nm = (typeof BRAND_NAME !== 'undefined' && BRAND_NAME) || 'spot.';
-  var logo = (typeof BRAND_LOGO === 'string' && BRAND_LOGO) ? '<img src="' + _liEsc(BRAND_LOGO) + '" alt="">' : _liEsc(String(nm).charAt(0).toUpperCase());
+  var _av = _logoAvatarSrc(), logo = _av ? '<img src="' + _liEsc(_av) + '" alt="">' : _liEsc(String(nm).charAt(0).toUpperCase());
   var sub = (typeof BRAND_TAGLINE !== 'undefined' && BRAND_TAGLINE) ? BRAND_TAGLINE : 'Företagssida';
   var body = String((post && post.content) || '').trim(), tags = ((post && post.hashtags) || []).map(function(h){ return '#' + String(h).replace(/^#/, ''); });
   var txt = _liEsc(body) + (tags.length ? (body ? '\n\n' : '') + tags.map(function(h){ return '<span class="li-tag">' + _liEsc(h) + '</span>'; }).join(' ') : '');
@@ -1935,19 +1935,19 @@ function _applyBrandColors(html){
   html = html.split('var(--m)').join(p.main).split('#b31e59').join(p.main).split('#B31E59').join(p.main).split('#82093e').join(p.dark);
   return html.replace(/rgba\(177,\s*30,\s*89,\s*([\d.]+)\)/g, function(_, a){ return 'rgba(' + p.rgb.join(',') + ',' + a + ')'; });
 }
-function _swapBrandMark(html){
+function _swapBrandMark(html, post){
   if (typeof CURRENT_WORKSPACE === 'undefined' || CURRENT_WORKSPACE === 'spot') return html;
   try {
     var tmp = document.createElement('div'); tmp.innerHTML = html;
     var marks = [];
     tmp.querySelectorAll('*').forEach(function(el){ if (!el.children.length) { var t = el.textContent.trim(); if (t === 'spot.' || t === 's.') marks.push(el); } });
-    var used = [];
+    var used = [], _ls = _logoSrc(post);
     marks.forEach(function(el){
       var grp = el.parentElement && el.parentElement.parentElement ? el.parentElement.parentElement : el.parentElement;
       if (used.some(function(u){ return grp && grp.contains(u); })) { el.remove(); return; }
-      if (typeof BRAND_LOGO === 'string' && BRAND_LOGO) {
+      if (_ls) {
         el.textContent = '';
-        var img = document.createElement('img'); img.src = BRAND_LOGO; img.alt = ''; img.className = 'brand-logo-mark';
+        var img = document.createElement('img'); img.src = _ls; img.alt = ''; img.className = 'brand-logo-mark';
         img.style.cssText = 'display:inline-block;vertical-align:middle;height:2.2em;width:auto;max-width:100%;max-height:100%;object-fit:contain;border-radius:4px';
         el.appendChild(img); used.push(img);
       } else { el.textContent = (typeof BRAND_NAME !== 'undefined' && BRAND_NAME) ? BRAND_NAME : ''; used.push(el); }
@@ -1975,7 +1975,7 @@ function getPostImageHTML(post, size='card') {
       html = tmp.innerHTML;
     } catch(e) {}
   }
-  if (_showBrand) html = _swapBrandMark(html);
+  if (_showBrand) html = _swapBrandMark(html, post);
   html = _applyBrandColors(html);
   return '<div class="post-img-root" style="width:100%;height:100%;border-radius:0;position:relative">' + html + (typeof _cvElementsHTML === 'function' ? _cvElementsHTML(post) : '') + '</div>';
 }
@@ -2685,6 +2685,7 @@ function getBrandProfile() {
     services: 'Grafisk design, foto, innehållsproduktion, SoMe-mallar',
     dos: DOS_RULES.filter(r => r.active).map(r => r.text),
     donts: DONTS_RULES.filter(r => r.active).map(r => r.text),
+    logos: BRAND_LOGOS.map(function(l){ return { id: l.id, kind: l.kind, bg: l.bg || 'any', note: l.note || '' }; }),
     forbidden: FORBIDDEN,
     website: (function(){ try { var u = (typeof BRAND_WEBSITE!=="undefined"?BRAND_WEBSITE:""); var d = (typeof BRAND_WEBSITE_INFO!=="undefined"&&BRAND_WEBSITE_INFO.description)?BRAND_WEBSITE_INFO.description:""; return u ? (u + (d ? " — " + d : "")) : ""; } catch(e){ return ""; } })(),
   };
@@ -3220,7 +3221,7 @@ function renderProposalCards(ch) {
   body.innerHTML = '<div style="width:100%;display:flex;flex-direction:column">' + _rpBarHTML() + `<div class="ai-proposals" style="width:100%">` +
     proposals.slice(0,_tplCount(ch)).map((p, i) => {
       const cardLayouts = _cardLayoutsForWs();
-      const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', aiTitle: p.title||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [] }; Object.assign(mockPost, _createExtra()); mockPost.tplIdx = _tplIdxFor(ch, i); _tplStrip(mockPost);
+      const mockPost = { channel: ch, layout: cardLayouts[i] || 'gradient', title: p.title||'', aiTitle: p.title||'', logoId: p.logoId||'', content: p.content||'', hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')), imageUrl: activeImageUrl(), imageStyle: S.imageStyle, imgPos: S._imgPos, photoBox: S._photoBox || null, elements: S._elements || [] }; Object.assign(mockPost, _createExtra()); mockPost.tplIdx = _tplIdxFor(ch, i); _tplStrip(mockPost);
       const dim = i!==selectedIdx || !!S._blankPick;
       return `<div class="ai-prop-card ${i===selectedIdx?'selected':''}" onclick="openProposalEditor('${ch}',${i})" style="${dim ? 'opacity:.55;filter:grayscale(.3)' : ''};transition:opacity .15s,filter .15s">
         ${_zoomBtn()}${_liTop(mockPost)}<div class="ai-prop-thumb" style="position:relative;aspect-ratio:${_arFor(ch)}">
@@ -3340,7 +3341,7 @@ function addManualToReview() {
       S.reviewQueue.push({
         id: 'pm-' + Date.now() + '-' + ch + '-' + Math.random().toString(36).slice(2,5),
         brief: document.getElementById('briefInput')?.value || 'spot. content studio',
-        channel: ch, title: p.title, aiTitle: p.title, content: p.content,
+        channel: ch, title: p.title, aiTitle: p.title, logoId: p.logoId || '', content: p.content,
         hashtags: (p.hashtags||[]).map(t=>t.replace(/^#/,'')),
         layout: cardLayouts[idx] || 'gradient', tplIdx: _tplIdxFor(ch, idx), blank: !!S._blankPick,
         author: (typeof CURRENT_USER_NAME !== 'undefined' && CURRENT_USER_NAME) ? CURRENT_USER_NAME : 'Okänd',
@@ -4781,6 +4782,16 @@ function setImgStyle(id) {
 }
 
 var BRAND_LOGO = "";
+// Flera loggor: varje logga har typ (primär/sekundär/ikon), bakgrund och en egen beskrivning.
+// BRAND_LOGO är alltid den primära loggan (används där bara en logga får plats).
+var BRAND_LOGOS = [];
+var LOGO_KINDS = { primary:'Primär logga', secondary:'Sekundär logga', icon:'Ikon / symbol' };
+var LOGO_BGS = { any:'Alla bakgrunder', light:'Ljus bakgrund', dark:'Mörk bakgrund' };
+function _syncPrimaryLogo(){ var p = BRAND_LOGOS.find(function(l){ return l.kind === 'primary'; }) || BRAND_LOGOS[0]; BRAND_LOGO = p ? p.src : ''; }
+function _logoById(id){ return id ? BRAND_LOGOS.find(function(l){ return l.id === id; }) : null; }
+// Loggan för ett inlägg: vald i editorn → vald av AI för inlägget → primär logga
+function _logoSrc(post, id){ var l = _logoById(id) || _logoById(post && post.logoId); return (l && l.src) || BRAND_LOGO || ''; }
+function _logoAvatarSrc(){ var i = BRAND_LOGOS.find(function(l){ return l.kind === 'icon'; }); return (i && i.src) || BRAND_LOGO || ''; }
 var CUSTOM_FONTS = [];
 function injectCustomFontFaces(){var css="";CUSTOM_FONTS.forEach(function(f){css+="@font-face{font-family:'"+f.name+"';src:url("+f.url+");font-display:swap;}";});var st=document.getElementById("customFontFaceStyle");if(!st){st=document.createElement("style");st.id="customFontFaceStyle";document.head.appendChild(st);}st.textContent=css;}
 function typoFontUpload(input,i){var f=input.files&&input.files[0];if(!f)return;var r=new FileReader();r.onload=function(){var nm=TYPOGRAPHY[i].name;var ex=CUSTOM_FONTS.find(function(x){return x.name===nm;});if(ex){ex.url=r.result;}else{CUSTOM_FONTS.push({name:nm,url:r.result});}injectCustomFontFaces();saveBrandSettings();renderTypography();if(typeof showToast==="function")showToast("Typsnitt uppladdat");};r.readAsDataURL(f);}
@@ -4821,7 +4832,7 @@ function typoGoogleFont(fam, i){
 
 function _resetBrandForNewWorkspace(){
   COLORS = []; TYPOGRAPHY = []; DOS_RULES = []; DONTS_RULES = []; TEMPLATES = [];
-  CUSTOM_FONTS = []; BRAND_LOGO = ""; S.imageStyle = 'grayscale';
+  CUSTOM_FONTS = []; BRAND_LOGO = ""; BRAND_LOGOS = []; S.imageStyle = 'grayscale';
   BRAND_NAME = ""; BRAND_TAGLINE = ""; BRAND_LOCATION = ""; BRAND_TONE = "";
   BRAND_WEBSITE = ""; BRAND_WEBSITE_INFO = { title:'', description:'' };
 }
@@ -4838,7 +4849,8 @@ function loadBrandSettings(){
     if (!b) { if (typeof renderBrand === "function") renderBrand(); return; }
     if (b.colors && b.colors.length) COLORS = b.colors;
     if (b.typography && b.typography.length) { TYPOGRAPHY = b.typography; try { loadGoogleFonts(); } catch (e) {} }
-    if (typeof b.logo === "string") BRAND_LOGO = b.logo;
+    if (Array.isArray(b.logos) && b.logos.length) { BRAND_LOGOS = b.logos.filter(function(l){ return l && l.src; }); _syncPrimaryLogo(); }
+    else if (typeof b.logo === "string") { BRAND_LOGO = b.logo; BRAND_LOGOS = b.logo ? [{ id:'logo1', src:b.logo, kind:'primary', bg:'any', note:'' }] : []; }
     if (b.dos && b.dos.length) DOS_RULES = b.dos;
     if (b.donts && b.donts.length) DONTS_RULES = b.donts;
     if (b.templates && b.templates.length) { TEMPLATES = b.templates; setTimeout(_tplAutoEditable, 1500); }
@@ -4855,7 +4867,7 @@ function loadBrandSettings(){
 }
 function saveBrandSettings(){
   var payload = {
-    imageStyle: S.imageStyle, colors:COLORS, typography:TYPOGRAPHY, customFonts:CUSTOM_FONTS, logo:BRAND_LOGO, dos:DOS_RULES, donts:DONTS_RULES, templates:TEMPLATES,
+    imageStyle: S.imageStyle, colors:COLORS, typography:TYPOGRAPHY, customFonts:CUSTOM_FONTS, logo:BRAND_LOGO, logos:BRAND_LOGOS, dos:DOS_RULES, donts:DONTS_RULES, templates:TEMPLATES,
     name: (typeof BRAND_NAME!=="undefined"?BRAND_NAME:"spot."),
     tagline: (typeof BRAND_TAGLINE!=="undefined"?BRAND_TAGLINE:"a creative studio"),
     location: (typeof BRAND_LOCATION!=="undefined"?BRAND_LOCATION:"Halmstad, Sverige"),
@@ -4903,9 +4915,9 @@ async function downloadBrandFolder(){
     if(opts.text){
       zip.file("varumarke.json", JSON.stringify({colors:COLORS,typography:TYPOGRAPHY,dos:DOS_RULES,donts:DONTS_RULES}, null, 2));
     }
-    if(opts.logo && BRAND_LOGO && BRAND_LOGO.indexOf("data:")===0){
-      var lg=_dataUrlToBinary(BRAND_LOGO);
-      zip.file("logo."+lg.ext, lg.base64, {base64:true});
+    if(opts.logo){
+      var _lgs=BRAND_LOGOS.length?BRAND_LOGOS:(BRAND_LOGO?[{src:BRAND_LOGO,kind:"primary"}]:[]);
+      _lgs.forEach(function(l,k){ if(!l.src||l.src.indexOf("data:")!==0)return; var lg=_dataUrlToBinary(l.src); zip.file("logo"+(_lgs.length>1?"-"+(k+1)+"-"+(l.kind||"logga"):"")+"."+lg.ext, lg.base64, {base64:true}); });
     }
     if(opts.library){
       var lib=_getImgLib();
@@ -4951,9 +4963,21 @@ async function downloadBrandFolder(){
 }
 function toggleBrandEdit(){S.brandEdit=!S.brandEdit;renderBrand();}
 function toggleSecEdit(sec){var map={colors:"editColors",typo:"editTypo",logo:"editLogo",dos:"editDos",donts:"editDonts",templates:"editTemplates"};var key=map[sec];S[key]=!S[key];if(sec==="colors")renderColors();else if(sec==="typo")renderTypography();else if(sec==="logo")renderBrandLogo();else if(sec==="dos")renderDos();else if(sec==="donts")renderDonts();else renderTemplates();var b=document.getElementById("secBtn-"+sec);if(b){b.textContent=S[key]?"Klar":"Redigera";b.style.background=S[key]?"#b31e59":"#fff";b.style.color=S[key]?"#fff":"#b31e59";}}
-function brandLogoUpload(input){var f=input.files&&input.files[0];if(!f)return;var r=new FileReader();r.onload=function(){BRAND_LOGO=r.result;saveBrandSettings();renderBrandLogo();if(typeof showToast==="function")showToast("Logga uppdaterad");};r.readAsDataURL(f);}
-function brandLogoClear(){BRAND_LOGO="";saveBrandSettings();renderBrandLogo();}
-function renderBrandLogo(){var be=document.getElementById("secBtn-logo");if(be){be.textContent=S.editLogo?"Klar":"Redigera";be.style.background=S.editLogo?"#b31e59":"#fff";be.style.color=S.editLogo?"#fff":"#b31e59";}var el=document.getElementById("brandLogoBox");if(!el)return;var inner=BRAND_LOGO?('<div style="width:90px;height:90px;border-radius:12px;background:url('+BRAND_LOGO+') center/cover;border:1px solid #e5e7eb;flex-shrink:0;position:relative"><button onclick="downloadLogo()" style="position:absolute;top:-6px;left:-6px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:12px;cursor:pointer">⬇</button></div>'):'<div style="width:90px;height:90px;border-radius:12px;background:linear-gradient(135deg,#b31e59,#82093e);display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:700;font-family:Helvetica,Arial,sans-serif;flex-shrink:0">s.</div>';var controls;if(S.editLogo){controls='<div style="display:flex;flex-direction:column;gap:6px"><label style="padding:7px 14px;background:#b31e59;color:#fff;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:inline-block">Ladda upp logga<input type="file" accept="image/*" class="bl-input" style="display:none"></label>'+(BRAND_LOGO?'<button class="bl-clear" style="padding:6px 12px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;color:#6b7280;font-size:12px;cursor:pointer">Ta bort logga</button>':'')+'</div>';}else{controls='<div style="font-size:12px;color:#9ca3af">Klicka Redigera för att byta logga, färger och typsnitt.</div>';}el.innerHTML='<div style="display:flex;align-items:center;gap:16px;padding:16px">'+inner+controls+'</div>';var inp=el.querySelector(".bl-input");if(inp)inp.onchange=function(){brandLogoUpload(inp);};var clr=el.querySelector(".bl-clear");if(clr)clr.onclick=brandLogoClear;}
+function brandLogoUpload(input){var fs=[].slice.call(input.files||[]);if(!fs.length)return;var left=fs.length;fs.forEach(function(f){var r=new FileReader();r.onload=function(){BRAND_LOGOS.push({id:"logo"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),src:r.result,kind:BRAND_LOGOS.some(function(l){return l.kind==="primary";})?"secondary":"primary",bg:"any",note:""});if(--left===0){_syncPrimaryLogo();saveBrandSettings();renderBrandLogo();if(typeof showToast==="function")showToast(fs.length>1?"Loggor tillagda":"Logga tillagd");}};r.readAsDataURL(f);});}
+function brandLogoClear(i){if(i==null)BRAND_LOGOS=[];else BRAND_LOGOS.splice(i,1);_syncPrimaryLogo();saveBrandSettings();renderBrandLogo();}
+function brandLogoSet(i,key,val){var l=BRAND_LOGOS[i];if(!l)return;if(key==="kind"&&val==="primary")BRAND_LOGOS.forEach(function(o){if(o!==l&&o.kind==="primary")o.kind="secondary";});l[key]=val;_syncPrimaryLogo();saveBrandSettings();if(key!=="note")renderBrandLogo();}
+function renderBrandLogo(){var be=document.getElementById("secBtn-logo");if(be){be.textContent=S.editLogo?"Klar":"Redigera";be.style.background=S.editLogo?"#b31e59":"#fff";be.style.color=S.editLogo?"#fff":"#b31e59";}var el=document.getElementById("brandLogoBox");if(!el)return;
+  var bgCss={dark:"#111827",light:"#ffffff",any:"repeating-conic-gradient(#f3f4f6 0 25%,#fff 0 50%) 0 0/14px 14px"};
+  var sel=function(i,key,map,cur){return '<select onchange="brandLogoSet('+i+',\''+key+'\',this.value)" style="width:100%;font-size:11px;border:1px solid #e5e7eb;border-radius:6px;padding:4px 5px;margin-top:4px">'+Object.keys(map).map(function(k){return '<option value="'+k+'"'+(k===cur?" selected":"")+'>'+map[k]+'</option>';}).join("")+'</select>';};
+  var cards=BRAND_LOGOS.map(function(l,i){var thumb='<div style="width:100%;aspect-ratio:1;border-radius:10px;border:1px solid #e5e7eb;background:'+(bgCss[l.bg]||bgCss.any)+';position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="'+_h(l.src)+'" alt="" style="max-width:80%;max-height:80%;object-fit:contain"><button onclick="downloadLogo('+i+')" title="Ladda ner" style="position:absolute;top:4px;left:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:12px;cursor:pointer">⬇</button>'+(S.editLogo?'<button onclick="brandLogoClear('+i+')" title="Ta bort" style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:#b31e59;color:#fff;border:none;font-size:13px;cursor:pointer;line-height:1">×</button>':'')+'</div>';
+    var meta=S.editLogo?(sel(i,"kind",LOGO_KINDS,l.kind)+sel(i,"bg",LOGO_BGS,l.bg||"any")+'<input value="'+_h(l.note||"")+'" oninput="brandLogoSet('+i+',\'note\',this.value)" placeholder="När ska den användas?" title="Hjälper AI att välja, t.ex. kampanjer, rekrytering, formella inlägg" style="width:100%;box-sizing:border-box;font-size:11px;border:1px solid #e5e7eb;border-radius:6px;padding:4px 6px;margin-top:4px">')
+      :('<div style="font-size:11px;font-weight:700;color:'+(l.kind==="primary"?"#b31e59":"#374151")+';margin-top:6px">'+(LOGO_KINDS[l.kind]||"Logga")+'</div><div style="font-size:10px;color:#6b7280">'+(LOGO_BGS[l.bg]||LOGO_BGS.any)+'</div>'+(l.note?'<div style="font-size:10px;color:#9ca3af;margin-top:2px">'+_h(l.note)+'</div>':''));
+    return '<div style="width:120px">'+thumb+meta+'</div>';}).join("");
+  if(!BRAND_LOGOS.length)cards='<div style="width:90px;height:90px;border-radius:12px;background:linear-gradient(135deg,#b31e59,#82093e);display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:700;font-family:Helvetica,Arial,sans-serif;flex-shrink:0">s.</div>';
+  if(S.editLogo)cards+='<label style="width:120px;aspect-ratio:1;border:2px dashed #d1d5db;border-radius:10px;background:#fafafa;color:#6b7280;cursor:pointer;display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px;padding:8px;box-sizing:border-box">+ Ladda upp logga<input type="file" accept="image/*" multiple class="bl-input" style="display:none"></label>';
+  var hint=S.editLogo?'Ange typ och bakgrund för varje logga. AI väljer sedan den logga som passar bäst för varje inlägg. Primär logga används när inget annat är valt.':(BRAND_LOGOS.length>1?'AI väljer logga per inlägg. Du kan alltid byta logga på inlägget i editorn.':'Klicka Redigera för att lägga till fler loggor, t.ex. sekundär logga eller ikon.');
+  el.innerHTML='<div style="padding:16px"><div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start">'+cards+'</div><div style="font-size:12px;color:#9ca3af;margin-top:12px">'+hint+'</div></div>';
+  var inp=el.querySelector(".bl-input");if(inp)inp.onchange=function(){brandLogoUpload(inp);};}
 function renderRules(type){var rules=type==="dos"?DOS_RULES:DONTS_RULES;var el=document.getElementById(type==="dos"?"dosRows":"dontsRows");if(!el)return;var edit=type==="dos"?S.editDos:S.editDonts;var onE=type==="dos"?"🟢":"🔴";var html=rules.map(function(r,i){if(edit){return '<div class="rule-row" style="display:flex;align-items:center;gap:8px;padding:6px 16px"><input class="rr-text" data-i="'+i+'" value="'+String(r.text||"").split('"').join("&quot;")+'" style="flex:1;font-size:13px;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px"><button class="rr-del" data-i="'+i+'" style="width:22px;height:22px;border-radius:50%;background:#b31e59;color:#fff;border:none;cursor:pointer;flex-shrink:0">×</button></div>';}return '<div class="rule-row '+(r.active?"":"inactive")+'" id="'+type+'-'+r.id+'"><button class="toggle-btn rr-toggle" data-id="'+r.id+'">'+(r.active?onE:"⚫")+'</button><div class="rule-text">'+r.text+'</div></div>';}).join("");if(edit)html+='<div style="padding:8px 16px"><button class="rr-add" style="width:100%;padding:8px;border:2px dashed #d1d5db;border-radius:8px;background:#fafafa;color:#6b7280;cursor:pointer;font-size:13px">+ Lägg till regel</button></div>';el.innerHTML=html;el.querySelectorAll(".rr-toggle").forEach(function(x){x.onclick=function(){toggleRule(type,x.dataset.id);saveBrandSettings();};});if(!edit)return;el.querySelectorAll(".rr-text").forEach(function(x){x.oninput=function(){rules[+x.dataset.i].text=x.value;saveBrandSettings();};});el.querySelectorAll(".rr-del").forEach(function(x){x.onclick=function(){rules.splice(+x.dataset.i,1);saveBrandSettings();renderRules(type);};});var add=el.querySelector(".rr-add");if(add)add.onclick=function(){rules.push({id:"r"+Date.now(),text:"Ny regel",active:true});saveBrandSettings();renderRules(type);};}
 function renderDos(){renderRules("dos");}
 function renderDonts(){renderRules("donts");}
@@ -4970,12 +4994,13 @@ function downloadTemplateImage(i){
   a.download = (t.label || ('mall-' + (i+1))) + '.' + (ext==='jpeg'?'jpg':ext);
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
-function downloadLogo(){
-  if (!BRAND_LOGO) return;
+function downloadLogo(i){
+  var l = (i != null && BRAND_LOGOS[i]) || null, src = l ? l.src : BRAND_LOGO;
+  if (!src) return;
   var a = document.createElement('a');
-  a.href = BRAND_LOGO;
-  var ext = (/data:image\/(\w+)/.exec(BRAND_LOGO)||[])[1] || 'png';
-  a.download = 'logo.' + (ext==='jpeg'?'jpg':ext);
+  a.href = src;
+  var ext = (/data:image\/(\w+)/.exec(src)||[])[1] || 'png';
+  a.download = 'logo' + (l ? '-' + (l.kind || (i + 1)) + (i ? '-' + (i + 1) : '') : '') + '.' + (ext==='jpeg'?'jpg':ext);
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 function renderBrand() {
@@ -6263,7 +6288,7 @@ function _cvElementsHTML(post){
       } else inner = _cvEsc(txt);
     } else if (e.type === 'image' || e.type === 'logo') {
       // Mallens fotoramar fylls med inläggets bild (t.ex. AI-genererad) tills man själv byter bild i ramen
-      var src = e.type === 'logo' ? ((typeof BRAND_LOGO === 'string' && BRAND_LOGO) || e.src || '') : ((e.role === 'tplPhoto' && !e.ownSrc && post && _tplFrameSrc(post, e)) || e.src);
+      var src = e.type === 'logo' ? (_logoSrc(post, e.logoId) || e.src || '') : ((e.role === 'tplPhoto' && !e.ownSrc && post && _tplFrameSrc(post, e)) || e.src);
       inner = src ? '<img src="' + _cvAttr(src) + '" alt="" draggable="false" style="width:100%;height:100%;object-fit:' + (e.fit || 'contain') + ';display:block;pointer-events:none;border-radius:' + (e.radius || 0) + 'cqw;' + ((e.ix || e.iy || (e.iz && e.iz !== 1)) ? 'transform:translate(' + (e.ix || 0) + '%,' + (e.iy || 0) + '%) scale(' + (e.iz || 1) + ');' : '') + '">' : (e.type === 'logo' ? '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:5cqw">' + _cvEsc((typeof BRAND_NAME !== 'undefined' && BRAND_NAME) || 'Logga') + '</div>' : '<div style="width:100%;height:100%;background:repeating-linear-gradient(45deg,#d1d5db 0 2cqw,#e5e7eb 2cqw 4cqw);display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:3.5cqw;font-weight:700">Välj bild</div>');
       if (e.type === 'logo' && e.tint && src) inner = '<div style="width:100%;height:100%;background:' + _cvAttr(e.tint) + ';-webkit-mask:url(\'' + _cvAttr(src) + '\') center/contain no-repeat;mask:url(\'' + _cvAttr(src) + '\') center/contain no-repeat"></div>';
       if (e.type === 'image' && e.tint) inner += '<div style="position:absolute;inset:0;pointer-events:none;background:' + _cvAttr(e.tint) + ';opacity:' + (e.tintOp == null ? 0.35 : e.tintOp) + '"></div>';
@@ -6751,6 +6776,7 @@ function _cvToolbarHTML(){
   } else if (e.type === 'draw') {
     a += _CV_LBL('Färg') + _cvSw('fill', e.fill || '#b31e59', 'Färg') + _cvRng('Tjocklek', 'sw', 1, 14, 1, e.sw || 3, 64);
   } else if (e.type === 'logo') {
+    if (BRAND_LOGOS.length > 1) a += _CV_LBL('Logga') + _cvDd("cvSet('logoId', this.value)", [['', 'Automatiskt']].concat(BRAND_LOGOS.map(function(l, k){ return [l.id, (LOGO_KINDS[l.kind] || 'Logga') + (l.note ? ' – ' + l.note : '') + ' (' + (k + 1) + ')']; })), e.logoId || '', 'Vilken logga som visas');
     a += _CV_LBL('Färga loggan') + _cvSw('tint', e.tint || '', 'Loggans färg (✕ = originalfärger)', true);
   }
   a += '</div>';
