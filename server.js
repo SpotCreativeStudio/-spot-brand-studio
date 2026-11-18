@@ -1508,14 +1508,14 @@ app.post('/api/carousel-from-source', auth, async (req, res) => {
       ' Gor en karusell utifran ' + what + '. Upplagg: ett omslag med en stark, kort hook, sedan exakt ' + n + ' innehallssidor med en tydlig poang per sida, sist en avslutning med en uppmaning.' +
       ' Rubriker max 6 ord. Text per sida max 25 ord. Inga hashtags och inga emojis i sidorna. Hitta inte pa fakta som inte finns i kallan.' +
       ' Skriv pa ' + (en ? 'engelska (natural, fluent English)' : 'svenska') + '.' +
-      ' Svara ENDAST med JSON: {"title":"omslagets hook","intro":"en kort undertext till omslaget","slides":[{"h":"rubrik","t":"text"}],"cta":"avslutningens uppmaning"}'
+      ' Svara ENDAST med JSON: {"title":"omslagets hook","intro":"en kort undertext till omslaget","img":"bildbeskrivning for omslaget","slides":[{"h":"rubrik","t":"text","img":"bildbeskrivning for sidan"}],"cta":"avslutningens uppmaning"}. Varje "img" ar en kort beskrivning pa engelska (max 30 ord) av ett fotografi som passar sidan: motiv, miljo, ljus och kansla. Inga personer som kan kannas igen, ingen text, inga loggor i bilden.'
     parts.push({ text: prompt })
     const out = await geminiText(apiKey, parts, { responseMimeType: 'application/json', temperature: 0.7 })
     let data
     try { data = JSON.parse(out.text.replace(/^```(json)?|```$/g, '').trim()) } catch (e) { const m = out.text.match(/\{[\s\S]*\}/); data = m ? JSON.parse(m[0]) : null }
     if (!data || !Array.isArray(data.slides) || !data.slides.length) return res.status(502).json({ error: 'AI:n kunde inte skapa sidor – prova en annan länk eller ett ämne' })
     const clip = (s, l) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, l)
-    res.json({ title: clip(data.title, 90), intro: clip(data.intro, 160), cta: clip(data.cta, 200), slides: data.slides.slice(0, 8).map(s => ({ h: clip(s.h, 70), t: clip(s.t, 220) })) })
+    res.json({ title: clip(data.title, 90), intro: clip(data.intro, 160), img: clip(data.img, 300), cta: clip(data.cta, 200), slides: data.slides.slice(0, 8).map(s => ({ h: clip(s.h, 70), t: clip(s.t, 220), img: clip(s.img, 300) })) })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 app.post('/api/drafts/delete', auth, async (req, res) => {
