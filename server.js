@@ -1386,6 +1386,35 @@ app.post('/api/notify-rejected', auth, async (req, res) => {
     res.json({ ok: true, sent })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+// ── Karusell-PDF: uppladdad eller skapad i appen. Sparas per arbetsyta, inlägget pekar på id:t ──
+async function ensureCarouselPdfTable() { await getAuthPool().query('CREATE TABLE IF NOT EXISTS carousel_pdfs (id TEXT PRIMARY KEY, workspace TEXT, username TEXT, name TEXT, data BYTEA, created_at TIMESTAMPTZ DEFAULT NOW())') }
+app.post('/api/carousel-pdf', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    const { dataUrl, name } = req.body || {}
+    const m = /^data:application\/pdf;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''))
+    if (!m) return res.status(400).json({ error: 'Filen måste vara en PDF' })
+    const buf = Buffer.from(m[1], 'base64')
+    if (buf.length > 12 * 1024 * 1024) return res.status(413).json({ error: 'PDF:en är för stor (max 12 MB)' })
+    if (buf.slice(0, 5).toString('latin1') !== '%PDF-') return res.status(400).json({ error: 'Filen är inte en giltig PDF' })
+    await ensureCarouselPdfTable()
+    const id = crypto.randomBytes(12).toString('hex')
+    await getAuthPool().query('INSERT INTO carousel_pdfs (id, workspace, username, name, data) VALUES ($1,$2,$3,$4,$5)', [id, s.workspace || 'spot', s.u || '', String(name || 'karusell.pdf').replace(/[^\wåäöÅÄÖ .()-]/g, '').slice(0, 120), buf])
+    res.json({ ok: true, id })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+app.get('/api/carousel-pdf/:id', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    await ensureCarouselPdfTable()
+    const r = await getAuthPool().query('SELECT name, data FROM carousel_pdfs WHERE id=$1 AND workspace=$2', [String(req.params.id).slice(0, 40), s.workspace || 'spot'])
+    if (!r.rows.length) return res.status(404).json({ error: 'Hittar inte PDF:en' })
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', 'inline; filename="' + (r.rows[0].name || 'karusell.pdf').replace(/[^\w .()-]/g, '_') + '"')
+    res.setHeader('Cache-Control', 'private, max-age=3600')
+    res.send(r.rows[0].data)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 app.post('/api/drafts/delete', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
