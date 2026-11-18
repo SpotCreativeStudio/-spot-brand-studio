@@ -2746,14 +2746,29 @@ function rejectPost(id){
   box.querySelector("#rejectConfirm").onclick=function(){
     var reason=ta.value.trim();
     if(!reason){ ta.style.borderColor="#b31e59"; ta.focus(); return; }
-    var drafts=(function(){try{return JSON.parse(localStorage.getItem("spotDrafts")||"[]");}catch(e){return [];}})();
-    drafts.unshift({ id:"d"+Date.now(), ts:Date.now(), title:"🚫 NEKAD – "+(post.title||"(inlägg)"), content:"[Nekad. Orsak: "+reason+"]\n\n"+(post.content||""), channels:(post.channels||(post.channel?[post.channel]:[])), proposals:null, selected:null, aiImageUrl:(post.imageUrl||post.aiImageUrl||null), imgPos:(post.imgPos||null), uploaded:null, rejected:true, rejectedReason:reason });
-    try{localStorage.setItem("spotDrafts",JSON.stringify(drafts));}catch(e){}
-    S.reviewQueue=(S.reviewQueue||[]).filter(function(p){return p.id!==id;});
-    if(S.selectedReviewId===id)S.selectedReviewId=(S.reviewQueue[0]?S.reviewQueue[0].id:null);
-    ov.remove();
-    if(typeof renderReview==="function")renderReview();
-    if(typeof showToast==="function")showToast("Inlägget nekades och skickades till utkast.");
+    var btn=box.querySelector("#rejectConfirm"); if(btn.disabled) return; btn.disabled=true; btn.textContent="Nekar…";
+    var draft={ title:"🚫 NEKAD – "+(post.title||"(inlägg)"), content:"[Nekad. Orsak: "+reason+"]\n\n"+(post.content||""), channels:(post.channels||(post.channel?[post.channel]:[])), proposals:null, selected:null, aiImageUrl:(post.imageUrl||post.aiImageUrl||null), imgPos:(post.imgPos||null), uploaded:null, tags:(post.hashtags||[]), rejected:true, rejectedReason:reason, rejectedPostId:String(id) };
+    // Utkastet sparas på servern (så att skaparen och alla i teamet ser det) och inlägget tas bort ur granskningen även på servern
+    fetch("/api/drafts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(draft)})
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(!res||!res.ok) throw new Error((res&&res.error)||"save");
+        draft.id=res.id; draft.ts=res.ts; draft.by=(typeof CURRENT_USER_NAME!=="undefined"&&CURRENT_USER_NAME)||draft.by||"";
+        if(typeof _draftsCache!=="undefined") _draftsCache.unshift(draft);
+        return fetch("/api/delete-post",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:id})});
+      })
+      .then(function(){
+        S.reviewQueue=(S.reviewQueue||[]).filter(function(p){return String(p.id)!==String(id);});
+        if(S.selectedReviewId===id)S.selectedReviewId=(S.reviewQueue[0]?S.reviewQueue[0].id:null);
+        if(typeof _saveAppState==="function")_saveAppState();
+        if(typeof updateBadge==="function")updateBadge();
+        ov.remove();
+        if(typeof renderReview==="function")renderReview();
+        if(typeof renderDashboard==="function")renderDashboard();
+        if(typeof _loadDrafts==="function")_loadDrafts();
+        if(typeof showToast==="function")showToast("Inlägget nekades och skickades till utkast.");
+      })
+      .catch(function(){ btn.disabled=false; btn.textContent="⨯ Neka inlägg"; if(typeof showToast==="function")showToast("⚠️ Kunde inte neka inlägget – försök igen"); });
   };
 }
 function _arFor(ch,obj){try{if(obj&&obj.aspectRatio)return obj.aspectRatio==="1:1"?"1/1":"5/4";if(obj&&typeof _teamTpl==="function"){var _tt=_teamTpl(obj);if(_tt&&/^\d+:\d+$/.test(_tt.ratio||""))return _tt.ratio.replace(":","/");}if(typeof S!=="undefined"&&S.aspectRatio)return S.aspectRatio==="1:1"?"1/1":"5/4"}catch(e){}return ({instagram:"4/5",tiktok:"9/16",facebook:"1/1",linkedin:"1/1"})[ch]||"4/5";}
