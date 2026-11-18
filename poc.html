@@ -227,6 +227,8 @@ textarea.field-input{resize:vertical;line-height:1.5}
 .lb-close-btn{position:absolute;top:-48px;right:0;width:36px;height:36px;background:rgba(255,255,255,.12);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;cursor:pointer;transition:background .15s}
 .lb-close-btn:hover{background:rgba(255,255,255,.25)}
 /* ── BRAND ── */
+.btab-bar::-webkit-scrollbar{display:none}
+.btab-bar .pub-tab{white-space:nowrap;flex-shrink:0}
 #v-brand,#v-media{overflow-y:auto;padding:24px;flex-direction:column;gap:20px}
 #v-brand>*,#v-media>*{flex-shrink:0}
 .color-row{display:flex;gap:12px;flex-wrap:wrap}
@@ -717,7 +719,7 @@ html:has(#editorModal.open),body:has(#editorModal.open){overflow:hidden}
 
     <!-- BRAND -->
     <div class="view" id="v-brand" style="overflow-y:auto;padding:24px;flex-direction:column;gap:20px">
-      <div style="display:flex;gap:8px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap;flex-shrink:0"><button id="btab-g" class="pub-tab active" onclick="setBrandTab('g')">🎨 Grafisk profil</button><button id="btab-r" class="pub-tab" onclick="setBrandTab('r')">📘 Ramverk</button><button id="btab-i" class="pub-tab" onclick="setBrandTab('i')">🔌 Integrationer</button><button id="btab-b" class="pub-tab" onclick="setBrandTab('b')">🖼️ Bildbank</button></div>
+      <div class="btab-bar" style="display:flex;gap:4px;border-bottom:1px solid #e5e7eb;flex-wrap:nowrap;flex-shrink:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none"><button id="btab-g" class="pub-tab active" onclick="setBrandTab('g')">🎨 Grafisk profil</button><button id="btab-r" class="pub-tab" onclick="setBrandTab('r')">📘 Ramverk</button><button id="btab-i" class="pub-tab" onclick="setBrandTab('i')">🔌 Integrationer</button><button id="btab-b" class="pub-tab" onclick="setBrandTab('b')">🖼️ Bildbank</button></div>
       <div data-btab="g" class="card"><div class="card-header" style="display:flex;align-items:center;justify-content:space-between">Logotyp <button id="secBtn-logo" onclick="toggleSecEdit('logo')" style="font-size:12px;font-weight:600;padding:6px 14px;border-radius:8px;border:1.5px solid #b31e59;background:#fff;color:#b31e59;cursor:pointer">Redigera</button></div><div id="brandLogoBox"></div></div>
       <div data-btab="i" class="card">
         <div class="card-header">💼 LinkedIn – företagssida</div>
