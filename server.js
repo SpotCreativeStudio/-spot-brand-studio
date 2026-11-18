@@ -273,7 +273,7 @@ function sessionValid(t) {
 function revokeUserSessions(username, exceptToken) { let n = 0; Object.keys(sessions).forEach(function (t) { if (t !== exceptToken && sessions[t] && sessions[t].u === username) { delete sessions[t]; dropSession(t); n++ } }); return n }
 // [Säkerhet 9] AI-logg: varje AI-anrop sparas med arbetsyta, användare, IP och enhet + tak per användare (60/timme)
 async function ensureAiUsageTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS ai_usage (id SERIAL PRIMARY KEY, workspace TEXT, username TEXT, endpoint TEXT, status INTEGER, ms INTEGER, ip TEXT, user_agent TEXT, created_at TIMESTAMPTZ DEFAULT NOW())") }
-const AI_ENDPOINTS = ['/api/generate', '/api/clean-template', '/api/template-layers', '/api/generate-image', '/api/post-chat']
+const AI_ENDPOINTS = ['/api/generate', '/api/clean-template', '/api/template-layers', '/api/generate-image', '/api/post-chat', '/api/carousel-from-source']
 app.use(function (req, res, next) {
   if (req.method !== 'POST' || AI_ENDPOINTS.indexOf(req.path) < 0) return next()
   const s = sessions[getToken(req)] || {}
@@ -1457,6 +1457,65 @@ app.get('/api/post-video/:id', auth, async (req, res) => {
     }
     res.setHeader('Content-Length', total)
     res.end(buf)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+// ── Karusell från källa: YouTube-länk, webbsida eller ämne → omslag, sidor och avslutning (JSON) ──
+async function _pageText(url) {
+  let cur = new URL(url), html = ''
+  const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 9000)
+  try {
+    for (let hop = 0; ; hop++) {
+      if (!(await isPublicUrl(cur))) throw new Error('Adressen är inte tillåten. Ange en publik webbplats.')
+      const r = await fetch(cur.toString(), { signal: controller.signal, redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (SpotBrandStudio)' } })
+      if (r.status >= 300 && r.status < 400 && r.headers.get('location')) { if (hop >= 4) throw new Error('För många omdirigeringar'); cur = new URL(r.headers.get('location'), cur); continue }
+      if (!r.ok) throw new Error('Sidan svarade ' + r.status)
+      html = (await r.text()).slice(0, 800000); break
+    }
+  } finally { clearTimeout(timeout) }
+  const title = ((/<title[^>]*>([^<]*)<\/title>/i.exec(html) || [])[1] || '').trim()
+  const text = html.replace(/<(script|style|noscript|svg|nav|footer|header)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim()
+  return { title, text: text.slice(0, 15000) }
+}
+app.post('/api/carousel-from-source', auth, async (req, res) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY saknas' })
+    let { source, brand, pages } = req.body || {}
+    source = String(source || '').trim().slice(0, 600)
+    if (!source) return res.status(400).json({ error: 'Ange en länk eller ett ämne' })
+    const n = Math.max(3, Math.min(8, parseInt(pages, 10) || 5))
+    const en = brand && brand.lang === 'en'
+    const parts = []
+    let what = 'amnet: "' + source + '"'
+    const isUrl = /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(\/|$)/i.test(source) && !/\s/.test(source)
+    if (isUrl) {
+      const url = /^https?:\/\//i.test(source) ? source : 'https://' + source
+      let u
+      try { u = new URL(url) } catch (e) { return res.status(400).json({ error: 'Ogiltig länk' }) }
+      const yt = /(^|\.)youtube\.com$/i.test(u.hostname) || /(^|\.)youtu\.be$/i.test(u.hostname)
+      if (yt) {
+        const id = u.hostname.indexOf('youtu.be') >= 0 ? u.pathname.slice(1) : (u.searchParams.get('v') || (u.pathname.match(/\/(shorts|embed)\/([\w-]+)/) || [])[2])
+        if (!id || !/^[\w-]{6,20}$/.test(id)) return res.status(400).json({ error: 'Hittar inte videon i YouTube-länken' })
+        parts.push({ fileData: { fileUri: 'https://www.youtube.com/watch?v=' + id, mimeType: 'video/*' } })
+        what = 'YouTube-videon ovan (anvand det som sags och visas i videon)'
+      } else {
+        const page = await _pageText(url)
+        if (!page.text || page.text.length < 80) return res.status(400).json({ error: 'Hittade ingen text på sidan' })
+        what = 'webbsidan "' + (page.title || url) + '". Sidans text: """' + page.text + '"""'
+      }
+    }
+    const prompt = 'Du ar en expert pa LinkedIn- och Instagram-karuseller.' + _chatBrandBlock(brand) +
+      ' Gor en karusell utifran ' + what + '. Upplagg: ett omslag med en stark, kort hook, sedan exakt ' + n + ' innehallssidor med en tydlig poang per sida, sist en avslutning med en uppmaning.' +
+      ' Rubriker max 6 ord. Text per sida max 25 ord. Inga hashtags och inga emojis i sidorna. Hitta inte pa fakta som inte finns i kallan.' +
+      ' Skriv pa ' + (en ? 'engelska (natural, fluent English)' : 'svenska') + '.' +
+      ' Svara ENDAST med JSON: {"title":"omslagets hook","intro":"en kort undertext till omslaget","slides":[{"h":"rubrik","t":"text"}],"cta":"avslutningens uppmaning"}'
+    parts.push({ text: prompt })
+    const out = await geminiText(apiKey, parts, { responseMimeType: 'application/json', temperature: 0.7 })
+    let data
+    try { data = JSON.parse(out.text.replace(/^```(json)?|```$/g, '').trim()) } catch (e) { const m = out.text.match(/\{[\s\S]*\}/); data = m ? JSON.parse(m[0]) : null }
+    if (!data || !Array.isArray(data.slides) || !data.slides.length) return res.status(502).json({ error: 'AI:n kunde inte skapa sidor – prova en annan länk eller ett ämne' })
+    const clip = (s, l) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, l)
+    res.json({ title: clip(data.title, 90), intro: clip(data.intro, 160), cta: clip(data.cta, 200), slides: data.slides.slice(0, 8).map(s => ({ h: clip(s.h, 70), t: clip(s.t, 220) })) })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 app.post('/api/drafts/delete', auth, async (req, res) => {
