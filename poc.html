@@ -2706,7 +2706,9 @@ function getBrandProfile() {
 }
 var _draftsCache = [];
 function _getDrafts(){ return _draftsCache; }
-function _loadDrafts(){ fetch('/api/drafts').then(function(r){return r.json();}).then(function(data){ _draftsCache = data.drafts || []; var el=document.getElementById("draftsPanel"); if(el && el.style.display==="block") renderDraftsPanel(); }).catch(function(){}); }
+// Länk från mejlet om nekat inlägg (?draft=ID): öppna utkastet direkt
+function _openDraftFromUrl(){ try { var m=/[?&]draft=([^&#]+)/.exec(location.search); if(!m||window._draftUrlDone) return; var id=decodeURIComponent(m[1]); if(!_draftsCache.some(function(x){return String(x.id)===String(id);})) return; window._draftUrlDone=true; history.replaceState(null,"",location.pathname+location.hash); setTimeout(function(){ openDraft(id); },300); } catch(e){} }
+function _loadDrafts(){ fetch('/api/drafts').then(function(r){return r.json();}).then(function(data){ _draftsCache = data.drafts || []; _openDraftFromUrl(); var el=document.getElementById("draftsPanel"); if(el && el.style.display==="block") renderDraftsPanel(); }).catch(function(){}); }
 function clearCreatePostForm(){
   if(!confirm("Radera allt innehåll i formuläret?")) return;
   S.manualTags = [];
@@ -2755,7 +2757,10 @@ function rejectPost(id){
         if(!res||!res.ok) throw new Error((res&&res.error)||"save");
         draft.id=res.id; draft.ts=res.ts; draft.by=(typeof CURRENT_USER_NAME!=="undefined"&&CURRENT_USER_NAME)||draft.by||"";
         if(typeof _draftsCache!=="undefined") _draftsCache.unshift(draft);
-        return fetch("/api/delete-post",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:id})});
+        // Skaparen får ett mejl med orsaken och en länk till utkastet (misslyckas det nekas inlägget ändå)
+        return fetch("/api/notify-rejected",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({postId:String(id),draftId:res.id,reason:reason})})
+          .then(function(r){ return r.json(); }).catch(function(){ return {}; })
+          .then(function(n){ window._rejMailSent=!!(n&&n.sent); return fetch("/api/delete-post",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:id})}); });
       })
       .then(function(){
         S.reviewQueue=(S.reviewQueue||[]).filter(function(p){return String(p.id)!==String(id);});
@@ -2766,7 +2771,7 @@ function rejectPost(id){
         if(typeof renderReview==="function")renderReview();
         if(typeof renderDashboard==="function")renderDashboard();
         if(typeof _loadDrafts==="function")_loadDrafts();
-        if(typeof showToast==="function")showToast("Inlägget nekades och skickades till utkast.");
+        if(typeof showToast==="function")showToast(window._rejMailSent?"Inlägget nekades – skaparen har fått ett mejl.":"Inlägget nekades och skickades till utkast.");
       })
       .catch(function(){ btn.disabled=false; btn.textContent="⨯ Neka inlägg"; if(typeof showToast==="function")showToast("⚠️ Kunde inte neka inlägget – försök igen"); });
   };
