@@ -1992,7 +1992,14 @@ function _swapBrandMark(html, post){
     return tmp.innerHTML;
   } catch (e) { return html; }
 }
+// Karusell/video: första sidan eller första bildrutan visas som inläggets bild, med en etikett
+function _mediaThumb(post){ try { var f = (post && post.formats) || []; if (f.indexOf('video') >= 0 && post.video && post.video.thumb) return { src: post.video.thumb, badge: '▶ Video' }; if (f.indexOf('carousel') >= 0 && post.carouselPdf && post.carouselPdf.thumb) return { src: post.carouselPdf.thumb, badge: '🎠 ' + (post.carouselPdf.pages ? post.carouselPdf.pages + ' sidor' : 'Karusell') }; } catch (e) {} return null; }
+function _thumbFromCanvas(c){ var w = 540, h = Math.round(c.height * w / c.width), o = document.createElement('canvas'); o.width = w; o.height = h; o.getContext('2d').drawImage(c, 0, 0, w, h); return o.toDataURL('image/jpeg', 0.8); }
+function _thumbFromImg(src){ return new Promise(function(ok){ var im = new Image(); im.onload = function(){ try { var c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); ok(_thumbFromCanvas(c)); } catch (e) { ok(null); } }; im.onerror = function(){ ok(null); }; im.src = src; }); }
+function _thumbFromVideo(file){ return new Promise(function(ok){ var done = false, url = URL.createObjectURL(file), v = document.createElement('video'); var fin = function(r){ if (done) return; done = true; URL.revokeObjectURL(url); ok(r); }; v.muted = true; v.playsInline = true; v.preload = 'auto'; v.onloadeddata = function(){ try { v.currentTime = Math.min(0.1, (v.duration || 1) / 2); } catch (e) { fin(null); } }; v.onseeked = function(){ try { var c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v, 0, 0); fin(_thumbFromCanvas(c)); } catch (e) { fin(null); } }; v.onerror = function(){ fin(null); }; setTimeout(function(){ fin(null); }, 8000); v.src = url; }); }
 function getPostImageHTML(post, size='card') {
+  var _mt = _mediaThumb(post);
+  if (_mt) return '<div style="position:absolute;inset:0;background:#111;overflow:hidden"><img src="' + _mt.src + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block"><span style="position:absolute;left:10px;top:10px;background:rgba(0,0,0,.65);color:#fff;font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px">' + _mt.badge + '</span></div>';
   var html = _getPostImageHTMLRaw(post, size);
   var _blocks = post.blocks || ['content','hashtags'];
   var _ibCb = document.getElementById('m-include-brand');
@@ -2715,7 +2722,7 @@ function crFileChosen(input){
     showToast('⏳ Laddar upp PDF…');
     _crUploadPdf(url, f.name).then(function(id){
       S._carouselPdf = { id: id, pages: null, name: f.name, source: 'upload' }; _crRefreshBox();
-      return _crLoadPdfJs().then(function(lib){ return lib.getDocument(_crPdfUrl(id)).promise; }).then(function(doc){ if (S._carouselPdf && S._carouselPdf.id === id) { S._carouselPdf.pages = doc.numPages; _crRefreshBox(); } }).catch(function(){});
+      return _crLoadPdfJs().then(function(lib){ return lib.getDocument(_crPdfUrl(id)).promise; }).then(function(doc){ if (S._carouselPdf && S._carouselPdf.id === id) { S._carouselPdf.pages = doc.numPages; _crRefreshBox(); } return doc.getPage(1).then(function(pg){ var v0 = pg.getViewport({ scale: 1 }), vp = pg.getViewport({ scale: 540 / v0.width }), c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height); return pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise.then(function(){ if (S._carouselPdf && S._carouselPdf.id === id) S._carouselPdf.thumb = c.toDataURL('image/jpeg', 0.8); }); }); }).catch(function(){});
     }).then(function(){ showToast('📄 PDF bifogad till inlägget'); })
       .catch(function(e){ showToast('⚠️ ' + e.message); });
   };
@@ -2875,8 +2882,8 @@ function crBuild(attach){
   _crRenderAll(_cr.slides).then(function(jpegs){
     var blob = _crJpegsToPdf(jpegs);
     if (!attach) { var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name + '.pdf'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000); return; }
-    return _crBlobToDataUrl(blob).then(function(u){ return _crUploadPdf(u, name + '.pdf'); }).then(function(id){
-      S._carouselPdf = { id: id, pages: jpegs.length, name: name + '.pdf', source: 'generated' };
+    return _crBlobToDataUrl(blob).then(function(u){ return _crUploadPdf(u, name + '.pdf'); }).then(function(id){ return _thumbFromImg(jpegs[0]).then(function(th){ return [id, th]; }); }).then(function(a){ var id = a[0];
+      S._carouselPdf = { id: id, pages: jpegs.length, name: name + '.pdf', source: 'generated', thumb: a[1] || null };
       _crRefreshBox(); closeCarouselEditor(); showToast('📎 Karusellen (' + jpegs.length + ' sidor) är bifogad till inlägget');
     });
   }).catch(function(e){ showToast('⚠️ ' + (e && e.message || 'Kunde inte skapa PDF:en')); })
@@ -2927,7 +2934,7 @@ function vidFileChosen(input){
   showToast('⏳ Laddar upp video…');
   fetch('/api/post-video', { method: 'POST', headers: { 'Content-Type': type, 'X-File-Name': encodeURIComponent(f.name) }, body: f })
     .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ if (!r.ok || !d.id) throw new Error(d.error || (r.status === 413 ? 'Videon är för stor (max 15 MB)' : 'Kunde inte ladda upp videon')); return d; }); })
-    .then(function(d){ S._postVideo = { id: d.id, name: f.name, size: d.size || f.size }; _vidRefreshBox(); showToast('🎬 Videon är kopplad till inlägget'); })
+    .then(function(d){ S._postVideo = { id: d.id, name: f.name, size: d.size || f.size }; _vidRefreshBox(); showToast('🎬 Videon är kopplad till inlägget'); _thumbFromVideo(f).then(function(th){ if (th && S._postVideo && S._postVideo.id === d.id) S._postVideo.thumb = th; }); })
     .catch(function(e){ showToast('⚠️ ' + e.message); });
 }
 function openVideoPlayer(v){
