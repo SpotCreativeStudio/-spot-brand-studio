@@ -1019,7 +1019,7 @@ app.delete('/api/edit-draft', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
-app.post('/api/save-post', auth, async (req, res) => { try { const s = sessions[getToken(req)] || {}; const { Pool } = require('pg'); const pool = getAuthPool(); await pool.query('CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, data JSONB, created_at TIMESTAMPTZ DEFAULT NOW())'); const post = req.body; post.workspace = s.workspace || 'spot'; for (const _k of ['imageUrl', 'aiImageUrl']) { if (typeof post[_k] === 'string' && post[_k].indexOf('data:') === 0) { const _u = await storeDataUrlImage(post[_k], post.workspace, s.u, 'https://' + req.get('host')); if (_u) post[_k] = _u } } const _pid = post.id || Date.now().toString(); const _links = postLinks(_pid, post, 'https://' + req.get('host')); await ensurePostLinkColumns(); await pool.query('INSERT INTO posts (id,data,link,image_url) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET data=$2,link=$3,image_url=$4,created_at=NOW()', [_pid, JSON.stringify(post), _links.link, _links.image_url]); res.json({ saved: true }) } catch (e) { res.status(500).json({ error: e.message }) } })
+app.post('/api/save-post', auth, async (req, res) => { try { const s = sessions[getToken(req)] || {}; const { Pool } = require('pg'); const pool = getAuthPool(); await pool.query('CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, data JSONB, created_at TIMESTAMPTZ DEFAULT NOW())'); const post = req.body; post.workspace = s.workspace || 'spot'; for (const _k of ['imageUrl', 'aiImageUrl']) { if (typeof post[_k] === 'string' && post[_k].indexOf('data:') === 0) { const _u = await storeDataUrlImage(post[_k], post.workspace, s.u, 'https://' + req.get('host')); if (_u) post[_k] = _u } } const _pid = post.id || Date.now().toString(); if (!post.authorUser) { try { const _ex = await pool.query("SELECT data->>'authorUser' AS au FROM posts WHERE id=$1", [String(_pid)]); post.authorUser = (_ex.rows[0] && _ex.rows[0].au) || s.u || '' } catch (_e) { post.authorUser = s.u || '' } } const _links = postLinks(_pid, post, 'https://' + req.get('host')); await ensurePostLinkColumns(); await pool.query('INSERT INTO posts (id,data,link,image_url) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET data=$2,link=$3,image_url=$4,created_at=NOW()', [_pid, JSON.stringify(post), _links.link, _links.image_url]); res.json({ saved: true }) } catch (e) { res.status(500).json({ error: e.message }) } })
 app.get('/api/published-posts', auth, async (req, res) => { try { const s = sessions[getToken(req)] || {}; const { Pool } = require('pg'); const pool = getAuthPool(); await pool.query('CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, data JSONB, created_at TIMESTAMPTZ DEFAULT NOW())'); const result = await pool.query("SELECT data FROM posts WHERE data->>'status' IN ('published','archived') AND data->>'workspace' = $1 AND (data->>'deleted' IS NULL OR data->>'deleted' <> 'true') ORDER BY created_at DESC LIMIT 200", [s.workspace || 'spot']); res.json({ posts: result.rows.map(r => r.data) }) } catch (e) { res.status(500).json({ error: e.message }) } })
 app.get('/api/all-posts', auth, async (req, res) => { try { const s = sessions[getToken(req)] || {}; const { Pool } = require('pg'); const pool = getAuthPool(); await pool.query('CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, data JSONB, created_at TIMESTAMPTZ DEFAULT NOW())'); const result = await pool.query("SELECT data FROM posts WHERE data->>'workspace' = $1 AND (data->>'deleted' IS NULL OR data->>'deleted' <> 'true') ORDER BY created_at DESC LIMIT 500", [s.workspace || 'spot']); res.json({ posts: result.rows.map(r => r.data) }) } catch (e) { res.status(500).json({ error: e.message }) } })
 async function ensureLinkedInTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS linkedin_accounts (username TEXT PRIMARY KEY, access_token TEXT, expires_at BIGINT, li_sub TEXT, li_name TEXT)") }
@@ -1344,6 +1344,36 @@ app.post('/api/drafts', auth, async (req, res) => {
     const ts = Date.now()
     const r = await getAuthPool().query('INSERT INTO user_drafts (username,data,ts,workspace) VALUES ($1,$2,$3,$4) RETURNING id', [s.u, JSON.stringify(draft), ts, s.workspace || 'spot'])
     res.json({ ok: true, id: r.rows[0].id, ts })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+// ── Nekat inlägg: skaparen får ett mejl (Resend) med orsaken och en länk till utkastet ──
+app.post('/api/notify-rejected', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}, ws = s.workspace || 'spot'
+    if ((s.role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan neka inlägg' })
+    const { postId, draftId, reason } = req.body || {}
+    if (!postId) return res.status(400).json({ error: 'id saknas' })
+    await ensureUsersTable()
+    const pr = await getAuthPool().query("SELECT data FROM posts WHERE id=$1 AND data->>'workspace' = $2", [String(postId), ws])
+    const post = (pr.rows[0] && pr.rows[0].data) || {}
+    // Skaparen: användarnamnet som sparades med inlägget, annars (äldre inlägg) namnet i arbetsytan
+    let ur = { rows: [] }
+    if (post.authorUser) ur = await getAuthPool().query('SELECT username, email, first_name FROM app_users WHERE username=$1 AND workspace=$2', [post.authorUser, ws])
+    if (!ur.rows.length && post.author) ur = await getAuthPool().query("SELECT username, email, first_name FROM app_users WHERE workspace=$1 AND TRIM(COALESCE(first_name,'') || ' ' || COALESCE(last_name,'')) = $2", [ws, String(post.author).trim()])
+    if (ur.rows.length !== 1) return res.json({ ok: true, sent: false, why: 'no-user' })
+    const u = ur.rows[0]
+    if (u.username === s.u) return res.json({ ok: true, sent: false, why: 'self' })
+    if (!u.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(u.email)) return res.json({ ok: true, sent: false, why: 'no-email' })
+    const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+    const title = String(post.title || 'ditt inlägg').slice(0, 140), why = String(reason || '').slice(0, 2000)
+    const by = [s.firstName, s.lastName].filter(Boolean).join(' ') || s.u || 'Admin'
+    const link = 'https://' + req.get('host') + '/' + (draftId ? '?draft=' + encodeURIComponent(String(draftId)) : '')
+    const subject = 'Ditt inlägg "' + title.replace(/[\r\n]/g, ' ') + '" behöver justeras'
+    const text = 'Hej ' + (u.first_name || '') + '!\n\nDitt inlägg "' + title + '" nekades av ' + by + '.\n\nOrsak:\n' + why + '\n\nInlägget ligger nu som utkast. Öppna det, justera och skicka till granskning igen:\n' + link + '\n\n/ spot. Brand Studio'
+    const html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#111"><h2 style="font-size:18px;margin:0 0 12px">Ditt inlägg behöver justeras</h2><p style="font-size:14px;margin:0 0 12px">Hej ' + esc(u.first_name || '') + '! Ditt inlägg <b>"' + esc(title) + '"</b> nekades av ' + esc(by) + '.</p><div style="background:#fff5f7;border-left:4px solid #b31e59;padding:12px 14px;font-size:14px;white-space:pre-wrap;margin:0 0 16px"><b>Orsak:</b><br>' + esc(why) + '</div><p style="font-size:14px;margin:0 0 18px">Inlägget ligger nu som utkast. Justera det och skicka till granskning igen.</p><a href="' + esc(link) + '" style="display:inline-block;background:#b31e59;color:#fff;text-decoration:none;font-weight:bold;font-size:14px;padding:11px 18px;border-radius:9px">Öppna utkastet →</a><p style="font-size:12px;color:#9ca3af;margin:24px 0 0">spot. Brand Studio</p></div>'
+    const sent = await sendAppMail({ to: u.email, subject, text, html })
+    try { if (typeof audit === 'function') audit(req, 'reject_mail', { postId: String(postId), to: u.username, sent }) } catch (_e) {}
+    res.json({ ok: true, sent })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 app.post('/api/drafts/delete', auth, async (req, res) => {
