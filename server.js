@@ -1415,6 +1415,50 @@ app.get('/api/carousel-pdf/:id', auth, async (req, res) => {
     res.send(r.rows[0].data)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+// ── Video till inlägg: laddas upp som den är (max 15 MB), sparas per arbetsyta. Spelas upp med stöd för Range ──
+async function ensurePostVideoTable() { await getAuthPool().query('CREATE TABLE IF NOT EXISTS post_videos (id TEXT PRIMARY KEY, workspace TEXT, username TEXT, name TEXT, mime TEXT, data BYTEA, created_at TIMESTAMPTZ DEFAULT NOW())') }
+const VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm']
+app.post('/api/post-video', auth, express.raw({ type: () => true, limit: '16mb' }), async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    const mime = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase()
+    if (!VIDEO_TYPES.includes(mime)) return res.status(400).json({ error: 'Videon måste vara mp4, mov eller webm' })
+    const buf = Buffer.isBuffer(req.body) ? req.body : null
+    if (!buf || !buf.length) return res.status(400).json({ error: 'Ingen video skickades' })
+    if (buf.length > 15 * 1024 * 1024) return res.status(413).json({ error: 'Videon är för stor (max 15 MB)' })
+    let name = 'video'
+    try { name = decodeURIComponent(String(req.headers['x-file-name'] || 'video')) } catch (_e) {}
+    name = name.replace(/[^\wåäöÅÄÖ .()-]/g, '').slice(0, 120) || 'video'
+    await ensurePostVideoTable()
+    const id = crypto.randomBytes(12).toString('hex')
+    await getAuthPool().query('INSERT INTO post_videos (id, workspace, username, name, mime, data) VALUES ($1,$2,$3,$4,$5,$6)', [id, s.workspace || 'spot', s.u || '', name, mime, buf])
+    res.json({ ok: true, id, size: buf.length })
+  } catch (e) { res.status(e.type === 'entity.too.large' ? 413 : 500).json({ error: e.type === 'entity.too.large' ? 'Videon är för stor (max 15 MB)' : e.message }) }
+})
+app.get('/api/post-video/:id', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    await ensurePostVideoTable()
+    const r = await getAuthPool().query('SELECT name, mime, data FROM post_videos WHERE id=$1 AND workspace=$2', [String(req.params.id).slice(0, 40), s.workspace || 'spot'])
+    if (!r.rows.length) return res.status(404).json({ error: 'Hittar inte videon' })
+    const buf = r.rows[0].data, total = buf.length
+    res.setHeader('Content-Type', r.rows[0].mime || 'video/mp4')
+    res.setHeader('Accept-Ranges', 'bytes')
+    res.setHeader('Cache-Control', 'private, max-age=3600')
+    res.setHeader('Content-Disposition', (req.query.dl ? 'attachment' : 'inline') + '; filename="' + (r.rows[0].name || 'video').replace(/[^\w .()-]/g, '_') + '"')
+    const m = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''))
+    if (m) {
+      let start = m[1] === '' ? Math.max(0, total - Number(m[2])) : Number(m[1])
+      let end = (m[1] !== '' && m[2] !== '') ? Math.min(Number(m[2]), total - 1) : total - 1
+      if (start >= total || start > end) { res.setHeader('Content-Range', 'bytes */' + total); return res.status(416).end() }
+      res.status(206).setHeader('Content-Range', 'bytes ' + start + '-' + end + '/' + total)
+      res.setHeader('Content-Length', end - start + 1)
+      return res.end(buf.subarray(start, end + 1))
+    }
+    res.setHeader('Content-Length', total)
+    res.end(buf)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 app.post('/api/drafts/delete', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
