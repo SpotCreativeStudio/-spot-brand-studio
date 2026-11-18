@@ -2027,7 +2027,7 @@ function getPostImageHTML(post, size='card') {
 
 
 // Full-size version for lightbox
-function getPostImageLargeHTML(post) { var _r = _applyBrandColors(_getPostImageLargeHTMLRaw(post)); return '<div class="post-img-root" style="width:100%;height:100%;border-radius:0;position:relative">' + _r + (_r.indexOf('cv-layer') < 0 && typeof _cvElementsHTML === 'function' ? _cvElementsHTML(post) : '') + '</div>'; }
+function getPostImageLargeHTML(post) { if (typeof _mediaThumb === 'function' && _mediaThumb(post)) { var _vv = (post.formats || []).indexOf('video') >= 0 && post.video && post.video.variants && post.video.variants[0]; return '<div class="post-img-root" style="width:100%;aspect-ratio:' + (_vv ? _vv.w + '/' + _vv.h : '4/5') + ';border-radius:0;position:relative">' + getPostImageHTML(post) + '</div>'; } var _r = _applyBrandColors(_getPostImageLargeHTMLRaw(post)); return '<div class="post-img-root" style="width:100%;height:100%;border-radius:0;position:relative">' + _r + (_r.indexOf('cv-layer') < 0 && typeof _cvElementsHTML === 'function' ? _cvElementsHTML(post) : '') + '</div>'; }
 function _getPostImageLargeHTMLRaw(post) {
   const layout = post.layout || 'gradient';
   // SPOT-mallarna är responsiva – använd samma renderare som korten
@@ -5713,7 +5713,7 @@ function renderLightbox() {
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div class="lb-fs">${CH_LABEL[post.channel]} · ${_h(post.author || '')}</div><div class="lb-count">${S._lbSingle ? '' : (S.lbIndex + 1) + ' / ' + S.reviewQueue.length}</div></div>
       ${_inReview ? `<div style="display:flex;gap:8px">
         <button onclick="event.stopPropagation();closeLightboxBtn();rejectPost('${post.id}')" style="${_bt}background:#fff;border:1.5px solid #ef4444;color:#ef4444">✕ Neka</button>
-        <button onclick="event.stopPropagation();closeLightboxBtn();openEditorModal(S.reviewQueue.find(p=>p.id==='${post.id}'))" style="${_bt}background:#fff;border:1.5px solid #e5e7eb;color:#374151">✏️ Redigera</button>
+        ${post.video && post.video.id ? `<button onclick="event.stopPropagation();closeLightboxBtn();editReviewVideo('${post.id}')" style="${_bt}background:#fff;border:1.5px solid #e5e7eb;color:#374151">🎬 Redigera video</button>` : (post.carouselPdf && post.carouselPdf.id ? `<button onclick="event.stopPropagation();closeLightboxBtn();editReviewCarousel('${post.id}')" style="${_bt}background:#fff;border:1.5px solid #e5e7eb;color:#374151">🎨 Redigera karusell</button>` : `<button onclick="event.stopPropagation();closeLightboxBtn();openEditorModal(S.reviewQueue.find(p=>p.id==='${post.id}'))" style="${_bt}background:#fff;border:1.5px solid #e5e7eb;color:#374151">✏️ Redigera</button>`)}
         <button onclick="event.stopPropagation();closeLightboxBtn();selectReview('${post.id}');approvePost('${post.id}', false)" style="${_bt}background:#b31e59;border:1.5px solid #b31e59;color:#fff">✅ Godkänn</button>
       </div>` : ''}
     </div>`;
