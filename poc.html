@@ -2811,6 +2811,13 @@ function _crRefreshBox(){
   st.innerHTML = p ? ('📄 <b>' + _crEsc(p.name || 'Karusell') + '</b> · ' + (p.pages || '?') + ' sidor · ' + (p.slides && p.slides.length ? '<a href="#" onclick="event.preventDefault();openCarouselEditor()">Redigera</a> · ' : '') + '<a href="#" onclick="event.preventDefault();openCarouselViewer(S._carouselPdf)">Visa</a> · <a href="#" onclick="event.preventDefault();crRemovePdf()">Ta bort</a>')
     : 'Ingen PDF bifogad ännu.';
 }
+// PDF-sidor → sidor i karusellstudion (sidan som helbild, så att man kan lägga text, logga m.m. ovanpå)
+function _crPdfToSlides(id){
+  return _crRenderPdf(_crPdfUrl(id), CS_W).then(function(pages){
+    if (!pages.length) throw new Error('PDF:en har inga sidor');
+    return pages.map(function(src){ return { bg: '#ffffff', els: [{ id: _csId(), type: 'image', x: 0, y: 0, w: CS_W, h: CS_H, src: src, fit: 'cover', pdfPage: true }] }; });
+  });
+}
 function crRemovePdf(){ S._carouselPdf = null; _crRefreshBox(); }
 function crPickPdf(){ var i = document.getElementById('crFile'); if (i) { i.value = ''; i.click(); } }
 function crFileChosen(input){
@@ -2824,8 +2831,12 @@ function crFileChosen(input){
     _crUploadPdf(url, f.name).then(function(id){
       S._carouselPdf = { id: id, pages: null, name: f.name, source: 'upload' }; _crRefreshBox();
       return _crLoadPdfJs().then(function(lib){ return lib.getDocument(_crPdfUrl(id)).promise; }).then(function(doc){ if (S._carouselPdf && S._carouselPdf.id === id) { S._carouselPdf.pages = doc.numPages; _crRefreshBox(); } return doc.getPage(1).then(function(pg){ var v0 = pg.getViewport({ scale: 1 }), vp = pg.getViewport({ scale: 540 / v0.width }), c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height); return pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise.then(function(){ if (S._carouselPdf && S._carouselPdf.id === id) S._carouselPdf.thumb = c.toDataURL('image/jpeg', 0.8); }); }); }).catch(function(){});
-    }).then(function(){ showToast('📄 PDF bifogad till inlägget'); })
-      .catch(function(e){ showToast('⚠️ ' + e.message); });
+    }).then(function(){
+      // Öppna den uppladdade karusellen direkt i studion: varje PDF-sida blir en sida i studion
+      var p = S._carouselPdf; if (!p || !p.id) return;
+      showToast('⏳ Öppnar karusellen i studion…');
+      return _crPdfToSlides(p.id).then(function(sl){ if (S._carouselPdf !== p) return; p.slides = sl; _crRefreshBox(); openCarouselEditor(); });
+    }).catch(function(e){ showToast('⚠️ ' + e.message); });
   };
   rd.readAsDataURL(f);
 }
@@ -3686,6 +3697,11 @@ function openCarouselEditor(){
 function editReviewCarousel(id){
   var post = (S.reviewQueue || []).filter(function(p){ return String(p.id) === String(id); })[0]; if (!post || !post.carouselPdf) return;
   var slides = post.carouselPdf.slides;
+  if ((!slides || !slides.length) && post.carouselPdf.id) {
+    showToast('⏳ Öppnar karusellen i studion…');
+    _crPdfToSlides(post.carouselPdf.id).then(function(sl){ post.carouselPdf.slides = sl; editReviewCarousel(id); }).catch(function(e){ showToast('⚠️ ' + ((e && e.message) || 'Kunde inte läsa PDF:en')); });
+    return;
+  }
   if (!slides || !slides.length) { showToast('Karusellen skapades innan studion fanns – sidorna byggs om från texten.'); slides = _crSlidesFromText(post.title || '', post.content || '').map(_csFromSimple); }
   openCarouselStudio({ slides: slides, post: post, onSave: function(info){
     post.carouselPdf = info;
