@@ -3702,6 +3702,7 @@ function _vsOvAlpha(o, t){
 }
 function _vsDrawOv(ctx, W, H, t, showSel){
   (_vs.ov || []).forEach(function(o){
+    if (o.hidden) return;
     var a = _vsOvAlpha(o, t); var sel = showSel && o.id === _vs.sel;
     if (a <= 0 && !sel) return;
     ctx.save(); ctx.globalAlpha = sel && a <= 0 ? 0.35 : a;
@@ -3765,6 +3766,17 @@ function vsOvSet(k, v, light){ var o = _vsSelOv(); if (!o) return; o[k] = v; if 
 function vsOvTime(which){ var o = _vsSelOv(); if (!o || !_vs.el) return; var t = _vs.el.currentTime; if (which === 'in') { o.t0 = Math.min(t, (o.t1 == null ? 1e9 : o.t1) - 0.2); } else if (which === 'out') { o.t1 = Math.max(t, (o.t0 || 0) + 0.2); } else { o.t0 = _vs.start; o.t1 = _vs.end; } _vsRender(); }
 function vsOvDel(){ _vs.ov = _vs.ov.filter(function(o){ return o.id !== _vs.sel; }); _vs.sel = null; _vsRender(); }
 function vsOvPick(id){ _vs.sel = id; var o = _vsSelOv(); if (o && _vs.el && (_vs.el.currentTime < o.t0 || _vs.el.currentTime > o.t1)) vsSeek(o.t0 + 0.05); _vsRender(); }
+// Lagerpanelen: samma som i bildredigeraren – dra för ordning, ▲▼, dölj och lås
+function _vsLyrById(id){ return _vs.ov.filter(function(o){ return o.id === id; })[0]; }
+function vsLyrMove(id, d){ var o = _vsLyrById(id); if (!o) return; var i = _vs.ov.indexOf(o), j = i + d; if (j < 0 || j >= _vs.ov.length) return; _vs.ov[i] = _vs.ov[j]; _vs.ov[j] = o; _vsRender(); }
+function vsLyrHide(id){ var o = _vsLyrById(id); if (!o) return; o.hidden = !o.hidden; if (o.hidden && _vs.sel === id) _vs.sel = null; _vsRender(); }
+function vsLyrLock(id){ var o = _vsLyrById(id); if (!o) return; o.locked = !o.locked; _vsRender(); }
+function vsLyrDrag(ev, id){ _vs.lyrDrag = id; try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', id); } catch (e) {} }
+function vsLyrDrop(ev, toId){
+  ev.preventDefault(); ev.currentTarget.style.borderTop = ''; var fromId = _vs.lyrDrag; _vs.lyrDrag = null; if (!fromId || fromId === toId) return;
+  var order = _vs.ov.slice().reverse(), f = order.findIndex(function(o){ return o.id === fromId; }); if (f < 0) return; var m = order.splice(f, 1)[0];
+  var t = order.findIndex(function(o){ return o.id === toId; }); order.splice(t < 0 ? order.length : t, 0, m); _vs.ov = order.reverse(); _vsRender();
+}
 function vsOvLayer(d){ var o = _vsSelOv(); if (!o) return; var i = _vs.ov.indexOf(o), j = i + d; if (j < 0 || j >= _vs.ov.length) return; _vs.ov[i] = _vs.ov[j]; _vs.ov[j] = o; _vsRender(); }
 
 // ── Ljud och tempo ──
@@ -3836,7 +3848,9 @@ function _vsPanelFmt(f, st, dur, len){
 function _vsPanelOv(){
   var o = _vsSelOv();
   var h = '<label class="vs-lab">Lägg till</label><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="vs-btn" onclick="vsAddText()">T Text</button><button class="vs-btn" onclick="vsAddImage()">🖼 Från datorn</button><button class="vs-btn" onclick="vsLibPicker()">📚 Bildbank</button><button class="vs-btn" onclick="vsAddLogo()">◎ Logga</button></div>';
-  h += _vs.ov.length ? '<label class="vs-lab" style="margin-top:4px">Lager</label>' + _vs.ov.slice().reverse().map(function(x){ return '<div class="vs-ov' + (x.id === _vs.sel ? ' on' : '') + '" onclick="vsOvPick(\'' + x.id + '\')"><span>' + (x.type === 'image' ? (x.logo ? '◎' : '🖼') : 'T') + '</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (x.type === 'image' ? (x.logo ? 'Logga' : 'Bild') : _crEsc(String(x.text || '').split('\n')[0] || 'Text')) + '</span><span style="color:#9ca3af;font-size:11px">' + _vsTime(x.t0) + '–' + _vsTime(x.t1) + '</span></div>'; }).join('') : '<div style="font-size:12px;color:#9ca3af;line-height:1.5">Lägg till text, bilder eller loggan. De bränns in i videon i alla format och kan visas hela tiden eller bara under en del av klippet.</div>';
+  var lb = 'border:none;background:none;cursor:pointer;font-size:12px;padding:2px 3px;color:#6b7280';
+  h += _vs.ov.length ? '<div style="border:1.5px solid #f0f0f0;border-radius:10px;padding:8px;margin-top:4px"><div style="font-size:11px;font-weight:700;color:#b31e59;margin-bottom:6px">🗂 Lager <span style="font-weight:400;color:#9ca3af">· överst = längst fram, dra för att ändra ordning</span></div>' + _vs.ov.slice().reverse().map(function(x){ var on = x.id === _vs.sel; return '<div draggable="true" ondragstart="vsLyrDrag(event,\'' + x.id + '\')" ondragover="event.preventDefault();this.style.borderTop=\'2px solid #b31e59\'" ondragleave="this.style.borderTop=\'\'" ondrop="vsLyrDrop(event,\'' + x.id + '\')" onclick="vsOvPick(\'' + x.id + '\')" style="display:flex;align-items:center;gap:4px;padding:5px 6px;margin-bottom:3px;border-radius:7px;cursor:pointer;font-size:12px;border:1px solid ' + (on ? '#b31e59' : '#f0f0f0') + ';background:' + (on ? '#fdf0f6' : '#fafafa') + ';opacity:' + (x.hidden ? .45 : 1) + '"><span style="cursor:grab;color:#c4c4c4">⋮⋮</span><span>' + (x.type === 'image' ? (x.logo ? '◎' : '🖼') : 'T') + '</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (x.type === 'image' ? (x.logo ? 'Logga' : 'Bild') : _crEsc(String(x.text || '').split('\n')[0] || 'Text')) + ' <span style="color:#9ca3af;font-size:10px">' + _vsTime(x.t0) + '–' + _vsTime(x.t1) + '</span></span>'
+    + '<button title="Framåt" style="' + lb + '" onclick="event.stopPropagation();vsLyrMove(\'' + x.id + '\',1)">▲</button><button title="Bakåt" style="' + lb + '" onclick="event.stopPropagation();vsLyrMove(\'' + x.id + '\',-1)">▼</button><button title="' + (x.hidden ? 'Visa' : 'Dölj') + '" style="' + lb + '" onclick="event.stopPropagation();vsLyrHide(\'' + x.id + '\')">' + (x.hidden ? '🚫' : '👁') + '</button><button title="' + (x.locked ? 'Lås upp' : 'Lås') + '" style="' + lb + '" onclick="event.stopPropagation();vsLyrLock(\'' + x.id + '\')">' + (x.locked ? '🔒' : '🔓') + '</button></div>'; }).join('') + '</div>' : '<div style="font-size:12px;color:#9ca3af;line-height:1.5">Lägg till text, bilder eller loggan. De bränns in i videon i alla format och kan visas hela tiden eller bara under en del av klippet.</div>';
   if (!o) return h + (_vs.ov.length ? '<div style="font-size:11px;color:#9ca3af">Klicka på ett lager – eller direkt i videon – för att ändra det. Dra för att flytta, dra i hörnet för att ändra storlek.</div>' : '');
   h += '<div style="height:1px;background:#eee;margin:4px 0"></div>';
   if (o.type === 'text') {
@@ -3934,9 +3948,10 @@ function vsPanDown(ev){
   var rect = mc.getBoundingClientRect(), fx = (ev.clientX - rect.left) / rect.width, fy = (ev.clientY - rect.top) / rect.height, t = v.currentTime;
   var hs = 0.03, hit = null, mode = 'move';
   var cur = _vsSelOv(); if (cur && cur._bh != null && Math.abs(fx - (cur.x + cur.w)) < hs && Math.abs(fy - (cur.y + cur._bh)) < hs * rect.width / rect.height) { hit = cur; mode = 'size'; }
-  if (!hit) for (var i = _vs.ov.length - 1; i >= 0; i--) { var o = _vs.ov[i]; if ((_vsOvAlpha(o, t) > 0 || o.id === _vs.sel) && o._bh != null && fx >= o.x && fx <= o.x + o.w && fy >= o.y && fy <= o.y + o._bh) { hit = o; break; } }
+  if (!hit) for (var i = _vs.ov.length - 1; i >= 0; i--) { var o = _vs.ov[i]; if (!o.hidden && (_vsOvAlpha(o, t) > 0 || o.id === _vs.sel) && o._bh != null && fx >= o.x && fx <= o.x + o.w && fy >= o.y && fy <= o.y + o._bh) { hit = o; break; } }
   if (hit) {
     var changed = _vs.sel !== hit.id || _vs.tab !== 'ov'; _vs.sel = hit.id; _vs.tab = 'ov'; if (changed) { _vsRender(); mc = document.getElementById('vsMain'); }
+    if (hit.locked) return;
     var sx = ev.clientX, sy = ev.clientY, ox = hit.x, oy = hit.y, ow = hit.w, os = hit.size, moved = false;
     var mv = function(e){ var dx = (e.clientX - sx) / rect.width, dy = (e.clientY - sy) / rect.height; moved = true;
       if (mode === 'size') { hit.w = Math.max(0.05, Math.min(1.2, ow + dx)); if (hit.type === 'text' && e.shiftKey) hit.size = Math.max(0.02, os * hit.w / ow); }
