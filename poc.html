@@ -3741,39 +3741,83 @@ function _vsDrawVid(ctx, v, W, H, st){
 var _vsDrawVidRect = null;
 // ── Inbränd text → redigerbara lager (som mallbilderna): AI läser texten i bildrutan, täcker den och lägger nya textlager ──
 function vsBurnedText(){
-  var v = _vs.el; if (!v || !v.videoWidth) return;
-  if (_vs.burnBusy) return; _vs.burnBusy = true; v.pause();
-  var btn = document.getElementById('vsBurnBtn'); if (btn) { btn.disabled = true; btn.textContent = '⏳ AI:n läser texten…'; }
-  var VW = v.videoWidth, VH = v.videoHeight, k = Math.min(1, 1600 / Math.max(VW, VH));
-  var c = document.createElement('canvas'); c.width = Math.round(VW * k); c.height = Math.round(VH * k); c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-  var frame = c.toDataURL('image/jpeg', 0.92), t = v.currentTime;
+  var v = _vs.el; if (!v || !v.videoWidth || _vs.burnBusy) return;
+  _vs.burnBusy = true; v.pause();
+  var btn = document.getElementById('vsBurnBtn'), say = function(s){ var b = document.getElementById('vsBurnBtn'); if (b) b.textContent = s; };
+  if (btn) btn.disabled = true;
   var done = function(msg){ _vs.burnBusy = false; var b = document.getElementById('vsBurnBtn'); if (b) { b.disabled = false; b.textContent = '✨ Gör inbränd text redigerbar'; } if (msg) showToast(msg); };
   var post = function(url, body){ return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function(r){ return r.json(); }); };
-  post('/api/template-layers', { src: frame }).then(function(d){
-    var els = ((d && d.elements) || []).filter(function(e){ return e.kind === 'text' && String(e.text || '').trim() && Array.isArray(e.box_2d); });
-    if (!els.length) { done('Hittade ingen text i den här bildrutan – stå på en bildruta där texten syns'); return; }
-    if (btn) btn.textContent = '⏳ Tar bort texten ur bilden…';
-    // Bakgrund utan text: enfärgad yta fylls med kantfärgen, annars används en AI-tvättad bildruta
-    var needClean = els.some(function(e){ var b = e.box_2d; return _vsEdgeInfo(c, b).spread > 22; });
-    return (needClean ? post('/api/clean-template', { src: frame }).then(function(r){ return r && r.url ? _tplLoadImg(r.url) : null; }).catch(function(){ return null; }) : Promise.resolve(null)).then(function(cleanImg){
-      var st = _vs.set[_vs.cur], f = _vsFmt(_vs.cur), vr = _vsVidRect(v, f.w, f.h, st), added = 0;
-      els.forEach(function(e){
-        var b = e.box_2d.map(Number), y0 = b[0] / 1000, x0 = b[1] / 1000, y1 = b[2] / 1000, x1 = b[3] / 1000; if (!(x1 > x0 && y1 > y0)) return;
-        var pad = Math.max(0.004, (y1 - y0) * 0.22), bx = Math.max(0, x0 - pad * VH / VW), by = Math.max(0, y0 - pad), bw = Math.min(1, x1 + pad * VH / VW) - bx, bh = Math.min(1, y1 + pad) - by;
-        var info = _vsEdgeInfo(c, [by * 1000, bx * 1000, (by + bh) * 1000, (bx + bw) * 1000]), patch = { bx: bx, by: by, bw: bw, bh: bh };
+  var VW = v.videoWidth, VH = v.videoHeight, sc = Math.min(1, 1280 / Math.max(VW, VH)), len = Math.max(0.2, _vs.end - _vs.start);
+  // Bildrutor genom hela klippet (ungefär två per sekund, högst tolv) – så att text som ändras fångas
+  var n = Math.max(2, Math.min(12, Math.round(len / 0.5) + 1)), step = len / (n - 1), times = [];
+  for (var i = 0; i < n; i++) times.push(Math.min(_vs.end - 0.03, _vs.start + i * step));
+  var sv = document.createElement('video'); sv.muted = true; sv.preload = 'auto'; sv.src = _vidUrl(_vs.video.id);
+  var grab = function(tt){ return new Promise(function(ok, no){ var to = setTimeout(function(){ no(new Error('Kunde inte läsa bildrutan')); }, 8000); sv.onseeked = function(){ clearTimeout(to); var c = document.createElement('canvas'); c.width = Math.round(VW * sc); c.height = Math.round(VH * sc); c.getContext('2d').drawImage(sv, 0, 0, c.width, c.height); ok(c); }; sv.currentTime = tt; }); };
+  var samples = [];
+  new Promise(function(ok, no){ sv.onloadeddata = ok; sv.onerror = function(){ no(new Error('Kunde inte läsa videon')); }; }).then(function(){
+    var ch = Promise.resolve();
+    times.forEach(function(tt){ ch = ch.then(function(){ return grab(tt).then(function(c){ samples.push({ t: tt, c: c, frame: c.toDataURL('image/jpeg', 0.9) }); }); }); });
+    return ch;
+  }).then(function(){
+    // AI:n läser texten i varje bildruta (tre åt gången)
+    var k = 0, left = samples.slice();
+    var worker = function(){ var s = left.shift(); if (!s) return Promise.resolve(); return post('/api/template-layers', { src: s.frame }).then(function(d){ s.els = ((d && d.elements) || []).filter(function(e){ return e.kind === 'text' && String(e.text || '').trim() && Array.isArray(e.box_2d); }); }).catch(function(){ s.els = []; }).then(function(){ k++; say('⏳ AI:n läser bildruta ' + k + ' av ' + samples.length + '…'); return worker(); }); };
+    say('⏳ AI:n läser bildruta 1 av ' + samples.length + '…');
+    return Promise.all([worker(), worker(), worker()]);
+  }).then(function(){
+    // Samma textrad i flera bildrutor = ett spår (rutorna överlappar)
+    var tracks = [];
+    samples.forEach(function(s, si){
+      var used = {};
+      (s.els || []).forEach(function(e){
+        var b = e.box_2d.map(Number), box = { y0: b[0] / 1000, x0: b[1] / 1000, y1: b[2] / 1000, x1: b[3] / 1000 }; if (!(box.x1 > box.x0 && box.y1 > box.y0)) return;
+        var hit = null;
+        tracks.forEach(function(tr, ti){ if (hit || used[ti]) return; var L = tr.obs[tr.obs.length - 1].box, oy = Math.min(L.y1, box.y1) - Math.max(L.y0, box.y0), ox = Math.min(L.x1, box.x1) - Math.max(L.x0, box.x0); if (oy > 0.5 * Math.min(L.y1 - L.y0, box.y1 - box.y0) && ox > -0.02) { hit = tr; used[ti] = 1; } });
+        if (!hit) { hit = { obs: [] }; tracks.push(hit); used[tracks.length - 1] = 1; }
+        hit.obs.push({ si: si, t: s.t, text: String(e.text).trim(), box: box, e: e });
+      });
+    });
+    if (!tracks.length) { done('Hittade ingen text i videon'); return; }
+    say('⏳ Tar bort texten ur bilden…');
+    var cleanCache = {};
+    var cleanFor = function(si){ if (!cleanCache[si]) cleanCache[si] = post('/api/clean-template', { src: samples[si].frame }).then(function(r){ return r && r.url ? _tplLoadImg(r.url) : null; }).catch(function(){ return null; }); return cleanCache[si]; };
+    var st = _vs.set[_vs.cur], f = _vsFmt(_vs.cur), vr = _vsVidRect(v, f.w, f.h, st), half = step / 2, added = 0, live = 0;
+    return Promise.all(tracks.map(function(tr){
+      var o0 = tr.obs[0], first = o0.si, last = tr.obs[tr.obs.length - 1].si, s0 = samples[first];
+      var U = tr.obs.reduce(function(u, ob){ return { y0: Math.min(u.y0, ob.box.y0), x0: Math.min(u.x0, ob.box.x0), y1: Math.max(u.y1, ob.box.y1), x1: Math.max(u.x1, ob.box.x1) }; }, { y0: 1, x0: 1, y1: 0, x1: 0 });
+      var pad = Math.max(0.004, (U.y1 - U.y0) * 0.22), bx = Math.max(0, U.x0 - pad * VH / VW), by = Math.max(0, U.y0 - pad), bw = Math.min(1, U.x1 + pad * VH / VW) - bx, bh = Math.min(1, U.y1 + pad) - by;
+      var info = _vsEdgeInfo(s0.c, [by * 1000, bx * 1000, (by + bh) * 1000, (bx + bw) * 1000]);
+      return (info.spread > 22 ? cleanFor(first) : Promise.resolve(null)).then(function(cleanImg){
+        var patch = { bx: bx, by: by, bw: bw, bh: bh };
         if (info.spread <= 22 || !cleanImg) patch.color = info.color;
-        else { var pc = document.createElement('canvas'); pc.width = Math.max(1, Math.round(bw * c.width)); pc.height = Math.max(1, Math.round(bh * c.height)); pc.getContext('2d').drawImage(cleanImg, bx * cleanImg.naturalWidth, by * cleanImg.naturalHeight, bw * cleanImg.naturalWidth, bh * cleanImg.naturalHeight, 0, 0, pc.width, pc.height); patch.src = pc.toDataURL('image/jpeg', 0.9); }
-        // Nytt textlager på samma plats i det format som visas nu
-        var lineH = (y1 - y0) * vr.h, align = /^(center|right)$/.test(e.align) ? e.align : 'left', extra = 0.04;
-        var ox = (vr.x + x0 * vr.w) / f.w, ow = (x1 - x0) * vr.w / f.w + extra; if (align === 'center') ox -= extra / 2; else if (align === 'right') ox -= extra;
-        _vs.ov.push({ id: _csId(), type: 'text', text: String(e.text), x: ox, y: (vr.y + y0 * vr.h - lineH * 0.1) / f.h, w: ow, size: lineH * 0.86 / f.w, bold: !!e.bold, italic: !!e.italic, align: align, color: /^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '#ffffff', shadow: false, plate: '', t0: _vs.start, t1: _vs.end, patch: patch, fromVideo: true });
+        else { var pc = document.createElement('canvas'); pc.width = Math.max(1, Math.round(bw * s0.c.width)); pc.height = Math.max(1, Math.round(bh * s0.c.height)); pc.getContext('2d').drawImage(cleanImg, bx * cleanImg.naturalWidth, by * cleanImg.naturalHeight, bw * cleanImg.naturalWidth, bh * cleanImg.naturalHeight, 0, 0, pc.width, pc.height); patch.src = pc.toDataURL('image/jpeg', 0.9); }
+        // Texten: samma hela tiden, en räknare ({tid}) eller en lista med ändringar över tid
+        var texts = tr.obs.map(function(ob){ return ob.text; }), same = texts.every(function(x){ return x.toLowerCase() === texts[0].toLowerCase(); });
+        var allNum = texts.every(function(x){ return _vsLiveFromBurned(x) !== x; }), text = texts[0], keys = null;
+        if (allNum && !same) { text = _vsLiveFromBurned(texts[0]); live++; }
+        else if (!same) { keys = []; tr.obs.forEach(function(ob, j){ if (!keys.length || keys[keys.length - 1].text !== ob.text) keys.push({ t: j === 0 ? _vs.start : Math.max(_vs.start, ob.t - half), text: ob.text }); }); live++; }
+        var e = o0.e, b = o0.box, lineH = (b.y1 - b.y0) * vr.h, align = /^(center|right)$/.test(e.align) ? e.align : 'left', extra = 0.04;
+        var ox = (vr.x + b.x0 * vr.w) / f.w, ow = (U.x1 - U.x0) * vr.w / f.w + extra; if (align === 'center') ox -= extra / 2; else if (align === 'right') ox -= extra;
+        var t0 = first === 0 ? _vs.start : Math.max(_vs.start, samples[first].t - half), t1 = last === samples.length - 1 ? _vs.end : Math.min(_vs.end, samples[last].t + half);
+        _vs.ov.push({ id: _csId(), type: 'text', text: keys ? keys[0].text : text, keys: keys, x: ox, y: (vr.y + b.y0 * vr.h - lineH * 0.1) / f.h, w: ow, size: lineH * 0.86 / f.w, bold: !!e.bold, italic: !!e.italic, align: align, color: /^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '#ffffff', shadow: false, plate: '', t0: t0, t1: t1, patch: patch, fromVideo: true });
         added++;
       });
+    })).then(function(){
       _vs.sel = null; _vs.tab = 'ov'; _vsRender();
-      done(added ? '✨ ' + added + ' textrad' + (added === 1 ? '' : 'er') + ' är nu egna lager – kolla att täckningen ser bra ut genom hela klippet' : 'Kunde inte placera texten');
+      done('✨ ' + added + ' text' + (added === 1 ? '' : 'er') + ' är nu egna lager' + (live ? ' – ' + live + ' ändras under videon och uppdateras live när den spelas' : '') + '. Spela upp och kolla täckningen.');
     });
   }).catch(function(e){ done('⚠️ ' + ((e && e.message) || 'Något gick fel')); });
 }
+// Text som ändras under videon: varje ändring har en starttid
+function _vsKeyText(o, t){ if (!o.keys || !o.keys.length) return o.text; var s = o.keys[0].text; o.keys.forEach(function(k){ if (t >= k.t - 0.001) s = k.text; }); return s; }
+function _vsKeysHTML(o){
+  var now = _vs.el ? _vs.el.currentTime : 0;
+  return '<label class="vs-lab">Text som ändras under videon</label>' + o.keys.map(function(k, i){ var on = now >= k.t - 0.001 && (i === o.keys.length - 1 || now < o.keys[i + 1].t - 0.001); return '<div style="display:flex;align-items:center;gap:6px"><button class="vs-btn" title="Hoppa hit" onclick="vsSeek(' + k.t + ')" style="padding:5px 7px;font-size:11px;' + (on ? 'border-color:#b31e59;color:#b31e59' : '') + '">' + _vsTime(k.t) + '</button><input value="' + _crEsc(k.text) + '" oninput="vsKeySet(' + i + ',this.value)" onchange="_vsRender()" style="flex:1;min-width:0;font-size:13px;padding:6px 8px;border:1px solid #e5e7eb;border-radius:8px">' + (o.keys.length > 1 ? '<button class="vs-btn" title="Ta bort ändringen" onclick="vsKeyDel(' + i + ')" style="padding:5px 8px">✕</button>' : '') + '</div>'; }).join('')
+    + '<button class="vs-btn" onclick="vsKeyAdd()">+ Ny ändring vid ' + _vsTime(now) + '</button><div style="font-size:10px;color:#9ca3af;margin-top:-4px">Texten byts vid tiderna ovan när videon spelas – även i den färdiga videon.</div>';
+}
+function vsKeySet(i, val){ var o = _vsSelOv(); if (!o || !o.keys || !o.keys[i]) return; o.keys[i].text = val; if (i === 0) o.text = val; _vsPaint(); }
+function vsKeyAdd(){ var o = _vsSelOv(); if (!o) return; var now = _vs.el ? _vs.el.currentTime : 0; if (!o.keys || !o.keys.length) o.keys = [{ t: o.t0 || 0, text: o.text }]; if (o.keys.some(function(k){ return Math.abs(k.t - now) < 0.05; })) return; o.keys.push({ t: now, text: _vsKeyText(o, now) }); o.keys.sort(function(a, b){ return a.t - b.t; }); _vsRender(); }
+function vsKeyDel(i){ var o = _vsSelOv(); if (!o || !o.keys || o.keys.length < 2) return; o.keys.splice(i, 1); o.text = o.keys[0].text; _vsRender(); }
 // Kantfärg runt en ruta (box_2d i 0–1000) och hur mycket den varierar – låg variation = enfärgad bakgrund
 function _vsEdgeInfo(c, b){
   var g = c.getContext('2d'), W = c.width, H = c.height, y0 = b[0] / 1000 * H, x0 = b[1] / 1000 * W, y1 = b[2] / 1000 * H, x1 = b[3] / 1000 * W, rs = [], gs = [], bs = [];
@@ -3803,7 +3847,7 @@ function _vsDrawOv(ctx, W, H, t, showSel){
     if (o.type === 'image') { im = _vsImg(o.src); var ar = (im.naturalWidth && im.naturalHeight) ? im.naturalWidth / im.naturalHeight : (o.ar || 1); h = o.hf ? o.hf * H : w / ar; }
     else {
       fs = Math.max(6, o.size * W); ctx.font = (o.bold ? '700 ' : '400 ') + fs + 'px ' + _csFontOf(o); ctx.textBaseline = 'top';
-      lines = []; String(o.text || '').split('\n').forEach(function(p){ var l = _crWrap(ctx, p, w); lines = lines.concat(l.length ? l : ['']); });
+      lines = []; _vsLiveText(_vsKeyText(o, t), t).split('\n').forEach(function(p){ var l = _crWrap(ctx, p, w); lines = lines.concat(l.length ? l : ['']); });
       lh = fs * 1.2; h = lines.length * lh;
     }
     if (showSel) o._bh = h / H;
@@ -3831,6 +3875,13 @@ function _vsDrawOv(ctx, W, H, t, showSel){
     ctx.restore();
   });
 }
+// Levande text: {tid} = tiden i videon (t.ex. 1.4), {tid0} = tiden från klippets start, {mm:ss} = minuter och sekunder
+function _vsLiveText(s, t){
+  t = t || 0; var r = Math.max(0, t - (_vs.start || 0)), mm = Math.floor(t / 60), ss = Math.floor(t % 60);
+  return String(s || '').replace(/\{tid\}/g, t.toFixed(1)).replace(/\{tid0\}/g, r.toFixed(1)).replace(/\{mm:ss\}/g, mm + ':' + (ss < 10 ? '0' : '') + ss);
+}
+// Inbränd text som är en räknare ("0.0 s", "12,5 sek") blir levande text som följer videons tid
+function _vsLiveFromBurned(s){ var m = String(s).trim().match(/^(\d+)(?:[.,](\d+))?(\s*(?:s|sek|sec)\.?)?$/i); return m ? '{tid}' + (m[3] || '') : String(s); }
 function _vsSelOv(){ return (_vs.ov || []).filter(function(o){ return o.id === _vs.sel; })[0] || null; }
 function _vsAddOv(o){ var t = _vs.el ? _vs.el.currentTime : 0; o.id = _csId(); if (o.t0 == null) o.t0 = Math.max(_vs.start, 0); if (o.t1 == null) o.t1 = _vs.end;
   // Nya bilder läggs bakom texterna så att texten inte döljs; text och logga hamnar överst
@@ -3976,7 +4027,7 @@ function _vsPanelOv(){
   if (!o) return h + (_vs.ov.length ? '<div style="font-size:11px;color:#9ca3af">Klicka på ett lager – eller direkt i videon – för att ändra det. Dra för att flytta, dra i hörnet för att ändra storlek.</div>' : '');
   h += '<div style="height:1px;background:#eee;margin:4px 0"></div>';
   if (o.type === 'text') {
-    h += '<label class="vs-lab">Text</label><textarea rows="3" oninput="vsOvSet(\'text\',this.value,true)" onchange="_vsRender()" style="font-size:13px;padding:8px;border:1px solid #e5e7eb;border-radius:8px;resize:vertical;font-family:inherit">' + _crEsc(o.text) + '</textarea>'
+    h += (o.keys && o.keys.length ? _vsKeysHTML(o) + '<div style="display:none">' : '<div style="display:flex;flex-direction:column;gap:8px">') + '<label class="vs-lab">Text</label><textarea rows="3" oninput="vsOvSet(\'text\',this.value,true)" onchange="_vsRender()" style="font-size:13px;padding:8px;border:1px solid #e5e7eb;border-radius:8px;resize:vertical;font-family:inherit">' + _crEsc(o.text) + '</textarea><div style="font-size:10px;color:#9ca3af;margin-top:-4px;line-height:1.4">Levande text som uppdateras när videon spelas: <b>{tid}</b> = videons tid · <b>{tid0}</b> = tid från klippets start · <b>{mm:ss}</b> = minuter:sekunder</div></div>'
       + '<label class="vs-lab">Typsnitt</label><select onchange="vsOvSet(\'font\',this.value)" style="padding:7px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px">' + CS_FONTS.map(function(f){ return '<option' + ((o.font || CS_FONTS[0]) === f ? ' selected' : '') + '>' + f + '</option>'; }).join('') + '</select>'
       + '<label class="vs-lab">Storlek</label><div class="vs-row"><input type="range" min="0.02" max="0.2" step="0.002" value="' + o.size + '" oninput="vsOvSet(\'size\',+this.value,true)"></div>'
       + '<div style="display:flex;gap:5px;flex-wrap:wrap"><button class="vs-btn' + (o.bold ? ' on' : '') + '" onclick="vsOvSet(\'bold\',' + !o.bold + ')"><b>B</b></button>' + ['left', 'center', 'right'].map(function(a){ return '<button class="vs-btn' + ((o.align || 'left') === a ? ' on' : '') + '" onclick="vsOvSet(\'align\',\'' + a + '\')">' + ({ left: '⟸', center: '≡', right: '⟹' })[a] + '</button>'; }).join('') + '<button class="vs-btn' + (o.shadow ? ' on' : '') + '" onclick="vsOvSet(\'shadow\',' + !o.shadow + ')">◐ Skugga</button></div>'
