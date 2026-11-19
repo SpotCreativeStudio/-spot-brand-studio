@@ -4108,7 +4108,7 @@ function saveDraft(){
   var t=document.getElementById("m-title"), c=document.getElementById("m-content");
   var title=t?t.value:"", content=c?c.value:"";
   var channels=[].slice.call(document.querySelectorAll("#manualChGrid .ch-pill.active")).map(function(p){return p.dataset.ch;});
-  if(!(title||"").trim()&&!(content||"").trim()){ showToast("Inget att spara – fyll i prompt eller innehåll."); return; }
+  if(!(title||"").trim()&&!(content||"").trim()&&!S._carouselPdf&&!S._postVideo){ showToast("Inget att spara – fyll i prompt eller innehåll."); return; }
   var draft = { title:title, content:content, channels:channels, proposals:(window._allChannelProposals||null), selected:(window._selectedProposalPerChannel||null), aiImageUrl:(S._aiImageUrl||null), imgPos:(S._imgPos||null), uploaded:(S._uploadedImageUrl||null), photoBox:(S._photoBox||null), elements:(S._elements||null), extra:_createExtra(), tags:(S.manualTags||[]), formats:_curFormats(), carouselPdf:(S._carouselPdf||null), video:(S._postVideo||null), activeTab:(window._activeProposalTab||null), blank:!!S._blankPick, tplPick:(S.manualTplPick||0) };
   fetch("/api/drafts", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(draft) })
     .then(function(r){ return r.json(); })
@@ -4817,7 +4817,7 @@ function addManualToReview() {
     // Manual mode: use form fields for all selected channels
     const title   = document.getElementById('m-title').value.trim();
     const content = document.getElementById('m-content').value.trim();
-    if (!content) { showToast('Fyll i innehåll', 'err'); return false; }
+    if (!content && !S._carouselPdf && !S._postVideo) { showToast('Fyll i innehåll', 'err'); return false; }
     channels.forEach(ch => {
       S.reviewQueue.push({
         id: 'pm-' + Date.now() + '-' + ch + '-' + Math.random().toString(36).slice(2,5),
