@@ -3729,8 +3729,33 @@ function vsAddText(){ _vsAddOv({ type: 'text', x: 0.08, y: 0.1, w: 0.84, text: '
 function vsAddImage(){ var i = document.getElementById('vsImgIn'); if (i) { i.value = ''; i.click(); } }
 function vsImgChosen(inp){
   var f = inp.files && inp.files[0]; if (!f) return; if (f.size > 8 * 1024 * 1024) { showToast('Bilden är för stor (max 8 MB)'); return; }
-  var r = new FileReader(); r.onload = function(e){ _csShrink(e.target.result).then(function(src){ if (!src) { showToast('Kunde inte läsa bilden'); return; } var im = new Image(); im.onload = function(){ var ar = im.width / im.height; _vs.imgs[src] = im; _vsAddOv({ type: 'image', src: src, ar: ar, x: 0.3, y: 0.3, w: 0.4 }); }; im.src = src; }); }; r.readAsDataURL(f);
+  var r = new FileReader(); r.onload = function(e){ _vsAddImgSrc(e.target.result, !/jpe?g/i.test(f.type)); }; r.readAsDataURL(f);
 }
+// Lägger till en bild som lager. Bilder med genomskinlighet (png, webp, gif) sparas som png så att bakgrunden inte blir svart
+function _vsAddImgSrc(url, alpha){
+  var im = new Image(); if (/^https?:/i.test(url)) im.crossOrigin = 'anonymous';
+  im.onload = function(){
+    var k = Math.min(1, 1080 / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k));
+    var src; try { c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); src = alpha ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.85); } catch (e) { src = url; }
+    var im2 = new Image(); im2.onload = function(){ _vs.imgs[src] = im2; _vsAddOv({ type: 'image', src: src, ar: im2.width / im2.height, x: 0.3, y: 0.3, w: 0.4 }); }; im2.src = src;
+  };
+  im.onerror = function(){ showToast('Kunde inte läsa bilden'); };
+  im.src = url;
+}
+// Välj bild från varumärkets bildbank
+function vsLibPicker(){
+  var lib = (typeof _getImgLib === 'function' ? _getImgLib() : []) || [];
+  if (!lib.length) { showToast('Bildbanken är tom – ladda upp bilder under Varumärke'); return; }
+  var folders = []; lib.forEach(function(x){ if (x.folder && folders.indexOf(x.folder) < 0) folders.push(x.folder); }); folders.sort();
+  var m = document.getElementById('vsLib'); if (!m) { m = document.createElement('div'); m.id = 'vsLib'; m.style.cssText = 'position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick = function(e){ if (e.target === m) m.style.display = 'none'; }; document.body.appendChild(m); }
+  var cur = _vs.libF || '', shown = lib.map(function(x, i){ return { x: x, i: i }; }).filter(function(o){ return !cur || o.x.folder === cur; });
+  var chip = function(v, l){ return '<button onclick="_vs.libF=' + JSON.stringify(v).replace(/"/g, '&quot;') + ';vsLibPicker()" style="font-size:12px;font-weight:600;padding:5px 10px;border-radius:999px;cursor:pointer;border:1px solid ' + (cur === v ? '#b31e59;background:#fff5f7;color:#b31e59' : '#e5e7eb;background:#fff;color:#374151') + '">' + l + '</button>'; };
+  m.style.display = 'flex';
+  m.innerHTML = '<div style="background:#fff;border-radius:14px;padding:16px;width:min(720px,100%);max-height:85vh;display:flex;flex-direction:column;gap:12px"><div style="display:flex;align-items:center"><b style="font-size:16px">📚 Välj från bildbanken</b><button onclick="document.getElementById(\'vsLib\').style.display=\'none\'" style="margin-left:auto;border:none;background:none;font-size:18px;cursor:pointer">✕</button></div>'
+    + (folders.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap">' + chip('', '🗂 Alla') + folders.map(function(f){ return chip(f, '📁 ' + _crEsc(f)); }).join('') + '</div>' : '')
+    + '<div style="overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">' + (shown.length ? shown.map(function(o){ return '<div onclick="vsLibUse(' + o.i + ')" style="aspect-ratio:1;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;cursor:pointer;background:#f3f4f6 url(' + JSON.stringify(o.x.url).replace(/"/g, '&quot;') + ') center/cover no-repeat" title="' + _crEsc(o.x.name || '') + '"></div>'; }).join('') : '<div style="grid-column:1/-1;color:#9ca3af;font-size:13px;padding:20px;text-align:center">Inga bilder i mappen.</div>') + '</div></div>';
+}
+function vsLibUse(i){ var x = _getImgLib()[i]; var m = document.getElementById('vsLib'); if (m) m.style.display = 'none'; if (!x) return; _vsAddImgSrc(x.url, /png|webp|gif/i.test(String(x.url).slice(0, 30)) || /\.(png|webp|gif)$/i.test(x.name || '')); }
 function vsAddLogo(){
   var src = ''; try { src = _logoSrc({}, null); } catch (e) {}
   if (!src) { showToast('Ingen logga uppladdad under Varumärke'); return; }
@@ -3810,7 +3835,7 @@ function _vsPanelFmt(f, st, dur, len){
 }
 function _vsPanelOv(){
   var o = _vsSelOv();
-  var h = '<label class="vs-lab">Lägg till</label><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="vs-btn" onclick="vsAddText()">T Text</button><button class="vs-btn" onclick="vsAddImage()">🖼 Bild</button><button class="vs-btn" onclick="vsAddLogo()">◎ Logga</button></div>';
+  var h = '<label class="vs-lab">Lägg till</label><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="vs-btn" onclick="vsAddText()">T Text</button><button class="vs-btn" onclick="vsAddImage()">🖼 Från datorn</button><button class="vs-btn" onclick="vsLibPicker()">📚 Bildbank</button><button class="vs-btn" onclick="vsAddLogo()">◎ Logga</button></div>';
   h += _vs.ov.length ? '<label class="vs-lab" style="margin-top:4px">Lager</label>' + _vs.ov.slice().reverse().map(function(x){ return '<div class="vs-ov' + (x.id === _vs.sel ? ' on' : '') + '" onclick="vsOvPick(\'' + x.id + '\')"><span>' + (x.type === 'image' ? (x.logo ? '◎' : '🖼') : 'T') + '</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (x.type === 'image' ? (x.logo ? 'Logga' : 'Bild') : _crEsc(String(x.text || '').split('\n')[0] || 'Text')) + '</span><span style="color:#9ca3af;font-size:11px">' + _vsTime(x.t0) + '–' + _vsTime(x.t1) + '</span></div>'; }).join('') : '<div style="font-size:12px;color:#9ca3af;line-height:1.5">Lägg till text, bilder eller loggan. De bränns in i videon i alla format och kan visas hela tiden eller bara under en del av klippet.</div>';
   if (!o) return h + (_vs.ov.length ? '<div style="font-size:11px;color:#9ca3af">Klicka på ett lager – eller direkt i videon – för att ändra det. Dra för att flytta, dra i hörnet för att ändra storlek.</div>' : '');
   h += '<div style="height:1px;background:#eee;margin:4px 0"></div>';
