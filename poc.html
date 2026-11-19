@@ -3663,7 +3663,7 @@ function editReviewCarousel(id){
     if (typeof renderReview === 'function') renderReview();
   } });
 }
-// ════════ VIDEOSTUDIO: samma video i rätt format för varje kanal (9:16, 4:5, 1:1, 16:9), klipp och omslag → mp4 ════════
+// ════════ VIDEOSTUDIO: samma video i rätt format för varje kanal (9:16, 4:5, 1:1, 16:9), klipp, omslag, text/bild/logga, ljud och tempo → mp4 ════════
 // Helt fristående från bildredigeraren. Originalet ligger kvar; varje format sparas som en egen mp4 i video.variants.
 var VS_FORMATS = [
   { k: '9x16', w: 1080, h: 1920, label: '9:16', use: 'Reels · TikTok · Stories' },
@@ -3671,7 +3671,7 @@ var VS_FORMATS = [
   { k: '1x1', w: 1080, h: 1080, label: '1:1', use: 'LinkedIn · Facebook' },
   { k: '16x9', w: 1920, h: 1080, label: '16:9', use: 'Liggande · YouTube' }
 ];
-var _vs = { video: null, post: null, onSave: null, set: {}, on: {}, cur: '9x16', start: 0, end: 0, cover: 0, el: null, busy: false };
+var _vs = { video: null, post: null, onSave: null, set: {}, on: {}, cur: '9x16', start: 0, end: 0, cover: 0, el: null, busy: false, ov: [], sel: null, au: {}, speed: 1, tab: 'fmt', imgs: {} };
 function _vsFmt(k){ return VS_FORMATS.filter(function(f){ return f.k === k; })[0]; }
 function _vsMime(){ var t = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/mp4']; for (var i = 0; i < t.length; i++) { try { if (window.MediaRecorder && MediaRecorder.isTypeSupported(t[i])) return t[i]; } catch (e) {} } return ''; }
 function _vsDefaultsFor(channels){
@@ -3693,80 +3693,201 @@ function _vsDraw(ctx, v, W, H, st){
   ctx.drawImage(v, x, y, iw, ih);
 }
 
+// ── Lager ovanpå videon: text, bild och logga. Läge och storlek sparas som andel av bilden, så att de passar alla format ──
+function _vsImg(src){ var c = _vs.imgs[src]; if (!c) { c = new Image(); c.onload = function(){ _vsPaint(); }; c.src = src; _vs.imgs[src] = c; } return c; }
+function _vsOvAlpha(o, t){
+  var t0 = o.t0 || 0, t1 = o.t1 == null ? 1e9 : o.t1; if (t < t0 || t > t1) return 0;
+  if (!o.fade) return o.op != null ? o.op : 1;
+  var a = Math.min(1, (t - t0) / 0.4, (t1 - t) / 0.4); return Math.max(0, a) * (o.op != null ? o.op : 1);
+}
+function _vsDrawOv(ctx, W, H, t, showSel){
+  (_vs.ov || []).forEach(function(o){
+    var a = _vsOvAlpha(o, t); var sel = showSel && o.id === _vs.sel;
+    if (a <= 0 && !sel) return;
+    ctx.save(); ctx.globalAlpha = sel && a <= 0 ? 0.35 : a;
+    var x = o.x * W, y = o.y * H, w = o.w * W, h;
+    if (o.type === 'image') {
+      var im = _vsImg(o.src), ar = (im.naturalWidth && im.naturalHeight) ? im.naturalWidth / im.naturalHeight : (o.ar || 1); h = w / ar;
+      if (im.complete && im.naturalWidth) ctx.drawImage(im, x, y, w, h);
+    } else {
+      var fs = Math.max(6, o.size * W); ctx.font = (o.bold ? '700 ' : '400 ') + fs + 'px ' + _csFontOf(o); ctx.textBaseline = 'top';
+      var lines = []; String(o.text || '').split('\n').forEach(function(p){ var l = _crWrap(ctx, p, w); lines = lines.concat(l.length ? l : ['']); });
+      var lh = fs * 1.2, pad = o.plate ? fs * 0.35 : 0; h = lines.length * lh;
+      if (o.plate) { var mw = 0; lines.forEach(function(l){ mw = Math.max(mw, ctx.measureText(l).width); }); var px0 = o.align === 'center' ? x + (w - mw) / 2 : (o.align === 'right' ? x + w - mw : x); ctx.fillStyle = o.plate; ctx.fillRect(px0 - pad, y - pad, mw + pad * 2, h + pad * 2); }
+      if (o.shadow) { ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = fs * 0.25; ctx.shadowOffsetY = fs * 0.05; }
+      ctx.fillStyle = o.color || '#fff';
+      lines.forEach(function(l, i){ var lw = ctx.measureText(l).width, lx = o.align === 'center' ? x + (w - lw) / 2 : (o.align === 'right' ? x + w - lw : x); ctx.fillText(l, lx, y + i * lh + (lh - fs) / 2); });
+    }
+    if (showSel) o._bh = h / H;
+    ctx.restore();
+    if (sel) { ctx.save(); ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = Math.max(2, W / 400); ctx.setLineDash([W / 90, W / 140]); ctx.strokeRect(x - 4, y - 4, w + 8, h + 8); ctx.setLineDash([]); var hs = Math.max(10, W / 45); ctx.fillStyle = '#fff'; ctx.fillRect(x + w - hs / 2 + 4, y + h - hs / 2 + 4, hs, hs); ctx.strokeRect(x + w - hs / 2 + 4, y + h - hs / 2 + 4, hs, hs); ctx.restore(); }
+  });
+}
+function _vsSelOv(){ return (_vs.ov || []).filter(function(o){ return o.id === _vs.sel; })[0] || null; }
+function _vsAddOv(o){ var t = _vs.el ? _vs.el.currentTime : 0; o.id = _csId(); if (o.t0 == null) o.t0 = Math.max(_vs.start, 0); if (o.t1 == null) o.t1 = _vs.end; _vs.ov.push(o); _vs.sel = o.id; _vs.tab = 'ov'; _vsRender(); }
+function vsAddText(){ _vsAddOv({ type: 'text', x: 0.08, y: 0.1, w: 0.84, text: 'Skriv din text', size: 0.07, bold: true, color: '#ffffff', align: 'center', shadow: true, plate: '' }); }
+function vsAddImage(){ var i = document.getElementById('vsImgIn'); if (i) { i.value = ''; i.click(); } }
+function vsImgChosen(inp){
+  var f = inp.files && inp.files[0]; if (!f) return; if (f.size > 8 * 1024 * 1024) { showToast('Bilden är för stor (max 8 MB)'); return; }
+  var r = new FileReader(); r.onload = function(e){ _csShrink(e.target.result).then(function(src){ if (!src) { showToast('Kunde inte läsa bilden'); return; } var im = new Image(); im.onload = function(){ var ar = im.width / im.height; _vs.imgs[src] = im; _vsAddOv({ type: 'image', src: src, ar: ar, x: 0.3, y: 0.3, w: 0.4 }); }; im.src = src; }); }; r.readAsDataURL(f);
+}
+function vsAddLogo(){
+  var src = ''; try { src = _logoSrc({}, null); } catch (e) {}
+  if (!src) { showToast('Ingen logga uppladdad under Varumärke'); return; }
+  var im = new Image(); im.onload = function(){ _vs.imgs[src] = im; _vsAddOv({ type: 'image', src: src, ar: im.width / im.height, x: 0.06, y: 0.05, w: 0.22, logo: true }); }; im.onerror = function(){ showToast('Kunde inte läsa loggan'); }; im.src = src;
+}
+function vsOvSet(k, v, light){ var o = _vsSelOv(); if (!o) return; o[k] = v; if (light) { _vsPaint(); return; } _vsRender(); }
+function vsOvTime(which){ var o = _vsSelOv(); if (!o || !_vs.el) return; var t = _vs.el.currentTime; if (which === 'in') { o.t0 = Math.min(t, (o.t1 == null ? 1e9 : o.t1) - 0.2); } else if (which === 'out') { o.t1 = Math.max(t, (o.t0 || 0) + 0.2); } else { o.t0 = _vs.start; o.t1 = _vs.end; } _vsRender(); }
+function vsOvDel(){ _vs.ov = _vs.ov.filter(function(o){ return o.id !== _vs.sel; }); _vs.sel = null; _vsRender(); }
+function vsOvPick(id){ _vs.sel = id; var o = _vsSelOv(); if (o && _vs.el && (_vs.el.currentTime < o.t0 || _vs.el.currentTime > o.t1)) vsSeek(o.t0 + 0.05); _vsRender(); }
+function vsOvLayer(d){ var o = _vsSelOv(); if (!o) return; var i = _vs.ov.indexOf(o), j = i + d; if (j < 0 || j >= _vs.ov.length) return; _vs.ov[i] = _vs.ov[j]; _vs.ov[j] = o; _vsRender(); }
+
+// ── Ljud och tempo ──
+function vsAu(k, v, light){ _vs.au[k] = v; if (_vs.el) { _vs.el.volume = Math.min(1, _vs.au.vol != null ? _vs.au.vol : 1); } if (light) return; _vsRender(); }
+function vsSpeed(s){ _vs.speed = s; if (_vs.el) _vs.el.playbackRate = s; _vsRender(); }
+function _vsGainAt(t){
+  var au = _vs.au || {}; if (au.mute) return 0;
+  var g = au.vol != null ? au.vol : 1, a = t - _vs.start, b = _vs.end - t;
+  if (au.fin && a < au.fin) g *= Math.max(0, a / au.fin);
+  if (au.fout && b < au.fout) g *= Math.max(0, b / au.fout);
+  return g;
+}
+function vsTab(t){ _vs.tab = t; _vsRender(); }
+
 // ── Öppna studion ── opts: { video, post, channels, onSave(video) }
 function openVideoStudio(opts){
   opts = opts || {}; var v = opts.video; if (!v || !v.id) { showToast('Ladda upp en video först'); return; }
   if (!_vsMime()) { showToast('Din webbläsare kan inte skapa mp4 – använd Chrome, Edge eller Safari'); return; }
+  if (typeof _csLoadFonts === 'function') _csLoadFonts();
   _vs.video = v; _vs.post = opts.post || null; _vs.onSave = opts.onSave || null;
   var ed = v.edit || {};
   _vs.set = _csClone(ed.set || {}); _vs.on = _csClone(ed.on || _vsDefaultsFor(opts.channels));
   VS_FORMATS.forEach(function(f){ if (!_vs.set[f.k]) _vs.set[f.k] = { mode: 'fill', zoom: 1, px: 0, py: 0, bg: 'blur' }; });
   _vs.cur = Object.keys(_vs.on).filter(function(k){ return _vs.on[k]; })[0] || '9x16';
   _vs.start = ed.start || 0; _vs.end = ed.end || 0; _vs.cover = ed.cover || 0;
+  _vs.ov = _csClone(ed.ov || []); _vs.au = _csClone(ed.au || { mute: false, vol: 1, fin: 0, fout: 0 }); _vs.speed = ed.speed || 1; _vs.sel = null; _vs.tab = 'fmt';
+  _vs.ov.forEach(function(o){ if (o.type === 'image') _vsImg(o.src); });
   var m = document.getElementById('vsStudio');
   if (!m) {
     m = document.createElement('div'); m.id = 'vsStudio';
     m.style.cssText = 'position:fixed;inset:0;background:rgba(17,17,17,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:12px';
     document.body.appendChild(m);
-    var st = document.createElement('style'); st.textContent = '#vsStudio .vs-btn{font-size:12px;font-weight:600;padding:7px 11px;border-radius:8px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;color:#111}#vsStudio .vs-btn:hover{background:#f9fafb}#vsStudio .vs-btn.pri{background:#b31e59;border-color:#b31e59;color:#fff}#vsStudio .vs-btn.on{background:#111;color:#fff;border-color:#111}#vsStudio .vs-f{display:flex;gap:10px;align-items:center;padding:8px;border-radius:10px;border:2px solid transparent;cursor:pointer;background:#fff}#vsStudio .vs-f.cur{border-color:#b31e59}#vsStudio label.vs-lab{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.04em}';
+    var st = document.createElement('style'); st.textContent = '#vsStudio .vs-btn{font-size:12px;font-weight:600;padding:7px 11px;border-radius:8px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;color:#111}#vsStudio .vs-btn:hover{background:#f9fafb}#vsStudio .vs-btn.pri{background:#b31e59;border-color:#b31e59;color:#fff}#vsStudio .vs-btn.on{background:#111;color:#fff;border-color:#111}#vsStudio .vs-f{display:flex;gap:10px;align-items:center;padding:8px;border-radius:10px;border:2px solid transparent;cursor:pointer;background:#fff}#vsStudio .vs-f.cur{border-color:#b31e59}#vsStudio label.vs-lab{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.04em}#vsStudio .vs-tab{flex:1;font-size:12px;font-weight:700;padding:9px 4px;border:none;background:none;cursor:pointer;color:#6b7280;border-bottom:2px solid transparent}#vsStudio .vs-tab.on{color:#b31e59;border-bottom-color:#b31e59}#vsStudio .vs-ov{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;border:1px solid #e5e7eb;cursor:pointer;font-size:12px;background:#fff}#vsStudio .vs-ov.on{border-color:#3b82f6;background:#eff6ff}#vsStudio .vs-row{display:flex;align-items:center;gap:8px}#vsStudio .vs-row input[type=range]{flex:1}#vsStudio .vs-sw{width:22px;height:22px;border-radius:50%;cursor:pointer;border:1px solid #d1d5db;flex-shrink:0}';
     document.head.appendChild(st);
+    document.addEventListener('keydown', function(e){
+      var mm = document.getElementById('vsStudio'); if (!mm || mm.style.display === 'none') return;
+      var a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+      if ((e.key === 'Delete' || e.key === 'Backspace') && _vs.sel) { e.preventDefault(); vsOvDel(); }
+      else if (e.key === ' ') { e.preventDefault(); vsPlay(); }
+    });
   }
   m.style.display = 'flex';
   m.innerHTML = '<div style="background:#fff;border-radius:16px;padding:20px;color:#6b7280;font-size:14px">⏳ Laddar videon…</div>';
   var el = document.createElement('video'); el.muted = true; el.playsInline = true; el.preload = 'auto'; el.src = _vidUrl(v.id);
-  _vs.el = el;
-  var ready = function(){ if (!_vs.end || _vs.end > el.duration) _vs.end = el.duration; _vsRender(); try { el.currentTime = _vs.cover || 0; } catch (e) {} };
+  _vs.el = el; el.playbackRate = _vs.speed;
+  var ready = function(){ if (!_vs.end || _vs.end > el.duration) _vs.end = el.duration; _vs.ov.forEach(function(o){ if (o.t1 == null || o.t1 > el.duration) o.t1 = _vs.end; }); _vsRender(); try { el.currentTime = _vs.cover || 0; } catch (e) {} };
   // Vissa filer (t.ex. inspelade i webbläsaren) saknar längd tills man hoppat till slutet
   el.onloadedmetadata = function(){ if (isFinite(el.duration)) return ready(); el.ondurationchange = function(){ if (isFinite(el.duration)) { el.ondurationchange = null; ready(); } }; try { el.currentTime = 1e9; } catch (e) {} };
   el.onseeked = el.ontimeupdate = function(){ _vsPaint(); _vsTimeUi(); };
   el.onerror = function(){ m.innerHTML = '<div style="background:#fff;border-radius:16px;padding:20px;font-size:14px">⚠️ Kunde inte läsa videon. <button class="vs-btn" onclick="closeVideoStudio()">Stäng</button></div>'; };
 }
 function closeVideoStudio(){ var m = document.getElementById('vsStudio'); if (m) m.style.display = 'none'; if (_vs.el) { try { _vs.el.pause(); } catch (e) {} } _vs.el = null; cancelAnimationFrame(_vs._raf); }
-function _vsRender(){
-  var m = document.getElementById('vsStudio'); if (!m || !_vs.el) return;
-  var f = _vsFmt(_vs.cur), st = _vs.set[_vs.cur], dur = _vs.el.duration || 0;
-  var maxH = Math.max(260, window.innerHeight - 290), maxW = Math.max(260, Math.min(window.innerWidth - 640, 760));
-  var k = Math.min(maxW / f.w, maxH / f.h), cw = Math.round(f.w * k), ch = Math.round(f.h * k);
-  var list = VS_FORMATS.map(function(x){
-    var tw = 64, th = Math.round(tw * x.h / x.w); if (th > 90) { th = 90; tw = Math.round(th * x.w / x.h); }
-    return '<div class="vs-f' + (x.k === _vs.cur ? ' cur' : '') + '" onclick="vsPick(\'' + x.k + '\')"><input type="checkbox" ' + (_vs.on[x.k] ? 'checked' : '') + ' onclick="event.stopPropagation();vsToggle(\'' + x.k + '\',this.checked)" title="Exportera det här formatet"><canvas data-k="' + x.k + '" width="' + tw * 2 + '" height="' + th * 2 + '" style="width:' + tw + 'px;height:' + th + 'px;border-radius:6px;background:#000;flex-shrink:0"></canvas><div><b style="font-size:14px">' + x.label + '</b><div style="font-size:11px;color:#6b7280">' + x.use + '</div><div style="font-size:10px;color:#9ca3af">' + x.w + ' × ' + x.h + '</div></div></div>';
-  }).join('');
-  var len = Math.max(0, _vs.end - _vs.start), sel = Object.keys(_vs.on).filter(function(x){ return _vs.on[x]; }).length;
-  m.innerHTML = '<div style="background:#faf9f7;border-radius:16px;width:min(1280px,100%);height:100%;max-height:960px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.35)">'
-    + '<div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid #eee;background:#fff;flex-wrap:wrap"><b style="font-size:16px">🎬 Videostudio</b><span style="font-size:12px;color:#6b7280">' + _crEsc(_vs.video.name || '') + '</span><span style="flex:1"></span>'
-    + '<span id="vsProg" style="font-size:12px;color:#b31e59;font-weight:600"></span><button class="vs-btn" onclick="closeVideoStudio()">Avbryt</button><button class="vs-btn pri" id="vsSaveBtn" onclick="vsExport()">💾 Skapa ' + sel + ' ' + (sel === 1 ? 'video' : 'videor') + '</button></div>'
-    + '<div style="flex:1;min-height:0;display:flex">'
-    + '<div style="width:250px;flex-shrink:0;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px;border-right:1px solid #eee"><label class="vs-lab">Format · kryssa i de som ska skapas</label>' + list + '</div>'
-    + '<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#ece9e4;padding:12px">'
-    + '<canvas id="vsMain" width="' + f.w / 2 + '" height="' + f.h / 2 + '" onpointerdown="vsPanDown(event)" onwheel="vsWheel(event)" style="width:' + cw + 'px;height:' + ch + 'px;background:#000;cursor:grab;box-shadow:0 6px 24px rgba(0,0,0,.2);touch-action:none"></canvas>'
-    + '<div style="font-size:11px;color:#6b7280">Dra i bilden för att flytta · scrolla eller använd reglaget för att zooma</div></div>'
-    + '<div style="width:270px;flex-shrink:0;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;border-left:1px solid #eee;background:#fff">'
-    + '<label class="vs-lab">' + f.label + ' · placering</label><div style="display:flex;gap:6px"><button class="vs-btn' + (st.mode !== 'fit' ? ' on' : '') + '" onclick="vsSet(\'mode\',\'fill\')">Fyll (beskär)</button><button class="vs-btn' + (st.mode === 'fit' ? ' on' : '') + '" onclick="vsSet(\'mode\',\'fit\')">Passa in</button></div>'
+function _vsSw(fn, cur, none){ return (none ? '<span class="vs-sw" title="Ingen" onclick="' + fn + '(\'\')" style="background:linear-gradient(135deg,#fff 45%,#ef4444 47%,#ef4444 53%,#fff 55%)' + (!cur ? ';outline:3px solid #b31e59;outline-offset:1px' : '') + '"></span>' : '') + ['#ffffff', '#111111'].concat(_crColors()).filter(function(c, i, a){ return a.indexOf(c) === i; }).map(function(c){ return '<span class="vs-sw" onclick="' + fn + '(\'' + c + '\')" style="background:' + c + (String(cur).toLowerCase() === c.toLowerCase() ? ';outline:3px solid #b31e59;outline-offset:1px' : '') + '"></span>'; }).join('') + '<input type="color" value="' + (/^#[0-9a-f]{6}$/i.test(cur) ? cur : '#ffffff') + '" onchange="' + fn + '(this.value)" style="width:28px;height:26px;border:none;background:none;padding:0;cursor:pointer">'; }
+function vsOvColor(c){ vsOvSet('color', c); }
+function vsOvPlate(c){ vsOvSet('plate', c); }
+function _vsPanelFmt(f, st, dur, len){
+  return '<label class="vs-lab">' + f.label + ' · placering</label><div style="display:flex;gap:6px"><button class="vs-btn' + (st.mode !== 'fit' ? ' on' : '') + '" onclick="vsSet(\'mode\',\'fill\')">Fyll (beskär)</button><button class="vs-btn' + (st.mode === 'fit' ? ' on' : '') + '" onclick="vsSet(\'mode\',\'fit\')">Passa in</button></div>'
     + '<label class="vs-lab">Zoom</label><div style="display:flex;align-items:center;gap:8px"><input type="range" min="1" max="3" step="0.05" value="' + st.zoom + '" oninput="vsSet(\'zoom\',+this.value,true)" style="flex:1"><button class="vs-btn" onclick="vsSet(\'reset\')">↺</button></div>'
     + (st.mode === 'fit' ? '<label class="vs-lab">Bakgrund</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><button class="vs-btn' + (st.bg === 'blur' ? ' on' : '') + '" onclick="vsSet(\'bg\',\'blur\')">Oskarp</button>' + _crColors().map(function(c){ return '<span onclick="vsSet(\'bg\',\'' + c + '\')" style="width:24px;height:24px;border-radius:50%;cursor:pointer;border:1px solid #d1d5db;background:' + c + (st.bg === c ? ';outline:3px solid #b31e59;outline-offset:1px' : '') + '"></span>'; }).join('') + '</div>' : '')
     + '<button class="vs-btn" onclick="vsCopyToAll()">⧉ Använd placeringen i alla format</button>'
     + '<div style="height:1px;background:#eee;margin:4px 0"></div>'
     + '<label class="vs-lab">Klipp</label>'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="vs-btn" onclick="vsMark(\'start\')">⇤ Start här</button><button class="vs-btn" onclick="vsMark(\'end\')">Slut här ⇥</button></div>'
-    + '<div style="font-size:12px;color:#374151">Från <b>' + _vsTime(_vs.start) + '</b> till <b>' + _vsTime(_vs.end) + '</b> · längd <b>' + _vsTime(len) + '</b> av ' + _vsTime(dur) + '</div>'
-    + (len > 90 ? '<div style="font-size:11px;color:#b45309">Över 90 s – Instagram Reels kan korta ner det, LinkedIn och TikTok går bra.</div>' : '')
+    + '<div style="font-size:12px;color:#374151">Från <b>' + _vsTime(_vs.start) + '</b> till <b>' + _vsTime(_vs.end) + '</b> · längd <b>' + _vsTime(len / (_vs.speed || 1)) + '</b> av ' + _vsTime(dur) + '</div>'
+    + (len / (_vs.speed || 1) > 90 ? '<div style="font-size:11px;color:#b45309">Över 90 s – Instagram Reels kan korta ner det, LinkedIn och TikTok går bra.</div>' : '')
     + '<div style="height:1px;background:#eee;margin:4px 0"></div>'
-    + '<label class="vs-lab">Omslag</label><button class="vs-btn" onclick="vsMark(\'cover\')">🖼 Använd den här bildrutan som omslag</button><div style="font-size:12px;color:#6b7280">Omslag vid ' + _vsTime(_vs.cover) + '</div>'
-    + '</div></div>'
+    + '<label class="vs-lab">Omslag</label><button class="vs-btn" onclick="vsMark(\'cover\')">🖼 Använd den här bildrutan som omslag</button><div style="font-size:12px;color:#6b7280">Omslag vid ' + _vsTime(_vs.cover) + '</div>';
+}
+function _vsPanelOv(){
+  var o = _vsSelOv();
+  var h = '<label class="vs-lab">Lägg till</label><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="vs-btn" onclick="vsAddText()">T Text</button><button class="vs-btn" onclick="vsAddImage()">🖼 Bild</button><button class="vs-btn" onclick="vsAddLogo()">◎ Logga</button></div>';
+  h += _vs.ov.length ? '<label class="vs-lab" style="margin-top:4px">Lager</label>' + _vs.ov.slice().reverse().map(function(x){ return '<div class="vs-ov' + (x.id === _vs.sel ? ' on' : '') + '" onclick="vsOvPick(\'' + x.id + '\')"><span>' + (x.type === 'image' ? (x.logo ? '◎' : '🖼') : 'T') + '</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (x.type === 'image' ? (x.logo ? 'Logga' : 'Bild') : _crEsc(String(x.text || '').split('\n')[0] || 'Text')) + '</span><span style="color:#9ca3af;font-size:11px">' + _vsTime(x.t0) + '–' + _vsTime(x.t1) + '</span></div>'; }).join('') : '<div style="font-size:12px;color:#9ca3af;line-height:1.5">Lägg till text, bilder eller loggan. De bränns in i videon i alla format och kan visas hela tiden eller bara under en del av klippet.</div>';
+  if (!o) return h + (_vs.ov.length ? '<div style="font-size:11px;color:#9ca3af">Klicka på ett lager – eller direkt i videon – för att ändra det. Dra för att flytta, dra i hörnet för att ändra storlek.</div>' : '');
+  h += '<div style="height:1px;background:#eee;margin:4px 0"></div>';
+  if (o.type === 'text') {
+    h += '<label class="vs-lab">Text</label><textarea rows="3" oninput="vsOvSet(\'text\',this.value,true)" onchange="_vsRender()" style="font-size:13px;padding:8px;border:1px solid #e5e7eb;border-radius:8px;resize:vertical;font-family:inherit">' + _crEsc(o.text) + '</textarea>'
+      + '<label class="vs-lab">Typsnitt</label><select onchange="vsOvSet(\'font\',this.value)" style="padding:7px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px">' + CS_FONTS.map(function(f){ return '<option' + ((o.font || CS_FONTS[0]) === f ? ' selected' : '') + '>' + f + '</option>'; }).join('') + '</select>'
+      + '<label class="vs-lab">Storlek</label><div class="vs-row"><input type="range" min="0.02" max="0.2" step="0.002" value="' + o.size + '" oninput="vsOvSet(\'size\',+this.value,true)"></div>'
+      + '<div style="display:flex;gap:5px;flex-wrap:wrap"><button class="vs-btn' + (o.bold ? ' on' : '') + '" onclick="vsOvSet(\'bold\',' + !o.bold + ')"><b>B</b></button>' + ['left', 'center', 'right'].map(function(a){ return '<button class="vs-btn' + ((o.align || 'left') === a ? ' on' : '') + '" onclick="vsOvSet(\'align\',\'' + a + '\')">' + ({ left: '⟸', center: '≡', right: '⟹' })[a] + '</button>'; }).join('') + '<button class="vs-btn' + (o.shadow ? ' on' : '') + '" onclick="vsOvSet(\'shadow\',' + !o.shadow + ')">◐ Skugga</button></div>'
+      + '<label class="vs-lab">Färg</label><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">' + _vsSw('vsOvColor', o.color) + '</div>'
+      + '<label class="vs-lab">Platta bakom texten</label><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">' + _vsSw('vsOvPlate', o.plate, true) + '</div>';
+  } else {
+    h += '<label class="vs-lab">Storlek</label><div class="vs-row"><input type="range" min="0.05" max="1" step="0.01" value="' + o.w + '" oninput="vsOvSet(\'w\',+this.value,true)"></div>';
+  }
+  h += '<label class="vs-lab">Opacitet</label><div class="vs-row"><input type="range" min="0.1" max="1" step="0.05" value="' + (o.op != null ? o.op : 1) + '" oninput="vsOvSet(\'op\',+this.value,true)"></div>'
+    + '<div style="height:1px;background:#eee;margin:4px 0"></div><label class="vs-lab">Visas</label>'
+    + '<div style="font-size:12px;color:#374151">Från <b>' + _vsTime(o.t0) + '</b> till <b>' + _vsTime(o.t1) + '</b></div>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="vs-btn" onclick="vsOvTime(\'in\')">⇤ Visa från här</button><button class="vs-btn" onclick="vsOvTime(\'out\')">Dölj här ⇥</button><button class="vs-btn" onclick="vsOvTime(\'all\')">Hela klippet</button></div>'
+    + '<label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox"' + (o.fade ? ' checked' : '') + ' onchange="vsOvSet(\'fade\',this.checked)"> Tona in och ut</label>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px"><button class="vs-btn" onclick="vsOvLayer(1)">⬆ Fram</button><button class="vs-btn" onclick="vsOvLayer(-1)">⬇ Bak</button><button class="vs-btn" onclick="vsOvDel()" style="color:#b31e59">🗑 Ta bort</button></div>';
+  return h;
+}
+function _vsPanelAu(){
+  var au = _vs.au, sp = _vs.speed || 1;
+  return '<label class="vs-lab">Ljud</label><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox"' + (au.mute ? ' checked' : '') + ' onchange="vsAu(\'mute\',this.checked)"> 🔇 Ta bort ljudet</label>'
+    + (au.mute ? '' : '<label class="vs-lab">Volym</label><div class="vs-row"><input type="range" min="0" max="2" step="0.05" value="' + (au.vol != null ? au.vol : 1) + '" oninput="vsAu(\'vol\',+this.value,true);this.nextElementSibling.textContent=Math.round(this.value*100)+\' %\'"><b style="font-size:12px;width:44px;text-align:right">' + Math.round((au.vol != null ? au.vol : 1) * 100) + ' %</b></div>'
+      + '<label class="vs-lab">Tona in</label><div class="vs-row"><input type="range" min="0" max="5" step="0.5" value="' + (au.fin || 0) + '" oninput="vsAu(\'fin\',+this.value,true);this.nextElementSibling.textContent=this.value+\' s\'"><b style="font-size:12px;width:44px;text-align:right">' + (au.fin || 0) + ' s</b></div>'
+      + '<label class="vs-lab">Tona ut</label><div class="vs-row"><input type="range" min="0" max="5" step="0.5" value="' + (au.fout || 0) + '" oninput="vsAu(\'fout\',+this.value,true);this.nextElementSibling.textContent=this.value+\' s\'"><b style="font-size:12px;width:44px;text-align:right">' + (au.fout || 0) + ' s</b></div>'
+      + '<div style="font-size:11px;color:#9ca3af">Över 100 % förstärks ljudet i den färdiga videon. Förhandsvisningen spelar som mest 100 %.</div>')
+    + '<div style="height:1px;background:#eee;margin:4px 0"></div><label class="vs-lab">Tempo</label><div style="display:flex;gap:6px;flex-wrap:wrap">' + [0.5, 0.75, 1, 1.25, 1.5, 2].map(function(s){ return '<button class="vs-btn' + (sp === s ? ' on' : '') + '" onclick="vsSpeed(' + s + ')">' + String(s).replace('.', ',') + 'x</button>'; }).join('') + '</div>'
+    + '<div style="font-size:12px;color:#374151">Färdig längd: <b>' + _vsTime(Math.max(0, _vs.end - _vs.start) / sp) + '</b></div>';
+}
+function _vsRender(){
+  var m = document.getElementById('vsStudio'); if (!m || !_vs.el) return;
+  var f = _vsFmt(_vs.cur), st = _vs.set[_vs.cur], dur = _vs.el.duration || 0;
+  var maxH = Math.max(260, window.innerHeight - 290), maxW = Math.max(260, Math.min(window.innerWidth - 660, 760));
+  var k = Math.min(maxW / f.w, maxH / f.h), cw = Math.round(f.w * k), ch = Math.round(f.h * k);
+  var list = VS_FORMATS.map(function(x){
+    var tw = 64, th = Math.round(tw * x.h / x.w); if (th > 90) { th = 90; tw = Math.round(th * x.w / x.h); }
+    return '<div class="vs-f' + (x.k === _vs.cur ? ' cur' : '') + '" onclick="vsPick(\'' + x.k + '\')"><input type="checkbox" ' + (_vs.on[x.k] ? 'checked' : '') + ' onclick="event.stopPropagation();vsToggle(\'' + x.k + '\',this.checked)" title="Exportera det här formatet"><canvas data-k="' + x.k + '" width="' + tw * 2 + '" height="' + th * 2 + '" style="width:' + tw + 'px;height:' + th + 'px;border-radius:6px;background:#000;flex-shrink:0"></canvas><div><b style="font-size:14px">' + x.label + '</b><div style="font-size:11px;color:#6b7280">' + x.use + '</div><div style="font-size:10px;color:#9ca3af">' + x.w + ' × ' + x.h + '</div></div></div>';
+  }).join('');
+  var len = Math.max(0, _vs.end - _vs.start), sel = Object.keys(_vs.on).filter(function(x){ return _vs.on[x]; }).length;
+  var o = _vsSelOv();
+  var panel = _vs.tab === 'ov' ? _vsPanelOv() : (_vs.tab === 'au' ? _vsPanelAu() : _vsPanelFmt(f, st, dur, len));
+  m.innerHTML = '<div style="background:#faf9f7;border-radius:16px;width:min(1320px,100%);height:100%;max-height:960px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.35)">'
+    + '<div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid #eee;background:#fff;flex-wrap:wrap"><b style="font-size:16px">🎬 Videostudio</b><span style="font-size:12px;color:#6b7280">' + _crEsc(_vs.video.name || '') + '</span><span style="flex:1"></span>'
+    + '<span id="vsProg" style="font-size:12px;color:#b31e59;font-weight:600"></span><button class="vs-btn" onclick="closeVideoStudio()">Avbryt</button><button class="vs-btn pri" id="vsSaveBtn" onclick="vsExport()">💾 Skapa ' + sel + ' ' + (sel === 1 ? 'video' : 'videor') + '</button></div>'
+    + '<div style="flex:1;min-height:0;display:flex">'
+    + '<div style="width:250px;flex-shrink:0;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px;border-right:1px solid #eee"><label class="vs-lab">Format · kryssa i de som ska skapas</label>' + list + '</div>'
+    + '<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#ece9e4;padding:12px">'
+    + '<canvas id="vsMain" width="' + f.w / 2 + '" height="' + f.h / 2 + '" onpointerdown="vsPanDown(event)" onwheel="vsWheel(event)" style="width:' + cw + 'px;height:' + ch + 'px;background:#000;cursor:grab;box-shadow:0 6px 24px rgba(0,0,0,.2);touch-action:none"></canvas>'
+    + '<div style="font-size:11px;color:#6b7280">' + (_vs.ov.length ? 'Klicka på text eller bild för att flytta den · dra i bakgrunden för att flytta videon · scrolla för att zooma' : 'Dra i bilden för att flytta · scrolla eller använd reglaget för att zooma') + '</div></div>'
+    + '<input id="vsImgIn" type="file" accept="image/*" style="display:none" onchange="vsImgChosen(this)">'
+    + '<div style="width:300px;flex-shrink:0;display:flex;flex-direction:column;border-left:1px solid #eee;background:#fff">'
+    + '<div style="display:flex;border-bottom:1px solid #eee;padding:0 8px"><button class="vs-tab' + (_vs.tab === 'fmt' ? ' on' : '') + '" onclick="vsTab(\'fmt\')">Format & klipp</button><button class="vs-tab' + (_vs.tab === 'ov' ? ' on' : '') + '" onclick="vsTab(\'ov\')">Text & bild' + (_vs.ov.length ? ' (' + _vs.ov.length + ')' : '') + '</button><button class="vs-tab' + (_vs.tab === 'au' ? ' on' : '') + '" onclick="vsTab(\'au\')">Ljud & tempo</button></div>'
+    + '<div style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px">' + panel + '</div></div>'
+    + '</div>'
     + '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid #eee;background:#fff"><button class="vs-btn" id="vsPlay" onclick="vsPlay()">▶</button><span id="vsNow" style="font-size:12px;width:90px;color:#374151"></span>'
-    + '<div style="position:relative;flex:1;height:28px"><div style="position:absolute;top:12px;left:0;right:0;height:4px;background:#e5e7eb;border-radius:2px"></div><div style="position:absolute;top:10px;height:8px;border-radius:4px;background:#f0d5e1;left:' + (dur ? _vs.start / dur * 100 : 0) + '%;width:' + (dur ? len / dur * 100 : 0) + '%"></div><input id="vsSeek" type="range" min="0" max="' + dur + '" step="0.05" value="' + (_vs.el.currentTime || 0) + '" oninput="vsSeek(+this.value)" style="position:absolute;inset:0;width:100%;margin:0;background:transparent"></div>'
+    + '<div style="position:relative;flex:1;height:28px"><div style="position:absolute;top:12px;left:0;right:0;height:4px;background:#e5e7eb;border-radius:2px"></div><div style="position:absolute;top:10px;height:8px;border-radius:4px;background:#f0d5e1;left:' + (dur ? _vs.start / dur * 100 : 0) + '%;width:' + (dur ? len / dur * 100 : 0) + '%"></div>'
+    + (o && dur ? '<div title="När lagret visas" style="position:absolute;top:22px;height:4px;border-radius:2px;background:#3b82f6;left:' + (o.t0 / dur * 100) + '%;width:' + (Math.max(0, Math.min(o.t1, dur) - o.t0) / dur * 100) + '%"></div>' : '')
+    + '<input id="vsSeek" type="range" min="0" max="' + dur + '" step="0.05" value="' + (_vs.el.currentTime || 0) + '" oninput="vsSeek(+this.value)" style="position:absolute;inset:0;width:100%;margin:0;background:transparent"></div>'
     + '<span style="font-size:12px;color:#6b7280">' + _vsTime(dur) + '</span></div></div>';
   _vsPaint(); _vsTimeUi();
 }
 function _vsPaint(){
   var v = _vs.el; if (!v || v.readyState < 2) return;
-  var mc = document.getElementById('vsMain'); if (mc) _vsDraw(mc.getContext('2d'), v, mc.width, mc.height, _vs.set[_vs.cur]);
-  [].slice.call(document.querySelectorAll('#vsStudio canvas[data-k]')).forEach(function(c){ _vsDraw(c.getContext('2d'), v, c.width, c.height, _vs.set[c.getAttribute('data-k')]); });
+  var mc = document.getElementById('vsMain'); if (mc) { var cx = mc.getContext('2d'); _vsDraw(cx, v, mc.width, mc.height, _vs.set[_vs.cur]); _vsDrawOv(cx, mc.width, mc.height, v.currentTime, true); }
+  [].slice.call(document.querySelectorAll('#vsStudio canvas[data-k]')).forEach(function(c){ var cx = c.getContext('2d'); _vsDraw(cx, v, c.width, c.height, _vs.set[c.getAttribute('data-k')]); _vsDrawOv(cx, c.width, c.height, v.currentTime, false); });
 }
 function _vsTimeUi(){ var v = _vs.el; if (!v) return; var n = document.getElementById('vsNow'); if (n) n.textContent = _vsTime(v.currentTime) ; var s = document.getElementById('vsSeek'); if (s && document.activeElement !== s) s.value = v.currentTime; var b = document.getElementById('vsPlay'); if (b) b.textContent = v.paused ? '▶' : '❚❚'; }
 function vsPlay(){
   var v = _vs.el; if (!v) return;
-  if (v.paused) { if (v.currentTime < _vs.start || v.currentTime >= _vs.end - 0.05) v.currentTime = _vs.start; v.play(); var loop = function(){ _vsPaint(); _vsTimeUi(); if (v.currentTime >= _vs.end) { v.pause(); _vsTimeUi(); return; } if (!v.paused) _vs._raf = requestAnimationFrame(loop); }; loop(); }
+  if (v.paused) {
+    if (v.currentTime < _vs.start || v.currentTime >= _vs.end - 0.05) v.currentTime = _vs.start;
+    v.playbackRate = _vs.speed || 1; v.muted = !!_vs.au.mute;
+    v.play().catch(function(){ v.muted = true; v.play(); });
+    var loop = function(){ if (!v.muted) v.volume = Math.max(0, Math.min(1, _vsGainAt(v.currentTime))); _vsPaint(); _vsTimeUi(); if (v.currentTime >= _vs.end) { v.pause(); _vsTimeUi(); return; } if (!v.paused) _vs._raf = requestAnimationFrame(loop); }; loop();
+  }
   else { v.pause(); _vsTimeUi(); }
 }
 function vsSeek(t){ var v = _vs.el; if (!v) return; v.pause(); v.currentTime = t; }
@@ -3782,41 +3903,61 @@ function vsSet(key, val, light){
 function vsCopyToAll(){ var st = _vs.set[_vs.cur]; VS_FORMATS.forEach(function(f){ _vs.set[f.k] = _csClone(st); }); _vsRender(); showToast('Placeringen gäller nu alla format'); }
 function vsMark(what){ var t = _vs.el ? _vs.el.currentTime : 0; if (what === 'start') { _vs.start = Math.min(t, _vs.end - 0.5); } else if (what === 'end') { _vs.end = Math.max(t, _vs.start + 0.5); } else { _vs.cover = t; } _vsRender(); }
 function vsWheel(ev){ ev.preventDefault(); var st = _vs.set[_vs.cur]; st.zoom = Math.max(1, Math.min(3, (st.zoom || 1) * (ev.deltaY < 0 ? 1.06 : 1 / 1.06))); _vsPaint(); }
+// Klick i videon: träffar man ett synligt lager flyttas/skalas det, annars panoreras videon
 function vsPanDown(ev){
   var mc = document.getElementById('vsMain'), v = _vs.el; if (!mc || !v) return; ev.preventDefault();
-  var st = _vs.set[_vs.cur], f = _vsFmt(_vs.cur), sx = ev.clientX, sy = ev.clientY, opx = st.px || 0, opy = st.py || 0;
-  var rect = mc.getBoundingClientRect(), k = f.w / rect.width, vw = v.videoWidth || 16, vh = v.videoHeight || 9;
-  var s = (st.mode === 'fit' ? Math.min(f.w / vw, f.h / vh) : Math.max(f.w / vw, f.h / vh)) * (st.zoom || 1), ox = Math.abs(vw * s - f.w) / 2, oy = Math.abs(vh * s - f.h) / 2;
-  mc.style.cursor = 'grabbing';
-  var mv = function(e){ if (ox > 1) st.px = Math.max(-1, Math.min(1, opx + (e.clientX - sx) * k / ox)); if (oy > 1) st.py = Math.max(-1, Math.min(1, opy + (e.clientY - sy) * k / oy)); _vsPaint(); };
-  var up = function(){ window.removeEventListener('pointermove', mv); mc.style.cursor = 'grab'; };
-  window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up, { once: true });
+  var rect = mc.getBoundingClientRect(), fx = (ev.clientX - rect.left) / rect.width, fy = (ev.clientY - rect.top) / rect.height, t = v.currentTime;
+  var hs = 0.03, hit = null, mode = 'move';
+  var cur = _vsSelOv(); if (cur && cur._bh != null && Math.abs(fx - (cur.x + cur.w)) < hs && Math.abs(fy - (cur.y + cur._bh)) < hs * rect.width / rect.height) { hit = cur; mode = 'size'; }
+  if (!hit) for (var i = _vs.ov.length - 1; i >= 0; i--) { var o = _vs.ov[i]; if ((_vsOvAlpha(o, t) > 0 || o.id === _vs.sel) && o._bh != null && fx >= o.x && fx <= o.x + o.w && fy >= o.y && fy <= o.y + o._bh) { hit = o; break; } }
+  if (hit) {
+    var changed = _vs.sel !== hit.id || _vs.tab !== 'ov'; _vs.sel = hit.id; _vs.tab = 'ov'; if (changed) { _vsRender(); mc = document.getElementById('vsMain'); }
+    var sx = ev.clientX, sy = ev.clientY, ox = hit.x, oy = hit.y, ow = hit.w, os = hit.size, moved = false;
+    var mv = function(e){ var dx = (e.clientX - sx) / rect.width, dy = (e.clientY - sy) / rect.height; moved = true;
+      if (mode === 'size') { hit.w = Math.max(0.05, Math.min(1.2, ow + dx)); if (hit.type === 'text' && e.shiftKey) hit.size = Math.max(0.02, os * hit.w / ow); }
+      else { hit.x = ox + dx; hit.y = oy + dy; if (Math.abs(hit.x + hit.w / 2 - 0.5) < 0.015) hit.x = 0.5 - hit.w / 2; }
+      _vsPaint(); };
+    var up = function(){ window.removeEventListener('pointermove', mv); if (moved) _vsRender(); };
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up, { once: true });
+    return;
+  }
+  if (_vs.sel) { _vs.sel = null; _vsRender(); mc = document.getElementById('vsMain'); }
+  var st = _vs.set[_vs.cur], f = _vsFmt(_vs.cur), sx2 = ev.clientX, sy2 = ev.clientY, opx = st.px || 0, opy = st.py || 0;
+  var k = f.w / rect.width, vw = v.videoWidth || 16, vh = v.videoHeight || 9;
+  var s = (st.mode === 'fit' ? Math.min(f.w / vw, f.h / vh) : Math.max(f.w / vw, f.h / vh)) * (st.zoom || 1), ox2 = Math.abs(vw * s - f.w) / 2, oy2 = Math.abs(vh * s - f.h) / 2;
+  if (mc) mc.style.cursor = 'grabbing';
+  var mv2 = function(e){ if (ox2 > 1) st.px = Math.max(-1, Math.min(1, opx + (e.clientX - sx2) * k / ox2)); if (oy2 > 1) st.py = Math.max(-1, Math.min(1, opy + (e.clientY - sy2) * k / oy2)); _vsPaint(); };
+  var up2 = function(){ window.removeEventListener('pointermove', mv2); var c = document.getElementById('vsMain'); if (c) c.style.cursor = 'grab'; };
+  window.addEventListener('pointermove', mv2); window.addEventListener('pointerup', up2, { once: true });
 }
 
-// ── Export: spelar klippet en gång per format och spelar in en ny mp4 i rätt storlek ──
+// ── Export: spelar klippet en gång per format och spelar in en ny mp4 i rätt storlek, med lager, ljud och tempo ──
 function _vsExportOne(f, st, onProg){
   return new Promise(function(ok, fail){
     var v = document.createElement('video'); v.playsInline = true; v.preload = 'auto'; v.src = _vidUrl(_vs.video.id);
     var c = document.createElement('canvas'); c.width = f.w; c.height = f.h; var ctx = c.getContext('2d');
-    var len = Math.max(0.5, _vs.end - _vs.start), mime = _vsMime();
-    var bps = Math.max(800000, Math.min(6000000, Math.floor((14 * 8 * 1024 * 1024) / len) - 160000));
-    var actx, chunks = [], rec, done = false;
+    var sp = _vs.speed || 1, len = Math.max(0.5, _vs.end - _vs.start), outLen = len / sp, mime = _vsMime();
+    var bps = Math.max(800000, Math.min(6000000, Math.floor((14 * 8 * 1024 * 1024) / outLen) - 160000));
+    var actx, gain, chunks = [], rec, done = false;
     var finish = function(err){ if (done) return; done = true; try { v.pause(); } catch (e) {} try { actx && actx.close(); } catch (e) {} if (err) fail(err); };
+    var frame = function(){ _vsDraw(ctx, v, f.w, f.h, st); _vsDrawOv(ctx, f.w, f.h, v.currentTime, false); };
     v.onerror = function(){ finish(new Error('Kunde inte läsa videon')); };
     v.onloadeddata = function(){
       try {
         var stream = c.captureStream(30);
-        try { actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.resume) actx.resume(); var src = actx.createMediaElementSource(v), dst = actx.createMediaStreamDestination(); src.connect(dst); dst.stream.getAudioTracks().forEach(function(t){ stream.addTrack(t); }); } catch (e) {}
+        if (!_vs.au.mute) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.resume) actx.resume(); var src = actx.createMediaElementSource(v), dst = actx.createMediaStreamDestination(); gain = actx.createGain(); gain.gain.value = _vsGainAt(_vs.start); src.connect(gain); gain.connect(dst); dst.stream.getAudioTracks().forEach(function(t){ stream.addTrack(t); }); } catch (e) {} }
+        else v.muted = true;
         rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bps, audioBitsPerSecond: 128000 });
         rec.ondataavailable = function(e){ if (e.data && e.data.size) chunks.push(e.data); };
         rec.onstop = function(){ if (done) return; done = true; try { actx && actx.close(); } catch (e) {} ok(new Blob(chunks, { type: 'video/mp4' })); };
         v.currentTime = _vs.start;
         v.onseeked = function(){
-          v.onseeked = null; _vsDraw(ctx, v, f.w, f.h, st); rec.start(500);
+          v.onseeked = null; v.playbackRate = sp; frame(); rec.start(500);
           v.play().then(function(){
             var tick = function(){
               if (done) return;
-              _vsDraw(ctx, v, f.w, f.h, st);
+              frame();
+              if (gain) gain.gain.value = _vsGainAt(v.currentTime);
               onProg && onProg(Math.min(1, (v.currentTime - _vs.start) / len));
               if (v.currentTime >= _vs.end || v.ended) { v.pause(); setTimeout(function(){ try { rec.stop(); } catch (e) { finish(e); } }, 150); return; }
               if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(tick); else requestAnimationFrame(tick);
@@ -3833,17 +3974,19 @@ function _vsFrameThumb(st, f, t){
     var v = document.createElement('video'); v.muted = true; v.preload = 'auto'; v.src = _vidUrl(_vs.video.id); var fin = false;
     var end = function(r){ if (fin) return; fin = true; ok(r); };
     v.onloadeddata = function(){ v.currentTime = Math.min(t || 0.1, (v.duration || 1) - 0.05); };
-    v.onseeked = function(){ try { var w = 540, h = Math.round(540 * f.h / f.w), c = document.createElement('canvas'); c.width = w; c.height = h; _vsDraw(c.getContext('2d'), v, w, h, st); end(c.toDataURL('image/jpeg', 0.8)); } catch (e) { end(null); } };
+    v.onseeked = function(){ try { var w = 540, h = Math.round(540 * f.h / f.w), c = document.createElement('canvas'); c.width = w; c.height = h; var cx = c.getContext('2d'); _vsDraw(cx, v, w, h, st); _vsDrawOv(cx, w, h, v.currentTime, false); end(c.toDataURL('image/jpeg', 0.8)); } catch (e) { end(null); } };
     v.onerror = function(){ end(null); }; setTimeout(function(){ end(null); }, 8000);
   });
 }
 function vsExport(){
   if (_vs.busy) return;
   var list = VS_FORMATS.filter(function(f){ return _vs.on[f.k]; }); if (!list.length) { showToast('Kryssa i minst ett format'); return; }
-  _vs.busy = true; if (_vs.el) _vs.el.pause();
+  _vs.busy = true; if (_vs.el) _vs.el.pause(); _vs.sel = null;
   var btn = document.getElementById('vsSaveBtn'), prog = document.getElementById('vsProg'); if (btn) btn.disabled = true;
   var variants = [], base = String((_vs.post && _vs.post.title) || ((document.getElementById('m-title') || {}).value) || 'video').toLowerCase().replace(/[åä]/g, 'a').replace(/ö/g, 'o').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 30) || 'video';
-  var chain = Promise.resolve();
+  // Typsnitt och bilder måste vara laddade innan inspelningen börjar
+  var fonts = _vs.ov.filter(function(o){ return o.type === 'text'; }).map(function(o){ return (o.bold ? '700 ' : '400 ') + '40px ' + _csFontOf(o); });
+  var chain = Promise.all(fonts.map(function(x){ return document.fonts && document.fonts.load ? document.fonts.load(x).catch(function(){}) : null; }).concat(_vs.ov.filter(function(o){ return o.type === 'image'; }).map(function(o){ var im = _vsImg(o.src); return im.complete ? null : new Promise(function(r){ im.onload = im.onerror = r; }); })));
   list.forEach(function(f, n){
     chain = chain.then(function(){
       var st = _vs.set[f.k];
@@ -3860,7 +4003,7 @@ function vsExport(){
   chain.then(function(){
     var v = _csClone(_vs.video);
     v.variants = variants;
-    v.edit = { set: _vs.set, on: _vs.on, start: _vs.start, end: _vs.end, cover: _vs.cover };
+    v.edit = { set: _vs.set, on: _vs.on, start: _vs.start, end: _vs.end, cover: _vs.cover, ov: _vs.ov.map(function(o){ var c = _csClone(o); delete c._bh; return c; }), au: _vs.au, speed: _vs.speed };
     v.thumb = (variants[0] && variants[0].thumb) || v.thumb || null;
     if (typeof _vs.onSave === 'function') _vs.onSave(v);
     closeVideoStudio(); showToast('🎬 ' + variants.length + ' ' + (variants.length === 1 ? 'video skapad' : 'videor skapade') + ' i rätt format');
