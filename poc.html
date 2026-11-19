@@ -3725,7 +3725,10 @@ function _vsDrawOv(ctx, W, H, t, showSel){
   });
 }
 function _vsSelOv(){ return (_vs.ov || []).filter(function(o){ return o.id === _vs.sel; })[0] || null; }
-function _vsAddOv(o){ var t = _vs.el ? _vs.el.currentTime : 0; o.id = _csId(); if (o.t0 == null) o.t0 = Math.max(_vs.start, 0); if (o.t1 == null) o.t1 = _vs.end; _vs.ov.push(o); _vs.sel = o.id; _vs.tab = 'ov'; _vsRender(); }
+function _vsAddOv(o){ var t = _vs.el ? _vs.el.currentTime : 0; o.id = _csId(); if (o.t0 == null) o.t0 = Math.max(_vs.start, 0); if (o.t1 == null) o.t1 = _vs.end;
+  // Nya bilder läggs bakom texterna så att texten inte döljs; text och logga hamnar överst
+  var ti = -1; if (o.type === 'image' && !o.logo) _vs.ov.forEach(function(x, i){ if (ti < 0 && x.type === 'text') ti = i; });
+  if (ti >= 0) _vs.ov.splice(ti, 0, o); else _vs.ov.push(o); _vs.sel = o.id; _vs.tab = 'ov'; _vsRender(); }
 function vsAddText(){ _vsAddOv({ type: 'text', x: 0.08, y: 0.1, w: 0.84, text: 'Skriv din text', size: 0.07, bold: true, color: '#ffffff', align: 'center', shadow: true, plate: '' }); }
 function vsAddImage(){ var i = document.getElementById('vsImgIn'); if (i) { i.value = ''; i.click(); } }
 function vsImgChosen(inp){
