@@ -1301,25 +1301,49 @@ app.post('/api/linkedin/company/publish', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
-async function ensureBrandImagesTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS brand_images (id SERIAL PRIMARY KEY, name TEXT, url TEXT, ts BIGINT)"); await getAuthPool().query("ALTER TABLE brand_images ADD COLUMN IF NOT EXISTS workspace TEXT DEFAULT 'spot'") }
+async function ensureBrandImagesTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS brand_images (id SERIAL PRIMARY KEY, name TEXT, url TEXT, ts BIGINT)"); await getAuthPool().query("ALTER TABLE brand_images ADD COLUMN IF NOT EXISTS workspace TEXT DEFAULT 'spot'"); await getAuthPool().query("ALTER TABLE brand_images ADD COLUMN IF NOT EXISTS folder TEXT DEFAULT ''") }
+// Mappar i bildbiblioteket: namnet rensas och kortas
+function _cleanFolder(f) { return String(f || '').replace(/[<>"'`\\/]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40) }
 app.get('/api/brand-images', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
     await ensureBrandImagesTable()
-    const r = await getAuthPool().query('SELECT id, name, url, ts FROM brand_images WHERE workspace=$1 ORDER BY ts DESC', [s.workspace || 'spot'])
+    const r = await getAuthPool().query('SELECT id, name, url, ts, folder FROM brand_images WHERE workspace=$1 ORDER BY ts DESC', [s.workspace || 'spot'])
     res.json({ images: r.rows })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 app.post('/api/brand-images', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
-    const { name, url } = req.body || {}
+    const { name, url, folder } = req.body || {}
     if ((s.role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan lägga till bilder i bildbanken' })
     if (!url) return res.status(400).json({ error: 'Ingen bild skickades' })
     await ensureBrandImagesTable()
     const ts = Date.now()
-    const r = await getAuthPool().query('INSERT INTO brand_images (name,url,ts,workspace) VALUES ($1,$2,$3,$4) RETURNING id', [name || 'bild', url, ts, s.workspace || 'spot'])
+    const r = await getAuthPool().query('INSERT INTO brand_images (name,url,ts,workspace,folder) VALUES ($1,$2,$3,$4,$5) RETURNING id', [name || 'bild', url, ts, s.workspace || 'spot', _cleanFolder(folder)])
     res.json({ ok: true, id: r.rows[0].id, ts })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+app.post('/api/brand-images/move', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    if ((s.role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan ändra bildbanken' })
+    const { id, folder } = req.body || {}
+    await ensureBrandImagesTable()
+    await getAuthPool().query('UPDATE brand_images SET folder=$1 WHERE id=$2 AND workspace=$3', [_cleanFolder(folder), id, s.workspace || 'spot'])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+// Byt namn på en mapp (to = nytt namn) eller ta bort den (to = '' → bilderna hamnar utan mapp)
+app.post('/api/brand-images/folder', auth, async (req, res) => {
+  try {
+    const s = sessions[getToken(req)] || {}
+    if ((s.role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan ändra bildbanken' })
+    const from = _cleanFolder((req.body || {}).from), to = _cleanFolder((req.body || {}).to)
+    if (!from) return res.status(400).json({ error: 'Mapp saknas' })
+    await ensureBrandImagesTable()
+    await getAuthPool().query('UPDATE brand_images SET folder=$1 WHERE folder=$2 AND workspace=$3', [to, from, s.workspace || 'spot'])
+    res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 app.post('/api/brand-images/delete', auth, async (req, res) => {
