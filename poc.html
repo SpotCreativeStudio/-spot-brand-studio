@@ -1266,8 +1266,8 @@ function libNewFolder(){
     _libFolder = n; renderImgLibrary(); _libRefresh();
   }).catch(function(){ showToast('⚠️ Kunde inte skapa mappen'); });
 }
-function libRenameFolder(){
-  var from = _libFolder; if (!from) return;
+function libRenameFolder(f){
+  var from = f || _libFolder; if (!from) return;
   var to = _libClean(prompt('Nytt namn på mappen "' + from + '":', from)); if (!to || to === from) return;
   _libPost({ from: from, to: to }).then(function(d){
     if (!d.ok) { showToast('⚠️ ' + (d.error || 'Kunde inte byta namn')); return; }
@@ -1329,12 +1329,12 @@ function renderImgLibrary(){
   var lib = _getImgLib(), folders = _libFolders();
   if (_libFolder && _libFolder !== '__none' && folders.indexOf(_libFolder) < 0) _libFolder = '';
   var count = function(f){ return lib.filter(function(x){ return f === '__none' ? !x.folder : x.folder === f; }).length; };
-  var chip = function(val, label, n, del){ var on = _libFolder === val, q = JSON.stringify(val).replace(/"/g, '&quot;'); return '<button onclick="libPickFolder(' + q + ')" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:6px ' + (del ? '6px' : '11px') + ' 6px 11px;border-radius:999px;cursor:pointer;border:1px solid ' + (on ? '#b31e59;background:#fff5f7;color:#b31e59' : '#e5e7eb;background:#fff;color:#374151') + '">' + label + ' <span style="font-weight:400;color:#9ca3af">' + n + '</span>' + (del ? '<span class="lib-admin" title="Ta bort mappen" onclick="libDeleteFolder(' + q + ',event)" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font-size:14px;line-height:1;color:#9ca3af;margin-left:2px" onmouseover="this.style.background=\'#fde2ea\';this.style.color=\'#b31e59\'" onmouseout="this.style.background=\'\';this.style.color=\'#9ca3af\'">×</span>' : '') + '</button>'; };
+  var chip = function(val, label, n, del){ var on = _libFolder === val, q = JSON.stringify(val).replace(/"/g, '&quot;'); return '<button onclick="libPickFolder(' + q + ')"' + (del ? ' ondblclick="libRenameFolder(' + q + ')" title="Dubbelklicka för att byta namn"' : '') + ' style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:6px ' + (del ? '6px' : '11px') + ' 6px 11px;border-radius:999px;cursor:pointer;border:1px solid ' + (on ? '#b31e59;background:#fff5f7;color:#b31e59' : '#e5e7eb;background:#fff;color:#374151') + '">' + label + ' <span style="font-weight:400;color:#9ca3af">' + n + '</span>' + (del ? '<span class="lib-admin" title="Ta bort mappen" onclick="libDeleteFolder(' + q + ',event)" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font-size:14px;line-height:1;color:#9ca3af;margin-left:2px" onmouseover="this.style.background=\'#fde2ea\';this.style.color=\'#b31e59\'" onmouseout="this.style.background=\'\';this.style.color=\'#9ca3af\'">×</span>' : '') + '</button>'; };
   var bar = document.getElementById('imgLibFolders');
   if (!bar) { bar = document.createElement('div'); bar.id = 'imgLibFolders'; bar.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px'; grid.parentNode.insertBefore(bar, grid); }
   bar.innerHTML = chip('', '🗂 Alla', lib.length) + folders.map(function(f){ return chip(f, '📁 ' + _libEsc(f), count(f), true); }).join('') + (lib.some(function(x){ return !x.folder; }) && folders.length ? chip('__none', 'Utan mapp', count('__none')) : '')
     + '<button class="lib-admin" onclick="libNewFolder()" style="font-size:12px;font-weight:600;padding:6px 11px;border-radius:999px;cursor:pointer;border:1.5px dashed #d1d5db;background:#fff;color:#6b7280">+ Ny mapp</button>'
-    + (_libFolder && _libFolder !== '__none' ? '<span style="flex:1"></span><button class="lib-admin" onclick="libRenameFolder()" style="font-size:12px;padding:5px 9px;border-radius:8px;border:1px solid #e5e7eb;background:#fff;cursor:pointer">✏️ Byt namn</button>' : '');
+    + (_libFolder && _libFolder !== '__none' ? '' : '');
   var shown = lib.map(function(img, i){ return { img: img, i: i }; }).filter(function(o){ return !_libFolder ? true : (_libFolder === '__none' ? !o.img.folder : o.img.folder === _libFolder); });
   if (!shown.length) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;font-size:12px;color:#9ca3af">' + (lib.length ? 'Inga bilder i den här mappen ännu. Ladda upp hit, eller flytta bilder hit med 📁 på bilden.' : 'Inga bilder uppladdade ännu.') + '</div>'; return; }
   grid.innerHTML = shown.map(function(o){
