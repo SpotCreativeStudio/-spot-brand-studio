@@ -3446,7 +3446,7 @@ function _csRender(){
   var vh = Math.max(360, window.innerHeight - 150), vw = Math.max(320, Math.min(window.innerWidth - 600, 900));
   _cs.scale = Math.min(vh / CS_H, vw / CS_W);
   var thumbs = _cs.slides.map(function(sl, k){
-    return '<div class="cs-thumb' + (k === _cs.i ? ' on' : '') + '" draggable="true" ondragstart="csThumbDrag(event,' + k + ')" ondragover="csThumbOver(event,' + k + ')" ondragleave="this.style.boxShadow=\'\'" ondrop="csThumbDrop(event,' + k + ')" ondragend="_cs.dragSlide=null" onclick="csGo(' + k + ')" title="Dra för att ändra ordning"><div style="pointer-events:none">' + _csSlideHTML(sl, 116 / CS_W, false, k) + '</div><span style="position:absolute;left:4px;top:4px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:9px">' + (k + 1) + '</span></div>';
+    return '<div class="cs-thumb' + (k === _cs.i ? ' on' : '') + '" draggable="true" ondragstart="csThumbDrag(event,' + k + ')" ondragover="csThumbOver(event,' + k + ')" ondragleave="this.style.boxShadow=\'\'" ondrop="csThumbDrop(event,' + k + ')" ondragend="_cs.dragSlide=null" onclick="csGo(' + k + ')" title="Dra för att ändra ordning"><div style="pointer-events:none">' + _csSlideHTML(sl, 116 / CS_W, false, k) + '</div><span style="position:absolute;left:4px;top:4px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:9px">' + (k + 1) + '</span><span onclick="csAskDelSlide(event,' + k + ')" title="Ta bort sidan" style="position:absolute;right:4px;top:4px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:13px;line-height:20px;text-align:center;cursor:pointer">×</span></div>';
   }).join('');
   var sw = function(fn, cur, none){ return (none ? '<span class="cs-sw" title="Ingen" onclick="' + fn + '(\'\')" style="background:linear-gradient(135deg,#fff 45%,#ef4444 47%,#ef4444 53%,#fff 55%)' + (!cur ? ';outline:3px solid #b31e59;outline-offset:1px' : '') + '"></span>' : '') + cols.map(function(c){ return '<span class="cs-sw" title="' + c + '" onclick="' + fn + '(\'' + c + '\')" style="background:' + c + (String(cur).toLowerCase() === c.toLowerCase() ? ';outline:3px solid #b31e59;outline-offset:1px' : '') + '"></span>'; }).join('') + '<input type="color" value="' + _crEsc(/^#[0-9a-f]{6}$/i.test(cur) ? cur : '#000000') + '" onchange="' + fn + '(this.value)" title="Valfri färg" style="width:28px;height:26px;border:none;background:none;padding:0;cursor:pointer">'; };
   var tog = function(key, val, label){ return '<button class="cs-btn' + (val ? ' on' : '') + '" onclick="csSet(\'' + key + '\',' + (!val) + ')">' + label + '</button>'; };
@@ -3491,11 +3491,32 @@ function _csRender(){
     + '<button class="cs-btn" onclick="closeCarouselStudio()">Avbryt</button><button class="cs-btn" onclick="csSave(false)">⬇️ PDF</button><button class="cs-btn pri" id="csSaveBtn" onclick="csSave(true)">💾 Spara karusell</button></div>'
     + '<div style="flex:1;min-height:0;display:flex">'
     + '<div style="width:148px;flex-shrink:0;overflow:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px;border-right:1px solid #eee">' + thumbs
-    + '<button class="cs-btn" onclick="csAddSlide()">+ Ny sida</button><button class="cs-btn" onclick="csDupSlide()">⧉ Kopiera sida</button><button class="cs-btn" onclick="csMoveSlide(-1)">↑ Flytta upp</button><button class="cs-btn" onclick="csMoveSlide(1)">↓ Flytta ner</button><button class="cs-btn" onclick="csDelSlide()" style="color:#b31e59">🗑 Ta bort sida</button></div>'
+    + '<button class="cs-btn" onclick="csAddSlide()">+ Ny sida</button><button class="cs-btn" onclick="csDupSlide()">⧉ Kopiera sida</button></div>'
     + '<div id="csStageWrap" onpointerdown="if(event.target===this){_cs.sel=null;_csRender();}" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;background:#ece9e4;overflow:auto"><div id="csStage" style="box-shadow:0 6px 24px rgba(0,0,0,.18)">' + _csSlideHTML(s, _cs.scale, true, _cs.i) + '</div></div>'
     + '<input id="csFile" type="file" accept="image/*" style="display:none" onchange="csFileChosen(this)">'
     + '<div style="width:290px;flex-shrink:0;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px;border-left:1px solid #eee;background:#fff">' + props + '</div>'
     + '</div></div>';
+}
+// Ta bort en sida: krysset på miniatyren öppnar en "Är du säker?"-ruta
+function csAskDelSlide(ev, k){
+  ev.stopPropagation(); ev.preventDefault();
+  var m = document.getElementById('csDelBox'); if (m) m.remove();
+  m = document.createElement('div'); m.id = 'csDelBox';
+  m.style.cssText = 'position:fixed;inset:0;z-index:10060;background:rgba(17,17,17,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+  m.onclick = function(e){ if (e.target === m) m.remove(); };
+  var last = _cs.slides.length <= 1;
+  m.innerHTML = '<div style="background:#fff;border-radius:14px;padding:22px;width:min(380px,100%);box-shadow:0 20px 50px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:12px">'
+    + '<div style="font-size:17px;font-weight:700">Ta bort sida ' + (k + 1) + '?</div>'
+    + '<div style="font-size:14px;color:#4b5563;line-height:1.5">' + (last ? 'Det här är den enda sidan – den töms i stället för att tas bort.' : 'Sidan och allt på den tas bort. Du kan ångra med Ctrl+Z.') + '</div>'
+    + '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px"><button id="csDelNo" style="font-size:13px;font-weight:600;padding:9px 14px;border-radius:9px;cursor:pointer;border:1px solid #e5e7eb;background:#fff;color:#111">Avbryt</button><button id="csDelYes" style="font-size:13px;font-weight:600;padding:9px 14px;border-radius:9px;cursor:pointer;border:1px solid #b31e59;background:#b31e59;color:#fff">Ja, ta bort</button></div></div>';
+  document.body.appendChild(m);
+  var no = document.getElementById('csDelNo'); no.onclick = function(){ m.remove(); }; no.focus();
+  document.getElementById('csDelYes').onclick = function(){
+    m.remove();
+    if (_cs.slides.length <= 1) { _cs.slides[0].els = []; }
+    else { var cur = _cs.slides[_cs.i]; _cs.slides.splice(k, 1); var j = _cs.slides.indexOf(cur); _cs.i = j >= 0 ? j : Math.min(k, _cs.slides.length - 1); }
+    _cs.sel = null; _csRender();
+  };
 }
 // Ändra ordning på sidorna: dra en miniatyr och släpp den ovanför eller nedanför en annan
 function csThumbDrag(ev, k){ _cs.dragSlide = k; try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(k)); } catch (e) {} }
