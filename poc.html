@@ -3467,7 +3467,7 @@ function _csRender(){
   _csSnap();
   var s = _csSlide(), el = _csSelEl(), cols = _crColors();
   var vh = Math.max(360, window.innerHeight - 150), vw = Math.max(320, Math.min(window.innerWidth - 600, 900));
-  _cs.scale = Math.min(vh / CS_H, vw / CS_W);
+  _cs.scale = _cs.fitScale || Math.min(vh / CS_H, vw / CS_W);
   var thumbs = _cs.slides.map(function(sl, k){
     return '<div class="cs-thumb' + (k === _cs.i ? ' on' : '') + '" draggable="true" ondragstart="csThumbDrag(event,' + k + ')" ondragover="csThumbOver(event,' + k + ')" ondragleave="this.style.boxShadow=\'\'" ondrop="csThumbDrop(event,' + k + ')" ondragend="_cs.dragSlide=null" onclick="csGo(' + k + ')" title="Dra för att ändra ordning"><div style="pointer-events:none">' + _csSlideHTML(sl, 116 / CS_W, false, k) + '</div><span style="position:absolute;left:4px;top:4px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:9px">' + (k + 1) + '</span><span onclick="csAskDelSlide(event,' + k + ')" title="Ta bort sidan" style="position:absolute;right:4px;top:4px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:13px;line-height:20px;text-align:center;cursor:pointer">×</span></div>';
   }).join('');
@@ -3519,6 +3519,13 @@ function _csRender(){
     + '<input id="csFile" type="file" accept="image/*" style="display:none" onchange="csFileChosen(this)">'
     + '<div style="width:290px;flex-shrink:0;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px;border-left:1px solid #eee;background:#fff">' + props + '</div>'
     + '</div></div>';
+  // Hela sidan ska synas utan att scrolla: mät scenen och skala om
+  var wr = document.getElementById('csStageWrap');
+  if (wr && wr.clientWidth > 0 && wr.clientHeight > 0) {
+    var ns = Math.max(0.05, Math.min((wr.clientWidth - 40) / CS_W, (wr.clientHeight - 40) / CS_H));
+    if (Math.abs(ns - _cs.scale) > 0.002) { _cs.scale = ns; var stg = document.getElementById('csStage'); if (stg) stg.innerHTML = _csSlideHTML(s, _cs.scale, true, _cs.i); }
+    _cs.fitScale = ns;
+  }
 }
 // Ta bort en sida: krysset på miniatyren öppnar en "Är du säker?"-ruta
 function csAskDelSlide(ev, k){
@@ -3712,12 +3719,69 @@ function _vsDrawBg(ctx, v, W, H, st){
   if (st.bg && st.bg !== 'blur') { ctx.fillStyle = st.bg; ctx.fillRect(0, 0, W, H); }
   else { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); var bs = Math.max(W / vw, H / vh); ctx.save(); ctx.filter = 'blur(' + Math.round(W / 24) + 'px) brightness(.7)'; ctx.drawImage(v, (W - vw * bs) / 2 - 40, (H - vh * bs) / 2 - 40, vw * bs + 80, vh * bs + 80); ctx.restore(); }
 }
-function _vsDrawVid(ctx, v, W, H, st){
+// Var videon hamnar i ett format (x, y, bredd, höjd i px)
+function _vsVidRect(v, W, H, st){
   var vw = v.videoWidth || 16, vh = v.videoHeight || 9; st = st || {};
   var fit = st.mode === 'fit', z = st.zoom || 1;
   var s = (fit ? Math.min(W / vw, H / vh) : Math.max(W / vw, H / vh)) * z, iw = vw * s, ih = vh * s;
-  var x = (W - iw) / 2 + (st.px || 0) * Math.abs(iw - W) / 2, y = (H - ih) / 2 + (st.py || 0) * Math.abs(ih - H) / 2;
-  ctx.drawImage(v, x, y, iw, ih);
+  return { x: (W - iw) / 2 + (st.px || 0) * Math.abs(iw - W) / 2, y: (H - ih) / 2 + (st.py || 0) * Math.abs(ih - H) / 2, w: iw, h: ih };
+}
+function _vsDrawVid(ctx, v, W, H, st){
+  var r = _vsDrawVidRect = _vsVidRect(v, W, H, st);
+  ctx.drawImage(v, r.x, r.y, r.w, r.h);
+  // Täckplattor över inbränd text i filmen. De sitter fast i videon (följer med i alla format) och visas när textlagret visas.
+  var t = v.currentTime || 0;
+  (_vs.ov || []).forEach(function(o){
+    var p = o.patch; if (!p || o.hidden || _vsOvAlpha(o, t) <= 0) return;
+    var px = r.x + p.bx * r.w, py = r.y + p.by * r.h, pw = p.bw * r.w, ph = p.bh * r.h;
+    if (p.src) { var im = _vsImg(p.src); if (im.complete && im.naturalWidth) ctx.drawImage(im, px, py, pw, ph); }
+    else if (p.color) { ctx.fillStyle = p.color; ctx.fillRect(px, py, pw, ph); }
+  });
+}
+var _vsDrawVidRect = null;
+// ── Inbränd text → redigerbara lager (som mallbilderna): AI läser texten i bildrutan, täcker den och lägger nya textlager ──
+function vsBurnedText(){
+  var v = _vs.el; if (!v || !v.videoWidth) return;
+  if (_vs.burnBusy) return; _vs.burnBusy = true; v.pause();
+  var btn = document.getElementById('vsBurnBtn'); if (btn) { btn.disabled = true; btn.textContent = '⏳ AI:n läser texten…'; }
+  var VW = v.videoWidth, VH = v.videoHeight, k = Math.min(1, 1600 / Math.max(VW, VH));
+  var c = document.createElement('canvas'); c.width = Math.round(VW * k); c.height = Math.round(VH * k); c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+  var frame = c.toDataURL('image/jpeg', 0.92), t = v.currentTime;
+  var done = function(msg){ _vs.burnBusy = false; var b = document.getElementById('vsBurnBtn'); if (b) { b.disabled = false; b.textContent = '✨ Gör inbränd text redigerbar'; } if (msg) showToast(msg); };
+  var post = function(url, body){ return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function(r){ return r.json(); }); };
+  post('/api/template-layers', { src: frame }).then(function(d){
+    var els = ((d && d.elements) || []).filter(function(e){ return e.kind === 'text' && String(e.text || '').trim() && Array.isArray(e.box_2d); });
+    if (!els.length) { done('Hittade ingen text i den här bildrutan – stå på en bildruta där texten syns'); return; }
+    if (btn) btn.textContent = '⏳ Tar bort texten ur bilden…';
+    // Bakgrund utan text: enfärgad yta fylls med kantfärgen, annars används en AI-tvättad bildruta
+    var needClean = els.some(function(e){ var b = e.box_2d; return _vsEdgeInfo(c, b).spread > 22; });
+    return (needClean ? post('/api/clean-template', { src: frame }).then(function(r){ return r && r.url ? _tplLoadImg(r.url) : null; }).catch(function(){ return null; }) : Promise.resolve(null)).then(function(cleanImg){
+      var st = _vs.set[_vs.cur], f = _vsFmt(_vs.cur), vr = _vsVidRect(v, f.w, f.h, st), added = 0;
+      els.forEach(function(e){
+        var b = e.box_2d.map(Number), y0 = b[0] / 1000, x0 = b[1] / 1000, y1 = b[2] / 1000, x1 = b[3] / 1000; if (!(x1 > x0 && y1 > y0)) return;
+        var pad = Math.max(0.004, (y1 - y0) * 0.22), bx = Math.max(0, x0 - pad * VH / VW), by = Math.max(0, y0 - pad), bw = Math.min(1, x1 + pad * VH / VW) - bx, bh = Math.min(1, y1 + pad) - by;
+        var info = _vsEdgeInfo(c, [by * 1000, bx * 1000, (by + bh) * 1000, (bx + bw) * 1000]), patch = { bx: bx, by: by, bw: bw, bh: bh };
+        if (info.spread <= 22 || !cleanImg) patch.color = info.color;
+        else { var pc = document.createElement('canvas'); pc.width = Math.max(1, Math.round(bw * c.width)); pc.height = Math.max(1, Math.round(bh * c.height)); pc.getContext('2d').drawImage(cleanImg, bx * cleanImg.naturalWidth, by * cleanImg.naturalHeight, bw * cleanImg.naturalWidth, bh * cleanImg.naturalHeight, 0, 0, pc.width, pc.height); patch.src = pc.toDataURL('image/jpeg', 0.9); }
+        // Nytt textlager på samma plats i det format som visas nu
+        var lineH = (y1 - y0) * vr.h, align = /^(center|right)$/.test(e.align) ? e.align : 'left', extra = 0.04;
+        var ox = (vr.x + x0 * vr.w) / f.w, ow = (x1 - x0) * vr.w / f.w + extra; if (align === 'center') ox -= extra / 2; else if (align === 'right') ox -= extra;
+        _vs.ov.push({ id: _csId(), type: 'text', text: String(e.text), x: ox, y: (vr.y + y0 * vr.h - lineH * 0.1) / f.h, w: ow, size: lineH * 0.86 / f.w, bold: !!e.bold, italic: !!e.italic, align: align, color: /^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '#ffffff', shadow: false, plate: '', t0: _vs.start, t1: _vs.end, patch: patch, fromVideo: true });
+        added++;
+      });
+      _vs.sel = null; _vs.tab = 'ov'; _vsRender();
+      done(added ? '✨ ' + added + ' textrad' + (added === 1 ? '' : 'er') + ' är nu egna lager – kolla att täckningen ser bra ut genom hela klippet' : 'Kunde inte placera texten');
+    });
+  }).catch(function(e){ done('⚠️ ' + ((e && e.message) || 'Något gick fel')); });
+}
+// Kantfärg runt en ruta (box_2d i 0–1000) och hur mycket den varierar – låg variation = enfärgad bakgrund
+function _vsEdgeInfo(c, b){
+  var g = c.getContext('2d'), W = c.width, H = c.height, y0 = b[0] / 1000 * H, x0 = b[1] / 1000 * W, y1 = b[2] / 1000 * H, x1 = b[3] / 1000 * W, rs = [], gs = [], bs = [];
+  function add(x, y){ x = Math.max(0, Math.min(W - 1, Math.round(x))); y = Math.max(0, Math.min(H - 1, Math.round(y))); var d = g.getImageData(x, y, 1, 1).data; rs.push(d[0]); gs.push(d[1]); bs.push(d[2]); }
+  for (var i = 0; i <= 20; i++) { var x = x0 + (x1 - x0) * i / 20, y = y0 + (y1 - y0) * i / 20; add(x, y0 - 3); add(x, y1 + 3); add(x0 - 3, y); add(x1 + 3, y); }
+  function med(a){ var s = a.slice().sort(function(p, q){ return p - q; }); return s[s.length >> 1]; }
+  function sd(a){ var m = a.reduce(function(p, q){ return p + q; }, 0) / a.length; return Math.sqrt(a.reduce(function(p, q){ return p + (q - m) * (q - m); }, 0) / a.length); }
+  return { color: 'rgb(' + med(rs) + ',' + med(gs) + ',' + med(bs) + ')', spread: Math.max(sd(rs), sd(gs), sd(bs)) };
 }
 
 // ── Lager ovanpå videon: text, bild och logga. Läge och storlek sparas som andel av bilden, så att de passar alla format ──
@@ -3902,7 +3966,8 @@ function _vsPanelFmt(f, st, dur, len){
 }
 function _vsPanelOv(){
   var o = _vsSelOv();
-  var h = '<label class="vs-lab">Lägg till</label><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="vs-btn" onclick="vsAddText()">T Text</button><button class="vs-btn" onclick="vsAddImage()">🖼 Från datorn</button><button class="vs-btn" onclick="vsLibPicker()">📚 Bildbank</button><button class="vs-btn" onclick="vsAddLogo()">◎ Logga</button></div>';
+  var h = '<label class="vs-lab">Lägg till</label><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="vs-btn" onclick="vsAddText()">T Text</button><button class="vs-btn" onclick="vsAddImage()">🖼 Från datorn</button><button class="vs-btn" onclick="vsLibPicker()">📚 Bildbank</button><button class="vs-btn" onclick="vsAddLogo()">◎ Logga</button></div>'
+    + '<button class="vs-btn" id="vsBurnBtn" onclick="vsBurnedText()" style="border-color:#b31e59;color:#b31e59" title="Stå på en bildruta där texten syns">✨ Gör inbränd text redigerbar</button><div style="font-size:11px;color:#9ca3af;line-height:1.4;margin-top:-4px">Text som redan finns i filmen: AI:n läser den, täcker den och gör den till lager du kan ändra. Fungerar bäst när texten står still.</div>';
   var lb = 'border:none;background:none;cursor:pointer;font-size:12px;padding:2px 3px;color:#6b7280';
   h += _vs.ov.length ? '<div style="border:1.5px solid #f0f0f0;border-radius:10px;padding:8px;margin-top:4px"><div style="font-size:11px;font-weight:700;color:#b31e59;margin-bottom:6px">🗂 Lager <span style="font-weight:400;color:#9ca3af">· överst = längst fram, dra för att ändra ordning</span></div>' + _vs.ov.slice().reverse().map(function(x){ var on = x.id === _vs.sel; return '<div draggable="true" ondragstart="vsLyrDrag(event,\'' + x.id + '\')" ondragover="event.preventDefault();this.style.borderTop=\'2px solid #b31e59\'" ondragleave="this.style.borderTop=\'\'" ondrop="vsLyrDrop(event,\'' + x.id + '\')" onclick="vsOvPick(\'' + x.id + '\')" style="display:flex;align-items:center;gap:4px;padding:5px 6px;margin-bottom:3px;border-radius:7px;cursor:pointer;font-size:12px;border:1px solid ' + (on ? '#b31e59' : '#f0f0f0') + ';background:' + (on ? '#fdf0f6' : '#fafafa') + ';opacity:' + (x.hidden ? .45 : 1) + '"><span style="cursor:grab;color:#c4c4c4">⋮⋮</span><span>' + (x.type === 'video' ? '🎬' : x.type === 'image' ? (x.logo ? '◎' : '🖼') : 'T') + '</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (x.type === 'video' ? '<b>Videon</b>' : x.type === 'image' ? (x.logo ? 'Logga' : 'Bild') : _crEsc(String(x.text || '').split('\n')[0] || 'Text')) + (x.type === 'video' ? '' : ' <span style="color:#9ca3af;font-size:10px">' + _vsTime(x.t0) + '–' + _vsTime(x.t1) + '</span>') + '</span>'
     + '<button title="Framåt" style="' + lb + '" onclick="event.stopPropagation();vsLyrMove(\'' + x.id + '\',1)">▲</button><button title="Bakåt" style="' + lb + '" onclick="event.stopPropagation();vsLyrMove(\'' + x.id + '\',-1)">▼</button><button title="' + (x.hidden ? 'Visa' : 'Dölj') + '" style="' + lb + '" onclick="event.stopPropagation();vsLyrHide(\'' + x.id + '\')">' + (x.hidden ? '🚫' : '👁') + '</button><button title="' + (x.locked ? 'Lås upp' : 'Lås') + '" style="' + lb + '" onclick="event.stopPropagation();vsLyrLock(\'' + x.id + '\')">' + (x.locked ? '🔒' : '🔓') + '</button></div>'; }).join('') + '<div onclick="vsOvPick(\'__bg\')" style="display:flex;align-items:center;gap:4px;padding:5px 6px;border-radius:7px;cursor:pointer;font-size:12px;border:1px solid ' + (_vs.sel === '__bg' ? '#b31e59;background:#fdf0f6' : '#f0f0f0;background:#fafafa') + '"><span style="color:#e5e7eb">⋮⋮</span><span>🎨</span><span style="flex:1"><b>Bakgrund</b> <span style="color:#9ca3af;font-size:10px">alltid längst bak</span></span></div></div>' : '<div style="font-size:12px;color:#9ca3af;line-height:1.5">Lägg till text, bilder eller loggan. De bränns in i videon i alla format och kan visas hela tiden eller bara under en del av klippet.</div>';
@@ -3969,7 +4034,13 @@ function _vsRender(){
     + (o && dur && o.type !== 'video' ? '<div title="När lagret visas" style="position:absolute;top:22px;height:4px;border-radius:2px;background:#3b82f6;left:' + (o.t0 / dur * 100) + '%;width:' + (Math.max(0, Math.min(o.t1, dur) - o.t0) / dur * 100) + '%"></div>' : '')
     + '<input id="vsSeek" type="range" min="0" max="' + dur + '" step="0.05" value="' + (_vs.el.currentTime || 0) + '" oninput="vsSeek(+this.value)" style="position:absolute;inset:0;width:100%;margin:0;background:transparent"></div>'
     + '<span style="font-size:12px;color:#6b7280">' + _vsTime(dur) + '</span></div></div>';
-  _vsPaint(); _vsTimeUi();
+  _vsFit(); _vsPaint(); _vsTimeUi();
+}
+function _vsFit(){
+  var mc = document.getElementById('vsMain'); if (!mc) return; var box = mc.parentElement, f = _vsFmt(_vs.cur); if (!box || !f) return;
+  mc.style.width = '10px'; mc.style.height = '10px'; box.style.overflow = 'hidden';
+  var hint = box.lastElementChild, aw = box.clientWidth - 24, ah = box.clientHeight - 24 - (hint && hint !== mc ? hint.offsetHeight + 10 : 0), k = Math.min(aw / f.w, ah / f.h);
+  if (k > 0) { mc.style.width = Math.floor(f.w * k) + 'px'; mc.style.height = Math.floor(f.h * k) + 'px'; }
 }
 function _vsPaint(){
   var v = _vs.el; if (!v || v.readyState < 2) return;
