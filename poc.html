@@ -3281,15 +3281,16 @@ function _csMove(ev){
     el.rot = Math.round(((a % 360) + 360) % 360); d.moved = true;
   } else {
     // Fyra hörn som i bildredigeraren: bild och text behåller proportionerna (Shift = fritt), text skalar sin storlek
-    var k = d.mode, nx = d.ox, ny = d.oy, nw, nh;
-    if (k[1] === 'e') nw = d.ow + dx; else { nw = d.ow - dx; nx = d.ox + dx; }
-    if (k[0] === 's') nh = d.oh + dy; else { nh = d.oh - dy; ny = d.oy + dy; }
+    // Sidorna (n, s, e, w) ändrar bara höjd eller bredd
+    var k = d.mode, nx = d.ox, ny = d.oy, nw = d.ow, nh = d.oh, side = k.length === 1, hx = side ? (k === 'e' || k === 'w' ? k : '') : k[1], vy = side ? (k === 'n' || k === 's' ? k : '') : k[0];
+    if (hx === 'e') nw = d.ow + dx; else if (hx === 'w') { nw = d.ow - dx; nx = d.ox + dx; }
+    if (vy === 's') nh = d.oh + dy; else if (vy === 'n') { nh = d.oh - dy; ny = d.oy + dy; }
     var keep = el.type === 'image' || el.type === 'text' || el.kind === 'circle' || el.kind === 'ring';
-    if (keep !== !!ev.shiftKey && d.ow && d.oh) { var sc = Math.abs(nh / d.oh - 1) > Math.abs(nw / d.ow - 1) ? nh / d.oh : nw / d.ow; nw = d.ow * sc; nh = d.oh * sc; nx = k[1] === 'w' ? d.ox + d.ow - nw : d.ox; ny = k[0] === 'n' ? d.oy + d.oh - nh : d.oy; }
-    if (nw < 20) { if (k[1] === 'w') nx -= 20 - nw; nw = 20; }
-    if (nh < 6) { if (k[0] === 'n') ny -= 6 - nh; nh = 6; }
+    if (!side && keep !== !!ev.shiftKey && d.ow && d.oh) { var sc = Math.abs(nh / d.oh - 1) > Math.abs(nw / d.ow - 1) ? nh / d.oh : nw / d.ow; nw = d.ow * sc; nh = d.oh * sc; nx = k[1] === 'w' ? d.ox + d.ow - nw : d.ox; ny = k[0] === 'n' ? d.oy + d.oh - nh : d.oy; }
+    if (nw < 20) { if (hx === 'w') nx -= 20 - nw; nw = 20; }
+    if (nh < 6) { if (vy === 'n') ny -= 6 - nh; nh = 6; }
     el.x = Math.round(nx); el.y = Math.round(ny); el.w = Math.round(nw); el.h = Math.round(nh);
-    if (el.type === 'text' && !ev.shiftKey && d.osize) { el.size = Math.max(8, Math.round(d.osize * nw / d.ow)); var tn = node && node.querySelector('.cs-txt'); if (tn) tn.style.fontSize = el.size + 'px'; }
+    if (el.type === 'text' && !ev.shiftKey && !side && d.osize) { el.size = Math.max(8, Math.round(d.osize * nw / d.ow)); var tn = node && node.querySelector('.cs-txt'); if (tn) tn.style.fontSize = el.size + 'px'; }
   }
   if (node) { node.style.left = el.x + 'px'; node.style.top = el.y + 'px'; node.style.width = el.w + 'px'; node.style.height = el.h + 'px'; node.style.transform = el.rot ? 'rotate(' + el.rot + 'deg)' : ''; }
 }
@@ -3454,7 +3455,7 @@ function _csSlideHTML(s, scale, interactive, idx){
       var plate = e.plate ? 'background:' + _crEsc(e.plate) + ';box-shadow:0 0 0 24px ' + _crEsc(e.plate) + ';border-radius:2px;' : '';
       inner = '<div class="cs-txt" style="width:100%;height:100%;white-space:pre-wrap;word-wrap:break-word;overflow:hidden;font-family:' + _crEsc(_csFontOf(e)) + ';font-size:' + e.size + 'px;line-height:' + (e.lh || 1.15) + ';font-weight:' + (e.bold ? 700 : 400) + ';font-style:' + (e.italic ? 'italic' : 'normal') + ';color:' + _crEsc(e.color || '#111') + ';text-align:' + (e.align || 'left') + ';' + ls + sh + plate + '">' + _crEsc(_csTxt(e, idx, total)) + '</div>';
     }
-    h += '<div class="cs-el' + (sel ? ' sel' : '') + '"' + attrs + ' style="' + base + '">' + inner + (sel ? (function(){ var hz = Math.round(14 / scale), hb = Math.max(2, Math.round(2 / scale)), o = -Math.round(hz / 2) - hb; return [['nw', 'left:' + o + 'px;top:' + o + 'px;cursor:nwse-resize'], ['ne', 'right:' + o + 'px;top:' + o + 'px;cursor:nesw-resize'], ['sw', 'left:' + o + 'px;bottom:' + o + 'px;cursor:nesw-resize'], ['se', 'right:' + o + 'px;bottom:' + o + 'px;cursor:nwse-resize']].map(function(c){ return '<div onpointerdown="csDown(event,\'' + e.id + '\',\'' + c[0] + '\')" style="position:absolute;width:' + hz + 'px;height:' + hz + 'px;background:#fff;border:' + hb + 'px solid #b31e59;border-radius:50%;' + c[1] + '"></div>'; }).join('') + '<div title="Dra för att rotera" onpointerdown="csDown(event,\'' + e.id + '\',\'rot\')" style="position:absolute;left:50%;top:' + (-Math.round(hz * 2.2)) + 'px;width:' + hz + 'px;height:' + hz + 'px;margin-left:' + (-Math.round(hz / 2)) + 'px;background:#b31e59;border:' + hb + 'px solid #fff;border-radius:50%;cursor:grab"></div>'; })() : '') + '</div>';
+    h += '<div class="cs-el' + (sel ? ' sel' : '') + '"' + attrs + ' style="' + base + '">' + inner + (sel ? (function(){ var hz = Math.round(14 / scale), hb = Math.max(2, Math.round(2 / scale)), o = -Math.round(hz / 2) - hb; return [['nw', 'left:' + o + 'px;top:' + o + 'px;cursor:nwse-resize'], ['ne', 'right:' + o + 'px;top:' + o + 'px;cursor:nesw-resize'], ['sw', 'left:' + o + 'px;bottom:' + o + 'px;cursor:nesw-resize'], ['se', 'right:' + o + 'px;bottom:' + o + 'px;cursor:nwse-resize']].map(function(c){ return '<div onpointerdown="csDown(event,\'' + e.id + '\',\'' + c[0] + '\')" style="position:absolute;width:' + hz + 'px;height:' + hz + 'px;background:#fff;border:' + hb + 'px solid #b31e59;border-radius:50%;' + c[1] + '"></div>'; }).join('') + (function(){ var lg = Math.round(hz * 1.5), sm = Math.round(hz * 0.65), so = -Math.round(sm / 2) - hb; return [['n', 'width:' + lg + 'px;height:' + sm + 'px;left:50%;margin-left:' + (-Math.round(lg / 2)) + 'px;top:' + so + 'px;cursor:ns-resize'], ['s', 'width:' + lg + 'px;height:' + sm + 'px;left:50%;margin-left:' + (-Math.round(lg / 2)) + 'px;bottom:' + so + 'px;cursor:ns-resize'], ['w', 'width:' + sm + 'px;height:' + lg + 'px;top:50%;margin-top:' + (-Math.round(lg / 2)) + 'px;left:' + so + 'px;cursor:ew-resize'], ['e', 'width:' + sm + 'px;height:' + lg + 'px;top:50%;margin-top:' + (-Math.round(lg / 2)) + 'px;right:' + so + 'px;cursor:ew-resize']].map(function(c){ return '<div onpointerdown="csDown(event,\'' + e.id + '\',\'' + c[0] + '\')" style="position:absolute;background:#fff;border:' + hb + 'px solid #b31e59;border-radius:' + Math.round(sm / 2) + 'px;' + c[1] + '"></div>'; }).join(''); })() + '<div title="Dra för att rotera" onpointerdown="csDown(event,\'' + e.id + '\',\'rot\')" style="position:absolute;left:50%;top:' + (-Math.round(hz * 2.2)) + 'px;width:' + hz + 'px;height:' + hz + 'px;margin-left:' + (-Math.round(hz / 2)) + 'px;background:#b31e59;border:' + hb + 'px solid #fff;border-radius:50%;cursor:grab"></div>'; })() : '') + '</div>';
   });
   if (interactive && _cs.grid) h += '<div style="position:absolute;inset:96px;border:2px dashed rgba(59,130,246,.55);pointer-events:none"></div><div style="position:absolute;left:540px;top:0;bottom:0;border-left:2px dashed rgba(236,72,153,.55);pointer-events:none"></div><div style="position:absolute;top:675px;left:0;right:0;border-top:2px dashed rgba(236,72,153,.55);pointer-events:none"></div>';
   h += '</div></div>';
@@ -3735,7 +3736,7 @@ function _vsDrawOv(ctx, W, H, t, showSel){
     ctx.save(); ctx.globalAlpha = sel && a <= 0 ? 0.35 : a;
     var x = o.x * W, y = o.y * H, w = o.w * W, h, im, fs, lines, lh;
     // Mät först (höjden behövs för att kunna rotera runt mitten)
-    if (o.type === 'image') { im = _vsImg(o.src); var ar = (im.naturalWidth && im.naturalHeight) ? im.naturalWidth / im.naturalHeight : (o.ar || 1); h = w / ar; }
+    if (o.type === 'image') { im = _vsImg(o.src); var ar = (im.naturalWidth && im.naturalHeight) ? im.naturalWidth / im.naturalHeight : (o.ar || 1); h = o.hf ? o.hf * H : w / ar; }
     else {
       fs = Math.max(6, o.size * W); ctx.font = (o.bold ? '700 ' : '400 ') + fs + 'px ' + _csFontOf(o); ctx.textBaseline = 'top';
       lines = []; String(o.text || '').split('\n').forEach(function(p){ var l = _crWrap(ctx, p, w); lines = lines.concat(l.length ? l : ['']); });
@@ -3743,7 +3744,7 @@ function _vsDrawOv(ctx, W, H, t, showSel){
     }
     if (showSel) o._bh = h / H;
     if (o.rot) { ctx.translate(x + w / 2, y + h / 2); ctx.rotate(o.rot * Math.PI / 180); ctx.translate(-(x + w / 2), -(y + h / 2)); }
-    if (o.type === 'image') { if (im.complete && im.naturalWidth) ctx.drawImage(im, x, y, w, h); }
+    if (o.type === 'image') { if (im.complete && im.naturalWidth) { if (o.hf && h > 0) { var br = w / h, sw = im.naturalWidth, sh = im.naturalHeight, sx0 = 0, sy0 = 0; if (sw / sh > br) { var nsw = sh * br; sx0 = (sw - nsw) / 2; sw = nsw; } else { var nsh = sw / br; sy0 = (sh - nsh) / 2; sh = nsh; } ctx.drawImage(im, sx0, sy0, sw, sh, x, y, w, h); } else ctx.drawImage(im, x, y, w, h); } }
     else {
       var pad = o.plate ? fs * 0.35 : 0;
       if (o.plate) { var mw = 0; lines.forEach(function(l){ mw = Math.max(mw, ctx.measureText(l).width); }); var px0 = o.align === 'center' ? x + (w - mw) / 2 : (o.align === 'right' ? x + w - mw : x); ctx.fillStyle = o.plate; ctx.fillRect(px0 - pad, y - pad, mw + pad * 2, h + pad * 2); }
@@ -3758,6 +3759,8 @@ function _vsDrawOv(ctx, W, H, t, showSel){
         var r = Math.max(5, W / 110), ro = W * 0.05;
         ctx.beginPath(); ctx.moveTo(x + w / 2, y); ctx.lineTo(x + w / 2, y - ro); ctx.stroke();
         [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(function(p){ ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = Math.max(1.5, W / 400); ctx.stroke(); });
+        // Sidhandtag: bredd för text, bredd och höjd för bilder
+        (o.type === 'image' ? [[x + w / 2, y, 1], [x + w / 2, y + h, 1], [x, y + h / 2, 0], [x + w, y + h / 2, 0]] : [[x, y + h / 2, 0], [x + w, y + h / 2, 0]]).forEach(function(p){ var a1 = p[2] ? r * 1.8 : r * 0.8, b1 = p[2] ? r * 0.8 : r * 1.8; ctx.fillStyle = '#fff'; ctx.fillRect(p[0] - a1, p[1] - b1, a1 * 2, b1 * 2); ctx.strokeRect(p[0] - a1, p[1] - b1, a1 * 2, b1 * 2); });
         ctx.beginPath(); ctx.arc(x + w / 2, y - ro, r * 1.15, 0, Math.PI * 2); ctx.fillStyle = '#b31e59'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.stroke();
       }
     }
@@ -4002,7 +4005,7 @@ function vsPanDown(ev){
   if (cur && cur.type !== 'video' && !cur.locked && cur._bh != null) {
     var L = _vsLocal(cur, px, py, rect), ro = rect.width * 0.05;
     if (Math.hypot(L.x - L.cx, L.y - (L.Y - ro)) < R) { hit = cur; mode = 'rot'; }
-    else [['nw', L.X, L.Y], ['ne', L.X + L.W, L.Y], ['sw', L.X, L.Y + L.H], ['se', L.X + L.W, L.Y + L.H]].forEach(function(c){ if (!hit && Math.hypot(L.x - c[1], L.y - c[2]) < R) { hit = cur; mode = c[0]; } });
+    else [['nw', L.X, L.Y], ['ne', L.X + L.W, L.Y], ['sw', L.X, L.Y + L.H], ['se', L.X + L.W, L.Y + L.H], ['w', L.X, L.Y + L.H / 2], ['e', L.X + L.W, L.Y + L.H / 2]].concat(cur.type === 'image' ? [['n', L.X + L.W / 2, L.Y], ['s', L.X + L.W / 2, L.Y + L.H]] : []).forEach(function(c){ if (!hit && Math.hypot(L.x - c[1], L.y - c[2]) < R) { hit = cur; mode = c[0]; } });
   }
   if (!hit) for (var i = _vs.ov.length - 1; i >= 0; i--) { var o = _vs.ov[i]; if (o.type === 'video' || o.hidden || o._bh == null || !(_vsOvAlpha(o, t) > 0 || o.id === _vs.sel)) continue; var q = _vsLocal(o, px, py, rect); if (q.x >= q.X && q.x <= q.X + q.W && q.y >= q.Y && q.y <= q.Y + q.H) { hit = o; break; } }
   if (hit) {
@@ -4012,6 +4015,11 @@ function vsPanDown(ev){
     var ccx = rect.left + (ox + ow / 2) * rect.width, ccy = rect.top + (oy + oh / 2) * rect.height;
     var mv = function(e){ var dx = (e.clientX - sx) / rect.width, dy = (e.clientY - sy) / rect.height; moved = true;
       if (mode === 'rot') { var ang = Math.atan2(e.clientY - ccy, e.clientX - ccx) * 180 / Math.PI + 90; if (!e.shiftKey) { var sn = Math.round(ang / 15) * 15; if (Math.abs(ang - sn) < 4) ang = sn; } hit.rot = Math.round(((ang % 360) + 360) % 360); }
+      else if (mode.length === 1) {
+        // Sida: bara bredd (e/w) eller bara höjd (n/s, bilder). Bilden beskärs i sin ruta.
+        if (mode === 'e' || mode === 'w') { var nw1 = Math.max(0.04, Math.min(1.5, mode === 'e' ? ow + dx : ow - dx)); if (hit.type === 'image' && !hit.hf) hit.hf = oh; hit.w = nw1; if (mode === 'w') hit.x = ox + ow - nw1; }
+        else { var nh1 = Math.max(0.03, Math.min(1.5, mode === 's' ? oh + dy : oh - dy)); hit.hf = nh1; if (mode === 'n') hit.y = oy + oh - nh1; }
+      }
       else if (mode !== 'move') {
         // Hörnet följer musen både i sidled och i höjdled – den riktning som ändrats mest bestämmer storleken
         var sxw = (mode[1] === 'e' ? ow + dx : ow - dx) / ow, syh = oh ? (mode[0] === 's' ? oh + dy : oh - dy) / oh : sxw;
@@ -4020,6 +4028,7 @@ function vsPanDown(ev){
         // Text: hörnen skalar texten som i Canva, Shift = bara rutans bredd
         if (hit.type === 'text' && !e.shiftKey) hit.size = Math.max(0.01, os * nw / ow);
         if (mode[0] === 'n') hit.y = oy + oh - oh * nw / ow;
+        if (hit.hf) hit.hf = oh * nw / ow;
       }
       else { hit.x = ox + dx; hit.y = oy + dy; if (Math.abs(hit.x + hit.w / 2 - 0.5) < 0.015) hit.x = 0.5 - hit.w / 2; }
       _vsPaint(); };
@@ -8799,9 +8808,11 @@ function _cvWire(post, card){
   var multiBox = document.createElement('div');
   multiBox.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:44';
   layer.appendChild(multiBox);
-  var corners = ['nw', 'ne', 'sw', 'se'].map(function(k){
+  // Fyra hörn (behåller proportionerna) + fyra sidor (ändrar bara bredd eller höjd)
+  var corners = ['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map(function(k){
     var h = document.createElement('div'); h.dataset.k = k;
-    h.style.cssText = 'position:absolute;width:12px;height:12px;background:#fff;border:2px solid #b31e59;border-radius:50%;pointer-events:auto;z-index:46;cursor:' + (k === 'nw' || k === 'se' ? 'nwse-resize' : 'nesw-resize') + ';' + (k[0] === 'n' ? 'top:-7px;' : 'bottom:-7px;') + (k[1] === 'w' ? 'left:-7px;' : 'right:-7px;');
+    if (k.length === 1) h.style.cssText = 'position:absolute;background:#fff;border:2px solid #b31e59;border-radius:4px;pointer-events:auto;z-index:46;' + (k === 'n' || k === 's' ? 'width:18px;height:8px;left:50%;margin-left:-9px;cursor:ns-resize;' + (k === 'n' ? 'top:-5px;' : 'bottom:-5px;') : 'width:8px;height:18px;top:50%;margin-top:-9px;cursor:ew-resize;' + (k === 'w' ? 'left:-5px;' : 'right:-5px;'));
+    else h.style.cssText = 'position:absolute;width:12px;height:12px;background:#fff;border:2px solid #b31e59;border-radius:50%;pointer-events:auto;z-index:46;cursor:' + (k === 'nw' || k === 'se' ? 'nwse-resize' : 'nesw-resize') + ';' + (k[0] === 'n' ? 'top:-7px;' : 'bottom:-7px;') + (k[1] === 'w' ? 'left:-7px;' : 'right:-7px;');
     selBox.appendChild(h); return h;
   });
   var rot = document.createElement('div');
@@ -8828,14 +8839,15 @@ function _cvWire(post, card){
       drag(function(m){
         var dx = (m.clientX - sx) / g.w * 100, dy = (m.clientY - sy) / g.h * 100;
         var nx = b0.x, ny = b0.y, nw = b0.w, nh = b0.h;
-        if (k[1] === 'e') nw = b0.w + dx; else { nw = b0.w - dx; nx = b0.x + dx; }
-        if (k[0] === 's') nh = b0.h + dy; else { nh = b0.h - dy; ny = b0.y + dy; }
-        if ((keepRatio && !m.shiftKey) || (!keepRatio && m.shiftKey)) { /* hörnet följer musen både i sidled och höjdled – den riktning som ändrats mest bestämmer */ var sc = Math.abs(nh / Math.max(0.1, b0.h) - 1) > Math.abs(nw / Math.max(0.1, b0.w) - 1) ? nh / Math.max(0.1, b0.h) : nw / Math.max(0.1, b0.w); nw = b0.w * sc; var nh2 = nw * ratio; nx = k[1] === 'w' ? b0.x + b0.w - nw : b0.x; ny = k[0] === 'n' ? b0.y + b0.h - nh2 : b0.y; nh = nh2; }
-        if (nw < 2) { if (k[1] === 'w') nx -= 2 - nw; nw = 2; }
+        var side = k.length === 1, hx = side ? (k === 'e' || k === 'w' ? k : '') : k[1], vy = side ? (k === 'n' || k === 's' ? k : '') : k[0];
+        if (hx === 'e') nw = b0.w + dx; else if (hx === 'w') { nw = b0.w - dx; nx = b0.x + dx; }
+        if (vy === 's') nh = b0.h + dy; else if (vy === 'n') { nh = b0.h - dy; ny = b0.y + dy; }
+        if (!side && ((keepRatio && !m.shiftKey) || (!keepRatio && m.shiftKey))) { /* hörnet följer musen både i sidled och höjdled – den riktning som ändrats mest bestämmer */ var sc = Math.abs(nh / Math.max(0.1, b0.h) - 1) > Math.abs(nw / Math.max(0.1, b0.w) - 1) ? nh / Math.max(0.1, b0.h) : nw / Math.max(0.1, b0.w); nw = b0.w * sc; var nh2 = nw * ratio; nx = k[1] === 'w' ? b0.x + b0.w - nw : b0.x; ny = k[0] === 'n' ? b0.y + b0.h - nh2 : b0.y; nh = nh2; }
+        if (nw < 2) { if (hx === 'w') nx -= 2 - nw; nw = 2; }
         if (nh < (e.type === 'line' ? 0.3 : 2)) nh = e.type === 'line' ? 0.3 : 2;
         // Ingen låsning till kanten – elementet får sticka ut utanför inlägget (beskärs visuellt)
         e.x = Math.round(nx * 10) / 10; e.y = Math.round(ny * 10) / 10; e.w = Math.round(nw * 10) / 10; e.h = Math.round(nh * 10) / 10;
-        if (e.type === 'text' && !m.shiftKey) { e.fs = Math.max(0.5, Math.round(fs0 * nw / Math.max(0.1, b0.w) * 100) / 100); if (node && !e.curve) node.style.fontSize = e.fs + 'cqw'; }
+        if (e.type === 'text' && !m.shiftKey && !side) { e.fs = Math.max(0.5, Math.round(fs0 * nw / Math.max(0.1, b0.w) * 100) / 100); if (node && !e.curve) node.style.fontSize = e.fs + 'cqw'; }
         if (node) apply(node, e); placeSel();
       }, function(){ if (e.type === 'text') _cvRerender(); });
     });
