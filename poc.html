@@ -3835,6 +3835,12 @@ function _vsGainAt(t){
   if (au.fout && b < au.fout) g *= Math.max(0, b / au.fout);
   return g;
 }
+// ── Ångra / gör om: ögonblicksbild av allt som går att ändra, efter varje ändring ──
+function _vsState(){ return JSON.stringify({ ov: _vs.ov, set: _vs.set, on: _vs.on, au: _vs.au, speed: _vs.speed, start: _vs.start, end: _vs.end, cover: _vs.cover }, function(k, v){ return k.charAt(0) === '_' ? undefined : v; }); }
+function _vsSnap(){ var j = _vsState(); if (!_vs.hist) { _vs.hist = [j]; _vs.hi = 0; return; } if (_vs.hist[_vs.hi] === j) return; _vs.hist = _vs.hist.slice(0, _vs.hi + 1); _vs.hist.push(j); if (_vs.hist.length > 80) _vs.hist.shift(); _vs.hi = _vs.hist.length - 1; }
+function _vsRestore(j){ var s = JSON.parse(j); _vs.ov = s.ov; _vs.set = s.set; _vs.on = s.on; _vs.au = s.au; _vs.speed = s.speed; _vs.start = s.start; _vs.end = s.end; _vs.cover = s.cover; if (_vs.el) _vs.el.playbackRate = _vs.speed || 1; if (!_vsSelOv()) _vs.sel = _vs.sel === '__bg' ? '__bg' : null; _vsRender(); }
+function vsUndo(){ if (!_vs.hist || _vs.hi <= 0) return; _vs.hi--; _vsRestore(_vs.hist[_vs.hi]); }
+function vsRedo(){ if (!_vs.hist || _vs.hi >= _vs.hist.length - 1) return; _vs.hi++; _vsRestore(_vs.hist[_vs.hi]); }
 function vsTab(t){ _vs.tab = t; _vsRender(); }
 
 // ── Öppna studion ── opts: { video, post, channels, onSave(video) }
@@ -3848,7 +3854,7 @@ function openVideoStudio(opts){
   VS_FORMATS.forEach(function(f){ if (!_vs.set[f.k]) _vs.set[f.k] = { mode: 'fill', zoom: 1, px: 0, py: 0, bg: 'blur' }; });
   _vs.cur = Object.keys(_vs.on).filter(function(k){ return _vs.on[k]; })[0] || '9x16';
   _vs.start = ed.start || 0; _vs.end = ed.end || 0; _vs.cover = ed.cover || 0;
-  _vs.ov = _csClone(ed.ov || []); if (!_vs.ov.some(function(o){ return o.type === 'video'; })) _vs.ov.unshift({ id: '__video', type: 'video' }); _vs.au = _csClone(ed.au || { mute: false, vol: 1, fin: 0, fout: 0 }); _vs.speed = ed.speed || 1; _vs.sel = null; _vs.tab = 'fmt';
+  _vs.ov = _csClone(ed.ov || []); if (!_vs.ov.some(function(o){ return o.type === 'video'; })) _vs.ov.unshift({ id: '__video', type: 'video' }); _vs.au = _csClone(ed.au || { mute: false, vol: 1, fin: 0, fout: 0 }); _vs.speed = ed.speed || 1; _vs.sel = null; _vs.tab = 'fmt'; _vs.hist = null;
   _vs.ov.forEach(function(o){ if (o.type === 'image') _vsImg(o.src); });
   var m = document.getElementById('vsStudio');
   if (!m) {
@@ -3860,6 +3866,8 @@ function openVideoStudio(opts){
     document.addEventListener('keydown', function(e){
       var mm = document.getElementById('vsStudio'); if (!mm || mm.style.display === 'none') return;
       var a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); if (e.shiftKey) vsRedo(); else vsUndo(); return; }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); vsRedo(); return; }
       if ((e.key === 'Delete' || e.key === 'Backspace') && _vs.sel) { e.preventDefault(); vsOvDel(); }
       else if (e.key === ' ') { e.preventDefault(); vsPlay(); }
     });
@@ -3932,6 +3940,7 @@ function _vsPanelAu(){
 }
 function _vsRender(){
   var m = document.getElementById('vsStudio'); if (!m || !_vs.el) return;
+  _vsSnap();
   var f = _vsFmt(_vs.cur), st = _vs.set[_vs.cur], dur = _vs.el.duration || 0;
   var maxH = Math.max(260, window.innerHeight - 290), maxW = Math.max(260, Math.min(window.innerWidth - 660, 760));
   var k = Math.min(maxW / f.w, maxH / f.h), cw = Math.round(f.w * k), ch = Math.round(f.h * k);
@@ -3943,7 +3952,7 @@ function _vsRender(){
   var o = _vsSelOv();
   var panel = _vs.tab === 'ov' ? _vsPanelOv() : (_vs.tab === 'au' ? _vsPanelAu() : _vsPanelFmt(f, st, dur, len));
   m.innerHTML = '<div style="background:#faf9f7;border-radius:16px;width:min(1320px,100%);height:100%;max-height:960px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.35)">'
-    + '<div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid #eee;background:#fff;flex-wrap:wrap"><b style="font-size:16px">🎬 Videostudio</b><span style="font-size:12px;color:#6b7280">' + _crEsc(_vs.video.name || '') + '</span><span style="flex:1"></span>'
+    + '<div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid #eee;background:#fff;flex-wrap:wrap"><b style="font-size:16px">🎬 Videostudio</b><button class="vs-btn" onclick="vsUndo()" title="Ångra (Ctrl+Z)"' + (_vs.hist && _vs.hi > 0 ? '' : ' disabled style="opacity:.35"') + '>↶</button><button class="vs-btn" onclick="vsRedo()" title="Gör om (Ctrl+Y)"' + (_vs.hist && _vs.hi < _vs.hist.length - 1 ? '' : ' disabled style="opacity:.35"') + '>↷</button><span style="font-size:12px;color:#6b7280">' + _crEsc(_vs.video.name || '') + '</span><span style="flex:1"></span>'
     + '<span id="vsProg" style="font-size:12px;color:#b31e59;font-weight:600"></span><button class="vs-btn" onclick="closeVideoStudio()">Avbryt</button><button class="vs-btn pri" id="vsSaveBtn" onclick="vsExport()">💾 Skapa ' + sel + ' ' + (sel === 1 ? 'video' : 'videor') + '</button></div>'
     + '<div style="flex:1;min-height:0;display:flex">'
     + '<div style="width:250px;flex-shrink:0;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px;border-right:1px solid #eee"><label class="vs-lab">Format · kryssa i de som ska skapas</label>' + list + '</div>'
