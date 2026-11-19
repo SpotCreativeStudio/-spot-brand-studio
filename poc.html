@@ -3831,7 +3831,10 @@ function _vsEdgeInfo(c, b){
 // ── Lager ovanpå videon: text, bild och logga. Läge och storlek sparas som andel av bilden, så att de passar alla format ──
 function _vsImg(src){ var c = _vs.imgs[src]; if (!c) { c = new Image(); c.onload = function(){ _vsPaint(); }; c.src = src; _vs.imgs[src] = c; } return c; }
 function _vsOvAlpha(o, t){
-  var t0 = o.t0 || 0, t1 = o.t1 == null ? 1e9 : o.t1; if (t < t0 || t > t1) return 0;
+  var t0 = o.t0 || 0, t1 = o.t1 == null ? 1e9 : o.t1;
+  // Lager som gäller till klippets slut (eller från dess start) syns även när videon stannat precis efter slutet eller före starten
+  var v0 = t0 <= (_vs.start || 0) + 0.02 ? -1e9 : t0, v1 = t1 >= (_vs.end || 0) - 0.02 ? 1e9 : t1; if (t < v0 || t > v1) return 0;
+  if (o.fade) { t = Math.max(t0, Math.min(t1, t)); }
   if (!o.fade) return o.op != null ? o.op : 1;
   var a = Math.min(1, (t - t0) / 0.4, (t1 - t) / 0.4); return Math.max(0, a) * (o.op != null ? o.op : 1);
 }
