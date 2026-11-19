@@ -1154,7 +1154,7 @@ function applyRolePermissions(){
 _loadUserInfo();
 var _imgLibCache = [];
 function _getImgLib(){ return _imgLibCache; }
-function _loadImgLibrary(){ fetch('/api/brand-images').then(function(r){return r.json();}).then(function(data){ _imgLibCache = data.images || []; renderImgLibrary(); }).catch(function(){}); }
+function _loadImgLibrary(){ fetch('/api/brand-images').then(function(r){return r.json();}).then(function(data){ _imgLibCache = data.images || []; _imgLibFolderList = data.folders || []; renderImgLibrary(); }).catch(function(){}); }
 function openLibraryPicker(target){
   window._libPickTarget = target || 'create';
   var modal = document.getElementById('libPickerModal');
@@ -1235,38 +1235,73 @@ function selectFromLibrary(i){
   if (typeof updateManualPreview === 'function') updateManualPreview();
   if (typeof showToast === 'function') showToast('📚 Bild vald från biblioteket');
 }
-// ── Mappar i bildbiblioteket: varje bild kan ligga i en mapp. Tomma mappar sparas lokalt tills en bild flyttas dit ──
-var _libFolder = '';
-function _libKey(){ return 'spotLibFolders:' + (typeof CURRENT_WORKSPACE !== 'undefined' ? CURRENT_WORKSPACE : 'spot'); }
-function _libExtra(){ try { return JSON.parse(localStorage.getItem(_libKey()) || '[]'); } catch (e) { return []; } }
-function _libSaveExtra(a){ try { localStorage.setItem(_libKey(), JSON.stringify(a)); } catch (e) {} }
-function _libFolders(){ var set = {}; _getImgLib().forEach(function(x){ if (x.folder) set[x.folder] = 1; }); _libExtra().forEach(function(f){ set[f] = 1; }); return Object.keys(set).sort(function(a, b){ return a.localeCompare(b, 'sv'); }); }
+// ── Mappar i bildbiblioteket: mapparna sparas på servern (även tomma) och listan uppdateras automatiskt ──
+var _libFolder = '', _imgLibFolderList = [], _libSig = '';
+function _libExtra(){ return []; }
+function _libSaveExtra(a){}
+function _libFolders(){ var set = {}; _getImgLib().forEach(function(x){ if (x.folder) set[x.folder] = 1; }); (_imgLibFolderList || []).forEach(function(f){ if (f) set[f] = 1; }); return Object.keys(set).sort(function(a, b){ return a.localeCompare(b, 'sv'); }); }
 function _libEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
+function _libClean(n){ return String(n || '').replace(/[<>"'\x60\\/]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40); }
+function _libPost(body){ return fetch('/api/brand-images/folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function(r){ return r.json(); }); }
+// Hämtar biblioteket igen i bakgrunden; ritar bara om när något faktiskt har ändrats
+function _libRefresh(){
+  return fetch('/api/brand-images').then(function(r){ return r.json(); }).then(function(d){
+    if (!d || !d.images) return;
+    var sig = JSON.stringify([(d.folders || []).slice().sort(), d.images.map(function(x){ return [x.id, x.folder || '', x.ts]; })]);
+    if (sig === _libSig) return; _libSig = sig;
+    _imgLibCache = d.images; _imgLibFolderList = d.folders || [];
+    if (!document.getElementById('libMoveMenu') && !document.getElementById('libDelBox')) renderImgLibrary();
+  }).catch(function(){});
+}
+// Kollar efter ändringar var 10:e sekund när bildbanken syns, och direkt när fönstret får fokus igen
+function _libVisible(){ var g = document.getElementById('imgLibGrid'); return !!(g && g.offsetParent); }
+setInterval(function(){ if (!document.hidden && _libVisible()) _libRefresh(); }, 10000);
+window.addEventListener('focus', function(){ if (_libVisible()) _libRefresh(); });
 function libPickFolder(f){ _libFolder = f; renderImgLibrary(); }
 function libNewFolder(){
-  var n = (prompt('Namn på den nya mappen:') || '').trim().slice(0, 40); if (!n) return;
-  var ex = _libExtra(); if (_libFolders().indexOf(n) < 0) { ex.push(n); _libSaveExtra(ex); }
-  _libFolder = n; renderImgLibrary();
+  var n = _libClean(prompt('Namn på den nya mappen:')); if (!n) return;
+  _libPost({ create: n }).then(function(d){
+    if (!d.ok) { showToast('⚠️ ' + (d.error || 'Kunde inte skapa mappen')); return; }
+    if (_imgLibFolderList.indexOf(n) < 0) _imgLibFolderList.push(n);
+    _libFolder = n; renderImgLibrary(); _libRefresh();
+  }).catch(function(){ showToast('⚠️ Kunde inte skapa mappen'); });
 }
 function libRenameFolder(){
   var from = _libFolder; if (!from) return;
-  var to = (prompt('Nytt namn på mappen "' + from + '":', from) || '').trim().slice(0, 40); if (!to || to === from) return;
-  fetch('/api/brand-images/folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: from, to: to }) }).then(function(r){ return r.json(); }).then(function(d){
+  var to = _libClean(prompt('Nytt namn på mappen "' + from + '":', from)); if (!to || to === from) return;
+  _libPost({ from: from, to: to }).then(function(d){
     if (!d.ok) { showToast('⚠️ ' + (d.error || 'Kunde inte byta namn')); return; }
     _getImgLib().forEach(function(x){ if (x.folder === from) x.folder = to; });
-    _libSaveExtra(_libExtra().map(function(f){ return f === from ? to : f; }));
-    _libFolder = to; renderImgLibrary();
+    _imgLibFolderList = _imgLibFolderList.map(function(f){ return f === from ? to : f; });
+    _libFolder = to; renderImgLibrary(); _libRefresh();
   });
 }
-function libDeleteFolder(){
-  var f = _libFolder; if (!f) return;
-  if (!confirm('Ta bort mappen "' + f + '"? Bilderna i den raderas inte – de flyttas till "Utan mapp".')) return;
-  fetch('/api/brand-images/folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: f, to: '' }) }).then(function(r){ return r.json(); }).then(function(d){
-    if (!d.ok) { showToast('⚠️ ' + (d.error || 'Kunde inte ta bort mappen')); return; }
-    _getImgLib().forEach(function(x){ if (x.folder === f) x.folder = ''; });
-    _libSaveExtra(_libExtra().filter(function(x){ return x !== f; }));
-    _libFolder = ''; renderImgLibrary();
-  });
+// Ta bort mapp: krysset på mappen öppnar en "Är du säker?"-ruta
+function libDeleteFolder(f, ev){
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  f = f || _libFolder; if (!f) return;
+  var n = _getImgLib().filter(function(x){ return x.folder === f; }).length;
+  var m = document.getElementById('libDelBox'); if (m) m.remove();
+  m = document.createElement('div'); m.id = 'libDelBox';
+  m.style.cssText = 'position:fixed;inset:0;z-index:10050;background:rgba(17,17,17,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+  m.onclick = function(e){ if (e.target === m) m.remove(); };
+  m.innerHTML = '<div style="background:#fff;border-radius:14px;padding:22px;width:min(400px,100%);box-shadow:0 20px 50px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:12px">'
+    + '<div style="font-size:17px;font-weight:700">Ta bort mappen "' + _libEsc(f) + '"?</div>'
+    + '<div style="font-size:14px;color:#4b5563;line-height:1.5">' + (n ? 'Bilderna i mappen (' + n + ' st) raderas inte – de flyttas till <b>Utan mapp</b>.' : 'Mappen är tom.') + ' Ändringen gäller för alla i teamet.</div>'
+    + '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px"><button id="libDelNo" style="font-size:13px;font-weight:600;padding:9px 14px;border-radius:9px;border:1px solid #e5e7eb;background:#fff;cursor:pointer">Avbryt</button><button id="libDelYes" style="font-size:13px;font-weight:600;padding:9px 14px;border-radius:9px;border:1px solid #b31e59;background:#b31e59;color:#fff;cursor:pointer">Ja, ta bort mappen</button></div></div>';
+  document.body.appendChild(m);
+  document.getElementById('libDelNo').onclick = function(){ m.remove(); };
+  document.getElementById('libDelNo').focus();
+  document.getElementById('libDelYes').onclick = function(){
+    m.remove();
+    _libPost({ from: f, to: '' }).then(function(d){
+      if (!d.ok) { showToast('⚠️ ' + (d.error || 'Kunde inte ta bort mappen')); return; }
+      _getImgLib().forEach(function(x){ if (x.folder === f) x.folder = ''; });
+      _imgLibFolderList = _imgLibFolderList.filter(function(x){ return x !== f; });
+      if (_libFolder === f) _libFolder = '';
+      renderImgLibrary(); showToast('🗑 Mappen "' + f + '" togs bort'); _libRefresh();
+    });
+  };
 }
 function libMoveImage(i, ev){
   if (ev) ev.stopPropagation();
@@ -1294,12 +1329,12 @@ function renderImgLibrary(){
   var lib = _getImgLib(), folders = _libFolders();
   if (_libFolder && _libFolder !== '__none' && folders.indexOf(_libFolder) < 0) _libFolder = '';
   var count = function(f){ return lib.filter(function(x){ return f === '__none' ? !x.folder : x.folder === f; }).length; };
-  var chip = function(val, label, n){ var on = _libFolder === val; return '<button onclick="libPickFolder(' + JSON.stringify(val).replace(/"/g, '&quot;') + ')" style="font-size:12px;font-weight:600;padding:6px 11px;border-radius:999px;cursor:pointer;border:1px solid ' + (on ? '#b31e59;background:#fff5f7;color:#b31e59' : '#e5e7eb;background:#fff;color:#374151') + '">' + label + ' <span style="font-weight:400;color:#9ca3af">' + n + '</span></button>'; };
+  var chip = function(val, label, n, del){ var on = _libFolder === val, q = JSON.stringify(val).replace(/"/g, '&quot;'); return '<button onclick="libPickFolder(' + q + ')" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:6px ' + (del ? '6px' : '11px') + ' 6px 11px;border-radius:999px;cursor:pointer;border:1px solid ' + (on ? '#b31e59;background:#fff5f7;color:#b31e59' : '#e5e7eb;background:#fff;color:#374151') + '">' + label + ' <span style="font-weight:400;color:#9ca3af">' + n + '</span>' + (del ? '<span class="lib-admin" title="Ta bort mappen" onclick="libDeleteFolder(' + q + ',event)" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font-size:14px;line-height:1;color:#9ca3af;margin-left:2px" onmouseover="this.style.background=\'#fde2ea\';this.style.color=\'#b31e59\'" onmouseout="this.style.background=\'\';this.style.color=\'#9ca3af\'">×</span>' : '') + '</button>'; };
   var bar = document.getElementById('imgLibFolders');
   if (!bar) { bar = document.createElement('div'); bar.id = 'imgLibFolders'; bar.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px'; grid.parentNode.insertBefore(bar, grid); }
-  bar.innerHTML = chip('', '🗂 Alla', lib.length) + folders.map(function(f){ return chip(f, '📁 ' + _libEsc(f), count(f)); }).join('') + (lib.some(function(x){ return !x.folder; }) && folders.length ? chip('__none', 'Utan mapp', count('__none')) : '')
+  bar.innerHTML = chip('', '🗂 Alla', lib.length) + folders.map(function(f){ return chip(f, '📁 ' + _libEsc(f), count(f), true); }).join('') + (lib.some(function(x){ return !x.folder; }) && folders.length ? chip('__none', 'Utan mapp', count('__none')) : '')
     + '<button class="lib-admin" onclick="libNewFolder()" style="font-size:12px;font-weight:600;padding:6px 11px;border-radius:999px;cursor:pointer;border:1.5px dashed #d1d5db;background:#fff;color:#6b7280">+ Ny mapp</button>'
-    + (_libFolder && _libFolder !== '__none' ? '<span style="flex:1"></span><button class="lib-admin" onclick="libRenameFolder()" style="font-size:12px;padding:5px 9px;border-radius:8px;border:1px solid #e5e7eb;background:#fff;cursor:pointer">✏️ Byt namn</button><button class="lib-admin" onclick="libDeleteFolder()" style="font-size:12px;padding:5px 9px;border-radius:8px;border:1px solid #f0d5e1;background:#fff;color:#b31e59;cursor:pointer">🗑 Ta bort mapp</button>' : '');
+    + (_libFolder && _libFolder !== '__none' ? '<span style="flex:1"></span><button class="lib-admin" onclick="libRenameFolder()" style="font-size:12px;padding:5px 9px;border-radius:8px;border:1px solid #e5e7eb;background:#fff;cursor:pointer">✏️ Byt namn</button>' : '');
   var shown = lib.map(function(img, i){ return { img: img, i: i }; }).filter(function(o){ return !_libFolder ? true : (_libFolder === '__none' ? !o.img.folder : o.img.folder === _libFolder); });
   if (!shown.length) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;font-size:12px;color:#9ca3af">' + (lib.length ? 'Inga bilder i den här mappen ännu. Ladda upp hit, eller flytta bilder hit med 📁 på bilden.' : 'Inga bilder uppladdade ännu.') + '</div>'; return; }
   grid.innerHTML = shown.map(function(o){
