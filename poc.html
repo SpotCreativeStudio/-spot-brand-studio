@@ -4009,8 +4009,10 @@ function _vsRender(){
   var f = _vsFmt(_vs.cur), st = _vs.set[_vs.cur], dur = _vs.el.duration || 0;
   var maxH = Math.max(260, window.innerHeight - 290), maxW = Math.max(260, Math.min(window.innerWidth - 660, 760));
   var k = Math.min(maxW / f.w, maxH / f.h), cw = Math.round(f.w * k), ch = Math.round(f.h * k);
+  var cpt = window.innerWidth < 1250;
   var list = VS_FORMATS.map(function(x){
-    var tw = 64, th = Math.round(tw * x.h / x.w); if (th > 90) { th = 90; tw = Math.round(th * x.w / x.h); }
+    var tw = cpt ? 44 : 64, th = Math.round(tw * x.h / x.w); if (th > (cpt ? 60 : 90)) { th = cpt ? 60 : 90; tw = Math.round(th * x.w / x.h); }
+    if (cpt) return '<div class="vs-f' + (x.k === _vs.cur ? ' cur' : '') + '" onclick="vsPick(\'' + x.k + '\')" title="' + x.label + ' · ' + x.use + '" style="flex-direction:column;gap:4px;padding:6px"><canvas data-k="' + x.k + '" width="' + tw * 2 + '" height="' + th * 2 + '" style="width:' + tw + 'px;height:' + th + 'px;border-radius:5px;background:#000"></canvas><label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:700;cursor:pointer" onclick="event.stopPropagation()"><input type="checkbox" ' + (_vs.on[x.k] ? 'checked' : '') + ' onclick="vsToggle(\'' + x.k + '\',this.checked)">' + x.label + '</label></div>';
     return '<div class="vs-f' + (x.k === _vs.cur ? ' cur' : '') + '" onclick="vsPick(\'' + x.k + '\')"><input type="checkbox" ' + (_vs.on[x.k] ? 'checked' : '') + ' onclick="event.stopPropagation();vsToggle(\'' + x.k + '\',this.checked)" title="Exportera det här formatet"><canvas data-k="' + x.k + '" width="' + tw * 2 + '" height="' + th * 2 + '" style="width:' + tw + 'px;height:' + th + 'px;border-radius:6px;background:#000;flex-shrink:0"></canvas><div><b style="font-size:14px">' + x.label + '</b><div style="font-size:11px;color:#6b7280">' + x.use + '</div><div style="font-size:10px;color:#9ca3af">' + x.w + ' × ' + x.h + '</div></div></div>';
   }).join('');
   var len = Math.max(0, _vs.end - _vs.start), sel = Object.keys(_vs.on).filter(function(x){ return _vs.on[x]; }).length;
@@ -4020,12 +4022,12 @@ function _vsRender(){
     + '<div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid #eee;background:#fff;flex-wrap:wrap"><b style="font-size:16px">🎬 Videostudio</b><button class="vs-btn" onclick="vsUndo()" title="Ångra (Ctrl+Z)"' + (_vs.hist && _vs.hi > 0 ? '' : ' disabled style="opacity:.35"') + '>↶</button><button class="vs-btn" onclick="vsRedo()" title="Gör om (Ctrl+Y)"' + (_vs.hist && _vs.hi < _vs.hist.length - 1 ? '' : ' disabled style="opacity:.35"') + '>↷</button><span style="font-size:12px;color:#6b7280">' + _crEsc(_vs.video.name || '') + '</span><span style="flex:1"></span>'
     + '<span id="vsProg" style="font-size:12px;color:#b31e59;font-weight:600"></span><button class="vs-btn" onclick="closeVideoStudio()">Avbryt</button><button class="vs-btn pri" id="vsSaveBtn" onclick="vsExport()">💾 Skapa ' + sel + ' ' + (sel === 1 ? 'video' : 'videor') + '</button></div>'
     + '<div style="flex:1;min-height:0;display:flex">'
-    + '<div style="width:250px;flex-shrink:0;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px;border-right:1px solid #eee"><label class="vs-lab">Format · kryssa i de som ska skapas</label>' + list + '</div>'
+    + '<div style="width:' + (cpt ? 92 : 250) + 'px;flex-shrink:0;overflow:auto;padding:' + (cpt ? 8 : 14) + 'px;display:flex;flex-direction:column;gap:8px;border-right:1px solid #eee"><label class="vs-lab">' + (cpt ? 'Format' : 'Format · kryssa i de som ska skapas') + '</label>' + list + '</div>'
     + '<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#ece9e4;padding:12px">'
     + '<canvas id="vsMain" width="' + f.w / 2 + '" height="' + f.h / 2 + '" onpointerdown="vsPanDown(event)" onwheel="vsWheel(event)" style="width:' + cw + 'px;height:' + ch + 'px;background:#000;cursor:grab;box-shadow:0 6px 24px rgba(0,0,0,.2);touch-action:none"></canvas>'
     + '<div style="font-size:11px;color:#6b7280">' + (_vs.ov.length ? 'Klicka på text eller bild för att flytta den · dra i bakgrunden för att flytta videon · scrolla för att zooma' : 'Dra i bilden för att flytta · scrolla eller använd reglaget för att zooma') + '</div></div>'
     + '<input id="vsImgIn" type="file" accept="image/*" style="display:none" onchange="vsImgChosen(this)">'
-    + '<div style="width:300px;flex-shrink:0;display:flex;flex-direction:column;border-left:1px solid #eee;background:#fff">'
+    + '<div style="width:' + (cpt ? 270 : 300) + 'px;flex-shrink:0;display:flex;flex-direction:column;border-left:1px solid #eee;background:#fff">'
     + '<div style="display:flex;border-bottom:1px solid #eee;padding:0 8px"><button class="vs-tab' + (_vs.tab === 'fmt' ? ' on' : '') + '" onclick="vsTab(\'fmt\')">Format & klipp</button><button class="vs-tab' + (_vs.tab === 'ov' ? ' on' : '') + '" onclick="vsTab(\'ov\')">Text & bild' + (_vs.ov.length > 1 ? ' (' + (_vs.ov.length - 1) + ')' : '') + '</button><button class="vs-tab' + (_vs.tab === 'au' ? ' on' : '') + '" onclick="vsTab(\'au\')">Ljud & tempo</button></div>'
     + '<div style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px">' + panel + '</div></div>'
     + '</div>'
@@ -4039,7 +4041,8 @@ function _vsRender(){
 function _vsFit(){
   var mc = document.getElementById('vsMain'); if (!mc) return; var box = mc.parentElement, f = _vsFmt(_vs.cur); if (!box || !f) return;
   mc.style.width = '10px'; mc.style.height = '10px'; box.style.overflow = 'hidden';
-  var hint = box.lastElementChild, aw = box.clientWidth - 24, ah = box.clientHeight - 24 - (hint && hint !== mc ? hint.offsetHeight + 10 : 0), k = Math.min(aw / f.w, ah / f.h);
+  box.style.padding = '8px'; var hint = box.lastElementChild; if (hint && hint !== mc) hint.style.display = box.clientWidth < 420 ? 'none' : '';
+  var aw = box.clientWidth - 16, ah = box.clientHeight - 16 - (hint && hint !== mc && hint.style.display !== 'none' ? hint.offsetHeight + 10 : 0), k = Math.min(aw / f.w, ah / f.h);
   if (k > 0) { mc.style.width = Math.floor(f.w * k) + 'px'; mc.style.height = Math.floor(f.h * k) + 'px'; }
 }
 function _vsPaint(){
