@@ -3285,7 +3285,7 @@ function _csMove(ev){
     if (k[1] === 'e') nw = d.ow + dx; else { nw = d.ow - dx; nx = d.ox + dx; }
     if (k[0] === 's') nh = d.oh + dy; else { nh = d.oh - dy; ny = d.oy + dy; }
     var keep = el.type === 'image' || el.type === 'text' || el.kind === 'circle' || el.kind === 'ring';
-    if (keep !== !!ev.shiftKey && d.ow) { var nh2 = nw * d.oh / d.ow; if (k[0] === 'n') ny = d.oy + d.oh - nh2; nh = nh2; }
+    if (keep !== !!ev.shiftKey && d.ow && d.oh) { var sc = Math.abs(nh / d.oh - 1) > Math.abs(nw / d.ow - 1) ? nh / d.oh : nw / d.ow; nw = d.ow * sc; nh = d.oh * sc; nx = k[1] === 'w' ? d.ox + d.ow - nw : d.ox; ny = k[0] === 'n' ? d.oy + d.oh - nh : d.oy; }
     if (nw < 20) { if (k[1] === 'w') nx -= 20 - nw; nw = 20; }
     if (nh < 6) { if (k[0] === 'n') ny -= 6 - nh; nh = 6; }
     el.x = Math.round(nx); el.y = Math.round(ny); el.w = Math.round(nw); el.h = Math.round(nh);
@@ -4013,7 +4013,9 @@ function vsPanDown(ev){
     var mv = function(e){ var dx = (e.clientX - sx) / rect.width, dy = (e.clientY - sy) / rect.height; moved = true;
       if (mode === 'rot') { var ang = Math.atan2(e.clientY - ccy, e.clientX - ccx) * 180 / Math.PI + 90; if (!e.shiftKey) { var sn = Math.round(ang / 15) * 15; if (Math.abs(ang - sn) < 4) ang = sn; } hit.rot = Math.round(((ang % 360) + 360) % 360); }
       else if (mode !== 'move') {
-        var nw = mode[1] === 'e' ? ow + dx : ow - dx; nw = Math.max(0.04, Math.min(1.5, nw));
+        // Hörnet följer musen både i sidled och i höjdled – den riktning som ändrats mest bestämmer storleken
+        var sxw = (mode[1] === 'e' ? ow + dx : ow - dx) / ow, syh = oh ? (mode[0] === 's' ? oh + dy : oh - dy) / oh : sxw;
+        var nw = ow * (Math.abs(syh - 1) > Math.abs(sxw - 1) ? syh : sxw); nw = Math.max(0.04, Math.min(1.5, nw));
         hit.w = nw; if (mode[1] === 'w') hit.x = ox + ow - nw;
         // Text: hörnen skalar texten som i Canva, Shift = bara rutans bredd
         if (hit.type === 'text' && !e.shiftKey) hit.size = Math.max(0.01, os * nw / ow);
@@ -8828,7 +8830,7 @@ function _cvWire(post, card){
         var nx = b0.x, ny = b0.y, nw = b0.w, nh = b0.h;
         if (k[1] === 'e') nw = b0.w + dx; else { nw = b0.w - dx; nx = b0.x + dx; }
         if (k[0] === 's') nh = b0.h + dy; else { nh = b0.h - dy; ny = b0.y + dy; }
-        if ((keepRatio && !m.shiftKey) || (!keepRatio && m.shiftKey)) { var nh2 = nw * ratio; if (k[0] === 'n') ny = b0.y + b0.h - nh2; nh = nh2; }
+        if ((keepRatio && !m.shiftKey) || (!keepRatio && m.shiftKey)) { /* hörnet följer musen både i sidled och höjdled – den riktning som ändrats mest bestämmer */ var sc = Math.abs(nh / Math.max(0.1, b0.h) - 1) > Math.abs(nw / Math.max(0.1, b0.w) - 1) ? nh / Math.max(0.1, b0.h) : nw / Math.max(0.1, b0.w); nw = b0.w * sc; var nh2 = nw * ratio; nx = k[1] === 'w' ? b0.x + b0.w - nw : b0.x; ny = k[0] === 'n' ? b0.y + b0.h - nh2 : b0.y; nh = nh2; }
         if (nw < 2) { if (k[1] === 'w') nx -= 2 - nw; nw = 2; }
         if (nh < (e.type === 'line' ? 0.3 : 2)) nh = e.type === 'line' ? 0.3 : 2;
         // Ingen låsning till kanten – elementet får sticka ut utanför inlägget (beskärs visuellt)
