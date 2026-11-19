@@ -1301,7 +1301,7 @@ app.post('/api/linkedin/company/publish', auth, async (req, res) => {
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
-async function ensureBrandImagesTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS brand_images (id SERIAL PRIMARY KEY, name TEXT, url TEXT, ts BIGINT)"); await getAuthPool().query("ALTER TABLE brand_images ADD COLUMN IF NOT EXISTS workspace TEXT DEFAULT 'spot'"); await getAuthPool().query("ALTER TABLE brand_images ADD COLUMN IF NOT EXISTS folder TEXT DEFAULT ''") }
+async function ensureBrandImagesTable() { await getAuthPool().query("CREATE TABLE IF NOT EXISTS brand_images (id SERIAL PRIMARY KEY, name TEXT, url TEXT, ts BIGINT)"); await getAuthPool().query("ALTER TABLE brand_images ADD COLUMN IF NOT EXISTS workspace TEXT DEFAULT 'spot'"); await getAuthPool().query("ALTER TABLE brand_images ADD COLUMN IF NOT EXISTS folder TEXT DEFAULT ''"); await getAuthPool().query("CREATE TABLE IF NOT EXISTS brand_image_folders (workspace TEXT NOT NULL, name TEXT NOT NULL, PRIMARY KEY (workspace, name))") }
 // Mappar i bildbiblioteket: namnet rensas och kortas
 function _cleanFolder(f) { return String(f || '').replace(/[<>"'`\\/]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40) }
 app.get('/api/brand-images', auth, async (req, res) => {
@@ -1309,7 +1309,9 @@ app.get('/api/brand-images', auth, async (req, res) => {
     const s = sessions[getToken(req)] || {}
     await ensureBrandImagesTable()
     const r = await getAuthPool().query('SELECT id, name, url, ts, folder FROM brand_images WHERE workspace=$1 ORDER BY ts DESC', [s.workspace || 'spot'])
-    res.json({ images: r.rows })
+    // Mappar: sparade mappar (även tomma) + mappar som bilder ligger i
+    const f = await getAuthPool().query("SELECT name FROM brand_image_folders WHERE workspace=$1 UNION SELECT DISTINCT folder FROM brand_images WHERE workspace=$1 AND folder <> ''", [s.workspace || 'spot'])
+    res.json({ images: r.rows, folders: f.rows.map(x => x.name) })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 app.post('/api/brand-images', auth, async (req, res) => {
@@ -1339,10 +1341,15 @@ app.post('/api/brand-images/folder', auth, async (req, res) => {
   try {
     const s = sessions[getToken(req)] || {}
     if ((s.role || 'admin') !== 'admin') return res.status(403).json({ error: 'Endast admin kan ändra bildbanken' })
+    const ws = s.workspace || 'spot', create = _cleanFolder((req.body || {}).create)
+    await ensureBrandImagesTable()
+    // Ny (tom) mapp
+    if (create) { await getAuthPool().query('INSERT INTO brand_image_folders (workspace, name) VALUES ($1,$2) ON CONFLICT DO NOTHING', [ws, create]); return res.json({ ok: true }) }
     const from = _cleanFolder((req.body || {}).from), to = _cleanFolder((req.body || {}).to)
     if (!from) return res.status(400).json({ error: 'Mapp saknas' })
-    await ensureBrandImagesTable()
-    await getAuthPool().query('UPDATE brand_images SET folder=$1 WHERE folder=$2 AND workspace=$3', [to, from, s.workspace || 'spot'])
+    await getAuthPool().query('UPDATE brand_images SET folder=$1 WHERE folder=$2 AND workspace=$3', [to, from, ws])
+    await getAuthPool().query('DELETE FROM brand_image_folders WHERE workspace=$1 AND name=$2', [ws, from])
+    if (to) await getAuthPool().query('INSERT INTO brand_image_folders (workspace, name) VALUES ($1,$2) ON CONFLICT DO NOTHING', [ws, to])
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
