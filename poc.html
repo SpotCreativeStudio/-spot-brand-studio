@@ -3446,7 +3446,7 @@ function _csRender(){
   var vh = Math.max(360, window.innerHeight - 150), vw = Math.max(320, Math.min(window.innerWidth - 600, 900));
   _cs.scale = Math.min(vh / CS_H, vw / CS_W);
   var thumbs = _cs.slides.map(function(sl, k){
-    return '<div class="cs-thumb' + (k === _cs.i ? ' on' : '') + '" onclick="csGo(' + k + ')"><div style="pointer-events:none">' + _csSlideHTML(sl, 116 / CS_W, false, k) + '</div><span style="position:absolute;left:4px;top:4px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:9px">' + (k + 1) + '</span></div>';
+    return '<div class="cs-thumb' + (k === _cs.i ? ' on' : '') + '" draggable="true" ondragstart="csThumbDrag(event,' + k + ')" ondragover="csThumbOver(event,' + k + ')" ondragleave="this.style.boxShadow=\'\'" ondrop="csThumbDrop(event,' + k + ')" ondragend="_cs.dragSlide=null" onclick="csGo(' + k + ')" title="Dra för att ändra ordning"><div style="pointer-events:none">' + _csSlideHTML(sl, 116 / CS_W, false, k) + '</div><span style="position:absolute;left:4px;top:4px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:9px">' + (k + 1) + '</span></div>';
   }).join('');
   var sw = function(fn, cur, none){ return (none ? '<span class="cs-sw" title="Ingen" onclick="' + fn + '(\'\')" style="background:linear-gradient(135deg,#fff 45%,#ef4444 47%,#ef4444 53%,#fff 55%)' + (!cur ? ';outline:3px solid #b31e59;outline-offset:1px' : '') + '"></span>' : '') + cols.map(function(c){ return '<span class="cs-sw" title="' + c + '" onclick="' + fn + '(\'' + c + '\')" style="background:' + c + (String(cur).toLowerCase() === c.toLowerCase() ? ';outline:3px solid #b31e59;outline-offset:1px' : '') + '"></span>'; }).join('') + '<input type="color" value="' + _crEsc(/^#[0-9a-f]{6}$/i.test(cur) ? cur : '#000000') + '" onchange="' + fn + '(this.value)" title="Valfri färg" style="width:28px;height:26px;border:none;background:none;padding:0;cursor:pointer">'; };
   var tog = function(key, val, label){ return '<button class="cs-btn' + (val ? ' on' : '') + '" onclick="csSet(\'' + key + '\',' + (!val) + ')">' + label + '</button>'; };
@@ -3496,6 +3496,18 @@ function _csRender(){
     + '<input id="csFile" type="file" accept="image/*" style="display:none" onchange="csFileChosen(this)">'
     + '<div style="width:290px;flex-shrink:0;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px;border-left:1px solid #eee;background:#fff">' + props + '</div>'
     + '</div></div>';
+}
+// Ändra ordning på sidorna: dra en miniatyr och släpp den ovanför eller nedanför en annan
+function csThumbDrag(ev, k){ _cs.dragSlide = k; try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(k)); } catch (e) {} }
+function _csDropPos(ev){ var r = ev.currentTarget.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2 ? 'before' : 'after'; }
+function csThumbOver(ev, k){ if (_cs.dragSlide == null) return; ev.preventDefault(); try { ev.dataTransfer.dropEffect = 'move'; } catch (e) {} ev.currentTarget.style.boxShadow = _csDropPos(ev) === 'before' ? '0 -4px 0 #b31e59' : '0 4px 0 #b31e59'; }
+function csThumbDrop(ev, k){
+  ev.preventDefault(); ev.currentTarget.style.boxShadow = '';
+  var from = _cs.dragSlide; _cs.dragSlide = null; if (from == null) return;
+  var to = _csDropPos(ev) === 'before' ? k : k + 1; if (from < to) to--;
+  if (to === from) return;
+  var cur = _cs.slides[_cs.i], s = _cs.slides.splice(from, 1)[0]; _cs.slides.splice(to, 0, s);
+  _cs.i = _cs.slides.indexOf(cur); _cs.sel = null; _csRender();
 }
 // Ändra ett lager. "light" = reglage som dras: rita bara om scenen och miniatyren
 function csSet(k, v, light){
