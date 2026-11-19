@@ -4068,12 +4068,18 @@ function _vsExportOne(f, st, onProg){
         v.onseeked = function(){
           v.onseeked = null; v.playbackRate = sp; frame(); rec.start(500);
           v.play().then(function(){
+            // Stoppa inspelningen när klippet är slut. Vid sista bildrutan kommer inga fler bildrute-anrop,
+            // så slutet fångas även via 'ended' och en vakt som märker när tiden slutat gå framåt.
+            var stopped = false, lastT = -1, still = 0;
+            var stop = function(){ if (stopped || done) return; stopped = true; clearInterval(guard); try { v.pause(); } catch (e) {} onProg && onProg(1); setTimeout(function(){ try { rec.stop(); } catch (e) { finish(e); } }, 150); };
+            v.onended = stop;
+            var guard = setInterval(function(){ if (done || stopped) { clearInterval(guard); return; } if (v.currentTime >= _vs.end - 0.05 || v.ended) return stop(); if (Math.abs(v.currentTime - lastT) < 0.001) { if (++still >= 6) stop(); } else { still = 0; lastT = v.currentTime; } }, 250);
             var tick = function(){
-              if (done) return;
+              if (done || stopped) return;
               frame();
               if (gain) gain.gain.value = _vsGainAt(v.currentTime);
               onProg && onProg(Math.min(1, (v.currentTime - _vs.start) / len));
-              if (v.currentTime >= _vs.end || v.ended) { v.pause(); setTimeout(function(){ try { rec.stop(); } catch (e) { finish(e); } }, 150); return; }
+              if (v.currentTime >= _vs.end || v.ended) return stop();
               if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(tick); else requestAnimationFrame(tick);
             };
             tick();
