@@ -3681,13 +3681,16 @@ function _vsDefaultsFor(channels){
 function _vsTime(s){ s = Math.max(0, s || 0); var m = Math.floor(s / 60), r = (s - m * 60); return m + ':' + (r < 10 ? '0' : '') + r.toFixed(1); }
 
 // Ritar en bildruta i ett format: fyll (beskär) eller passa in (med oskarp bakgrund eller färg), med zoom och panorering
-function _vsDraw(ctx, v, W, H, st){
+// Bakgrunden ritas först; själva videon är ett eget lager (type 'video') som ritas i lagerordningen i _vsDrawOv
+function _vsDraw(ctx, v, W, H, st){ _vs._cv = v; _vs._cst = st; _vsDrawBg(ctx, v, W, H, st || {}); if (!(_vs.ov || []).some(function(o){ return o.type === 'video'; })) _vsDrawVid(ctx, v, W, H, st || {}); }
+function _vsDrawBg(ctx, v, W, H, st){
+  var vw = v.videoWidth || 16, vh = v.videoHeight || 9;
+  if (st.bg && st.bg !== 'blur') { ctx.fillStyle = st.bg; ctx.fillRect(0, 0, W, H); }
+  else { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); var bs = Math.max(W / vw, H / vh); ctx.save(); ctx.filter = 'blur(' + Math.round(W / 24) + 'px) brightness(.7)'; ctx.drawImage(v, (W - vw * bs) / 2 - 40, (H - vh * bs) / 2 - 40, vw * bs + 80, vh * bs + 80); ctx.restore(); }
+}
+function _vsDrawVid(ctx, v, W, H, st){
   var vw = v.videoWidth || 16, vh = v.videoHeight || 9; st = st || {};
   var fit = st.mode === 'fit', z = st.zoom || 1;
-  if (fit) {
-    if (st.bg && st.bg !== 'blur') { ctx.fillStyle = st.bg; ctx.fillRect(0, 0, W, H); }
-    else { var bs = Math.max(W / vw, H / vh); ctx.save(); ctx.filter = 'blur(' + Math.round(W / 24) + 'px) brightness(.7)'; ctx.drawImage(v, (W - vw * bs) / 2 - 40, (H - vh * bs) / 2 - 40, vw * bs + 80, vh * bs + 80); ctx.restore(); }
-  } else { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); }
   var s = (fit ? Math.min(W / vw, H / vh) : Math.max(W / vw, H / vh)) * z, iw = vw * s, ih = vh * s;
   var x = (W - iw) / 2 + (st.px || 0) * Math.abs(iw - W) / 2, y = (H - ih) / 2 + (st.py || 0) * Math.abs(ih - H) / 2;
   ctx.drawImage(v, x, y, iw, ih);
@@ -3702,6 +3705,7 @@ function _vsOvAlpha(o, t){
 }
 function _vsDrawOv(ctx, W, H, t, showSel){
   (_vs.ov || []).forEach(function(o){
+    if (o.type === 'video') { if (!o.hidden && _vs._cv) _vsDrawVid(ctx, _vs._cv, W, H, _vs._cst); return; }
     if (o.hidden) return;
     var a = _vsOvAlpha(o, t); var sel = showSel && o.id === _vs.sel;
     if (a <= 0 && !sel) return;
@@ -3767,7 +3771,7 @@ function vsAddLogo(){
 }
 function vsOvSet(k, v, light){ var o = _vsSelOv(); if (!o) return; o[k] = v; if (light) { _vsPaint(); return; } _vsRender(); }
 function vsOvTime(which){ var o = _vsSelOv(); if (!o || !_vs.el) return; var t = _vs.el.currentTime; if (which === 'in') { o.t0 = Math.min(t, (o.t1 == null ? 1e9 : o.t1) - 0.2); } else if (which === 'out') { o.t1 = Math.max(t, (o.t0 || 0) + 0.2); } else { o.t0 = _vs.start; o.t1 = _vs.end; } _vsRender(); }
-function vsOvDel(){ _vs.ov = _vs.ov.filter(function(o){ return o.id !== _vs.sel; }); _vs.sel = null; _vsRender(); }
+function vsOvDel(){ _vs.ov = _vs.ov.filter(function(o){ return o.id !== _vs.sel || o.type === 'video'; }); _vs.sel = null; _vsRender(); }
 function vsOvPick(id){ _vs.sel = id; var o = _vsSelOv(); if (o && _vs.el && (_vs.el.currentTime < o.t0 || _vs.el.currentTime > o.t1)) vsSeek(o.t0 + 0.05); _vsRender(); }
 // Lagerpanelen: samma som i bildredigeraren – dra för ordning, ▲▼, dölj och lås
 function _vsLyrById(id){ return _vs.ov.filter(function(o){ return o.id === id; })[0]; }
@@ -3805,7 +3809,7 @@ function openVideoStudio(opts){
   VS_FORMATS.forEach(function(f){ if (!_vs.set[f.k]) _vs.set[f.k] = { mode: 'fill', zoom: 1, px: 0, py: 0, bg: 'blur' }; });
   _vs.cur = Object.keys(_vs.on).filter(function(k){ return _vs.on[k]; })[0] || '9x16';
   _vs.start = ed.start || 0; _vs.end = ed.end || 0; _vs.cover = ed.cover || 0;
-  _vs.ov = _csClone(ed.ov || []); _vs.au = _csClone(ed.au || { mute: false, vol: 1, fin: 0, fout: 0 }); _vs.speed = ed.speed || 1; _vs.sel = null; _vs.tab = 'fmt';
+  _vs.ov = _csClone(ed.ov || []); if (!_vs.ov.some(function(o){ return o.type === 'video'; })) _vs.ov.unshift({ id: '__video', type: 'video' }); _vs.au = _csClone(ed.au || { mute: false, vol: 1, fin: 0, fout: 0 }); _vs.speed = ed.speed || 1; _vs.sel = null; _vs.tab = 'fmt';
   _vs.ov.forEach(function(o){ if (o.type === 'image') _vsImg(o.src); });
   var m = document.getElementById('vsStudio');
   if (!m) {
@@ -3833,11 +3837,12 @@ function openVideoStudio(opts){
 }
 function closeVideoStudio(){ var m = document.getElementById('vsStudio'); if (m) m.style.display = 'none'; if (_vs.el) { try { _vs.el.pause(); } catch (e) {} } _vs.el = null; cancelAnimationFrame(_vs._raf); }
 function _vsSw(fn, cur, none){ return (none ? '<span class="vs-sw" title="Ingen" onclick="' + fn + '(\'\')" style="background:linear-gradient(135deg,#fff 45%,#ef4444 47%,#ef4444 53%,#fff 55%)' + (!cur ? ';outline:3px solid #b31e59;outline-offset:1px' : '') + '"></span>' : '') + ['#ffffff', '#111111'].concat(_crColors()).filter(function(c, i, a){ return a.indexOf(c) === i; }).map(function(c){ return '<span class="vs-sw" onclick="' + fn + '(\'' + c + '\')" style="background:' + c + (String(cur).toLowerCase() === c.toLowerCase() ? ';outline:3px solid #b31e59;outline-offset:1px' : '') + '"></span>'; }).join('') + '<input type="color" value="' + (/^#[0-9a-f]{6}$/i.test(cur) ? cur : '#ffffff') + '" onchange="' + fn + '(this.value)" style="width:28px;height:26px;border:none;background:none;padding:0;cursor:pointer">'; }
+function vsBgColor(c){ vsSet('bg', c || 'blur'); }
 function vsOvColor(c){ vsOvSet('color', c); }
 function vsOvPlate(c){ vsOvSet('plate', c); }
 function _vsPanelFmt(f, st, dur, len){
   return '<label class="vs-lab">' + f.label + ' · placering</label><div style="display:flex;gap:6px"><button class="vs-btn' + (st.mode !== 'fit' ? ' on' : '') + '" onclick="vsSet(\'mode\',\'fill\')">Fyll (beskär)</button><button class="vs-btn' + (st.mode === 'fit' ? ' on' : '') + '" onclick="vsSet(\'mode\',\'fit\')">Passa in</button></div>'
-    + '<label class="vs-lab">Zoom</label><div style="display:flex;align-items:center;gap:8px"><input type="range" min="1" max="3" step="0.05" value="' + st.zoom + '" oninput="vsSet(\'zoom\',+this.value,true)" style="flex:1"><button class="vs-btn" onclick="vsSet(\'reset\')">↺</button></div>'
+    + '<label class="vs-lab">Zoom</label><div style="display:flex;align-items:center;gap:8px"><input type="range" min="0.3" max="3" step="0.02" value="' + st.zoom + '" oninput="vsSet(\'zoom\',+this.value,true)" style="flex:1"><button class="vs-btn" onclick="vsSet(\'reset\')">↺</button></div>'
     + (st.mode === 'fit' ? '<label class="vs-lab">Bakgrund</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><button class="vs-btn' + (st.bg === 'blur' ? ' on' : '') + '" onclick="vsSet(\'bg\',\'blur\')">Oskarp</button>' + _crColors().map(function(c){ return '<span onclick="vsSet(\'bg\',\'' + c + '\')" style="width:24px;height:24px;border-radius:50%;cursor:pointer;border:1px solid #d1d5db;background:' + c + (st.bg === c ? ';outline:3px solid #b31e59;outline-offset:1px' : '') + '"></span>'; }).join('') + '</div>' : '')
     + '<button class="vs-btn" onclick="vsCopyToAll()">⧉ Använd placeringen i alla format</button>'
     + '<div style="height:1px;background:#eee;margin:4px 0"></div>'
@@ -3852,8 +3857,10 @@ function _vsPanelOv(){
   var o = _vsSelOv();
   var h = '<label class="vs-lab">Lägg till</label><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="vs-btn" onclick="vsAddText()">T Text</button><button class="vs-btn" onclick="vsAddImage()">🖼 Från datorn</button><button class="vs-btn" onclick="vsLibPicker()">📚 Bildbank</button><button class="vs-btn" onclick="vsAddLogo()">◎ Logga</button></div>';
   var lb = 'border:none;background:none;cursor:pointer;font-size:12px;padding:2px 3px;color:#6b7280';
-  h += _vs.ov.length ? '<div style="border:1.5px solid #f0f0f0;border-radius:10px;padding:8px;margin-top:4px"><div style="font-size:11px;font-weight:700;color:#b31e59;margin-bottom:6px">🗂 Lager <span style="font-weight:400;color:#9ca3af">· överst = längst fram, dra för att ändra ordning</span></div>' + _vs.ov.slice().reverse().map(function(x){ var on = x.id === _vs.sel; return '<div draggable="true" ondragstart="vsLyrDrag(event,\'' + x.id + '\')" ondragover="event.preventDefault();this.style.borderTop=\'2px solid #b31e59\'" ondragleave="this.style.borderTop=\'\'" ondrop="vsLyrDrop(event,\'' + x.id + '\')" onclick="vsOvPick(\'' + x.id + '\')" style="display:flex;align-items:center;gap:4px;padding:5px 6px;margin-bottom:3px;border-radius:7px;cursor:pointer;font-size:12px;border:1px solid ' + (on ? '#b31e59' : '#f0f0f0') + ';background:' + (on ? '#fdf0f6' : '#fafafa') + ';opacity:' + (x.hidden ? .45 : 1) + '"><span style="cursor:grab;color:#c4c4c4">⋮⋮</span><span>' + (x.type === 'image' ? (x.logo ? '◎' : '🖼') : 'T') + '</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (x.type === 'image' ? (x.logo ? 'Logga' : 'Bild') : _crEsc(String(x.text || '').split('\n')[0] || 'Text')) + ' <span style="color:#9ca3af;font-size:10px">' + _vsTime(x.t0) + '–' + _vsTime(x.t1) + '</span></span>'
-    + '<button title="Framåt" style="' + lb + '" onclick="event.stopPropagation();vsLyrMove(\'' + x.id + '\',1)">▲</button><button title="Bakåt" style="' + lb + '" onclick="event.stopPropagation();vsLyrMove(\'' + x.id + '\',-1)">▼</button><button title="' + (x.hidden ? 'Visa' : 'Dölj') + '" style="' + lb + '" onclick="event.stopPropagation();vsLyrHide(\'' + x.id + '\')">' + (x.hidden ? '🚫' : '👁') + '</button><button title="' + (x.locked ? 'Lås upp' : 'Lås') + '" style="' + lb + '" onclick="event.stopPropagation();vsLyrLock(\'' + x.id + '\')">' + (x.locked ? '🔒' : '🔓') + '</button></div>'; }).join('') + '</div>' : '<div style="font-size:12px;color:#9ca3af;line-height:1.5">Lägg till text, bilder eller loggan. De bränns in i videon i alla format och kan visas hela tiden eller bara under en del av klippet.</div>';
+  h += _vs.ov.length ? '<div style="border:1.5px solid #f0f0f0;border-radius:10px;padding:8px;margin-top:4px"><div style="font-size:11px;font-weight:700;color:#b31e59;margin-bottom:6px">🗂 Lager <span style="font-weight:400;color:#9ca3af">· överst = längst fram, dra för att ändra ordning</span></div>' + _vs.ov.slice().reverse().map(function(x){ var on = x.id === _vs.sel; return '<div draggable="true" ondragstart="vsLyrDrag(event,\'' + x.id + '\')" ondragover="event.preventDefault();this.style.borderTop=\'2px solid #b31e59\'" ondragleave="this.style.borderTop=\'\'" ondrop="vsLyrDrop(event,\'' + x.id + '\')" onclick="vsOvPick(\'' + x.id + '\')" style="display:flex;align-items:center;gap:4px;padding:5px 6px;margin-bottom:3px;border-radius:7px;cursor:pointer;font-size:12px;border:1px solid ' + (on ? '#b31e59' : '#f0f0f0') + ';background:' + (on ? '#fdf0f6' : '#fafafa') + ';opacity:' + (x.hidden ? .45 : 1) + '"><span style="cursor:grab;color:#c4c4c4">⋮⋮</span><span>' + (x.type === 'video' ? '🎬' : x.type === 'image' ? (x.logo ? '◎' : '🖼') : 'T') + '</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (x.type === 'video' ? '<b>Videon</b>' : x.type === 'image' ? (x.logo ? 'Logga' : 'Bild') : _crEsc(String(x.text || '').split('\n')[0] || 'Text')) + (x.type === 'video' ? '' : ' <span style="color:#9ca3af;font-size:10px">' + _vsTime(x.t0) + '–' + _vsTime(x.t1) + '</span>') + '</span>'
+    + '<button title="Framåt" style="' + lb + '" onclick="event.stopPropagation();vsLyrMove(\'' + x.id + '\',1)">▲</button><button title="Bakåt" style="' + lb + '" onclick="event.stopPropagation();vsLyrMove(\'' + x.id + '\',-1)">▼</button><button title="' + (x.hidden ? 'Visa' : 'Dölj') + '" style="' + lb + '" onclick="event.stopPropagation();vsLyrHide(\'' + x.id + '\')">' + (x.hidden ? '🚫' : '👁') + '</button><button title="' + (x.locked ? 'Lås upp' : 'Lås') + '" style="' + lb + '" onclick="event.stopPropagation();vsLyrLock(\'' + x.id + '\')">' + (x.locked ? '🔒' : '🔓') + '</button></div>'; }).join('') + '<div onclick="vsOvPick(\'__bg\')" style="display:flex;align-items:center;gap:4px;padding:5px 6px;border-radius:7px;cursor:pointer;font-size:12px;border:1px solid ' + (_vs.sel === '__bg' ? '#b31e59;background:#fdf0f6' : '#f0f0f0;background:#fafafa') + '"><span style="color:#e5e7eb">⋮⋮</span><span>🎨</span><span style="flex:1"><b>Bakgrund</b> <span style="color:#9ca3af;font-size:10px">alltid längst bak</span></span></div></div>' : '<div style="font-size:12px;color:#9ca3af;line-height:1.5">Lägg till text, bilder eller loggan. De bränns in i videon i alla format och kan visas hela tiden eller bara under en del av klippet.</div>';
+  if (_vs.sel === '__bg') { var bst = _vs.set[_vs.cur]; return h + '<div style="height:1px;background:#eee;margin:4px 0"></div><label class="vs-lab">Bakgrund · ' + _vsFmt(_vs.cur).label + '</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><button class="vs-btn' + (!bst.bg || bst.bg === 'blur' ? ' on' : '') + '" onclick="vsSet(\'bg\',\'blur\')">Oskarp video</button>' + _vsSw('vsBgColor', bst.bg && bst.bg !== 'blur' ? bst.bg : '') + '</div><div style="font-size:11px;color:#9ca3af;line-height:1.5">Bakgrunden syns där videon inte täcker – välj <b>Passa in</b> eller zooma ut videon. Lager som ligger under videon i listan syns också bara där.</div><button class="vs-btn" onclick="vsCopyToAll()">⧉ Samma bakgrund och placering i alla format</button>'; }
+  if (o && o.type === 'video') return h + '<div style="height:1px;background:#eee;margin:4px 0"></div><label class="vs-lab">Videon</label><div style="display:flex;gap:6px"><button class="vs-btn' + (_vs.set[_vs.cur].mode !== 'fit' ? ' on' : '') + '" onclick="vsSet(\'mode\',\'fill\')">Fyll</button><button class="vs-btn' + (_vs.set[_vs.cur].mode === 'fit' ? ' on' : '') + '" onclick="vsSet(\'mode\',\'fit\')">Passa in</button></div><label class="vs-lab">Storlek</label><div class="vs-row"><input type="range" min="0.3" max="3" step="0.02" value="' + (_vs.set[_vs.cur].zoom || 1) + '" oninput="vsSet(\'zoom\',+this.value,true)"></div><div style="font-size:11px;color:#9ca3af;line-height:1.5">Dra i videon för att flytta den. Lägg text eller bilder under videon i listan för att de ska hamna bakom den.</div>';
   if (!o) return h + (_vs.ov.length ? '<div style="font-size:11px;color:#9ca3af">Klicka på ett lager – eller direkt i videon – för att ändra det. Dra för att flytta, dra i hörnet för att ändra storlek.</div>' : '');
   h += '<div style="height:1px;background:#eee;margin:4px 0"></div>';
   if (o.type === 'text') {
@@ -3906,12 +3913,12 @@ function _vsRender(){
     + '<div style="font-size:11px;color:#6b7280">' + (_vs.ov.length ? 'Klicka på text eller bild för att flytta den · dra i bakgrunden för att flytta videon · scrolla för att zooma' : 'Dra i bilden för att flytta · scrolla eller använd reglaget för att zooma') + '</div></div>'
     + '<input id="vsImgIn" type="file" accept="image/*" style="display:none" onchange="vsImgChosen(this)">'
     + '<div style="width:300px;flex-shrink:0;display:flex;flex-direction:column;border-left:1px solid #eee;background:#fff">'
-    + '<div style="display:flex;border-bottom:1px solid #eee;padding:0 8px"><button class="vs-tab' + (_vs.tab === 'fmt' ? ' on' : '') + '" onclick="vsTab(\'fmt\')">Format & klipp</button><button class="vs-tab' + (_vs.tab === 'ov' ? ' on' : '') + '" onclick="vsTab(\'ov\')">Text & bild' + (_vs.ov.length ? ' (' + _vs.ov.length + ')' : '') + '</button><button class="vs-tab' + (_vs.tab === 'au' ? ' on' : '') + '" onclick="vsTab(\'au\')">Ljud & tempo</button></div>'
+    + '<div style="display:flex;border-bottom:1px solid #eee;padding:0 8px"><button class="vs-tab' + (_vs.tab === 'fmt' ? ' on' : '') + '" onclick="vsTab(\'fmt\')">Format & klipp</button><button class="vs-tab' + (_vs.tab === 'ov' ? ' on' : '') + '" onclick="vsTab(\'ov\')">Text & bild' + (_vs.ov.length > 1 ? ' (' + (_vs.ov.length - 1) + ')' : '') + '</button><button class="vs-tab' + (_vs.tab === 'au' ? ' on' : '') + '" onclick="vsTab(\'au\')">Ljud & tempo</button></div>'
     + '<div style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px">' + panel + '</div></div>'
     + '</div>'
     + '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid #eee;background:#fff"><button class="vs-btn" id="vsPlay" onclick="vsPlay()">▶</button><span id="vsNow" style="font-size:12px;width:90px;color:#374151"></span>'
     + '<div style="position:relative;flex:1;height:28px"><div style="position:absolute;top:12px;left:0;right:0;height:4px;background:#e5e7eb;border-radius:2px"></div><div style="position:absolute;top:10px;height:8px;border-radius:4px;background:#f0d5e1;left:' + (dur ? _vs.start / dur * 100 : 0) + '%;width:' + (dur ? len / dur * 100 : 0) + '%"></div>'
-    + (o && dur ? '<div title="När lagret visas" style="position:absolute;top:22px;height:4px;border-radius:2px;background:#3b82f6;left:' + (o.t0 / dur * 100) + '%;width:' + (Math.max(0, Math.min(o.t1, dur) - o.t0) / dur * 100) + '%"></div>' : '')
+    + (o && dur && o.type !== 'video' ? '<div title="När lagret visas" style="position:absolute;top:22px;height:4px;border-radius:2px;background:#3b82f6;left:' + (o.t0 / dur * 100) + '%;width:' + (Math.max(0, Math.min(o.t1, dur) - o.t0) / dur * 100) + '%"></div>' : '')
     + '<input id="vsSeek" type="range" min="0" max="' + dur + '" step="0.05" value="' + (_vs.el.currentTime || 0) + '" oninput="vsSeek(+this.value)" style="position:absolute;inset:0;width:100%;margin:0;background:transparent"></div>'
     + '<span style="font-size:12px;color:#6b7280">' + _vsTime(dur) + '</span></div></div>';
   _vsPaint(); _vsTimeUi();
@@ -3944,7 +3951,7 @@ function vsSet(key, val, light){
 }
 function vsCopyToAll(){ var st = _vs.set[_vs.cur]; VS_FORMATS.forEach(function(f){ _vs.set[f.k] = _csClone(st); }); _vsRender(); showToast('Placeringen gäller nu alla format'); }
 function vsMark(what){ var t = _vs.el ? _vs.el.currentTime : 0; if (what === 'start') { _vs.start = Math.min(t, _vs.end - 0.5); } else if (what === 'end') { _vs.end = Math.max(t, _vs.start + 0.5); } else { _vs.cover = t; } _vsRender(); }
-function vsWheel(ev){ ev.preventDefault(); var st = _vs.set[_vs.cur]; st.zoom = Math.max(1, Math.min(3, (st.zoom || 1) * (ev.deltaY < 0 ? 1.06 : 1 / 1.06))); _vsPaint(); }
+function vsWheel(ev){ ev.preventDefault(); var st = _vs.set[_vs.cur]; st.zoom = Math.max(0.3, Math.min(3, (st.zoom || 1) * (ev.deltaY < 0 ? 1.06 : 1 / 1.06))); _vsPaint(); }
 // Klick i videon: träffar man ett synligt lager flyttas/skalas det, annars panoreras videon
 function vsPanDown(ev){
   var mc = document.getElementById('vsMain'), v = _vs.el; if (!mc || !v) return; ev.preventDefault();
